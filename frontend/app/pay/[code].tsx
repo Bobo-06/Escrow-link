@@ -11,8 +11,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { paymentLinkApi, ordersApi } from '../../src/api/api';
-import TrustBadge from '../../src/components/TrustBadge';
+import { paymentLinkApi } from '../../src/api/api';
 
 export default function ProductPage() {
   const router = useRouter();
@@ -20,14 +19,16 @@ export default function ProductPage() {
   const [product, setProduct] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedCurrency, setSelectedCurrency] = useState('TZS');
 
   useEffect(() => {
     loadProduct();
-  }, [code]);
+  }, [code, selectedCurrency]);
 
   const loadProduct = async () => {
     try {
-      const response = await paymentLinkApi.getByCode(code || '');
+      setIsLoading(true);
+      const response = await paymentLinkApi.getByCode(code || '', selectedCurrency);
       setProduct(response.data);
     } catch (error: any) {
       setError(error.response?.data?.detail || 'Product not found');
@@ -39,17 +40,28 @@ export default function ProductPage() {
   const handleBuy = () => {
     router.push({
       pathname: '/checkout/[orderId]',
-      params: { orderId: 'new', productId: product.product_id },
+      params: { 
+        orderId: 'new', 
+        productId: product.product_id,
+        currency: selectedCurrency 
+      },
     });
   };
 
-  const formatTZS = (amount: number) => `TZS ${amount?.toLocaleString() || 0}`;
+  const formatPrice = (amount: number, currency: string = 'TZS') => {
+    if (currency === 'TZS') return `TZS ${amount?.toLocaleString() || 0}`;
+    if (currency === 'USD') return `$${amount?.toFixed(2) || 0}`;
+    if (currency === 'GBP') return `£${amount?.toFixed(2) || 0}`;
+    if (currency === 'EUR') return `€${amount?.toFixed(2) || 0}`;
+    return `${currency} ${amount?.toLocaleString() || 0}`;
+  };
 
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#7C3AED" />
+          <ActivityIndicator size="large" color="#16A34A" />
+          <Text style={styles.loadingText}>Loading...</Text>
         </View>
       </SafeAreaView>
     );
@@ -67,9 +79,42 @@ export default function ProductPage() {
     );
   }
 
+  const displayPrice = selectedCurrency === 'TZS' 
+    ? product.price_tzs || product.price 
+    : product.display_price || product.price;
+  
+  const displayFee = selectedCurrency === 'TZS'
+    ? product.buyer_protection_fee
+    : product.buyer_protection_fee_display;
+  
+  const displayTotal = selectedCurrency === 'TZS'
+    ? product.total_buyer_pays
+    : product.total_buyer_pays_display;
+
   return (
     <SafeAreaView style={styles.container}>
+      {/* Green Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        <View style={styles.headerTitle}>
+          <Ionicons name="shield-checkmark" size={20} color="#FFFFFF" />
+          <Text style={styles.headerText}>CraftHer</Text>
+        </View>
+        <View style={styles.headerRight}>
+          <Ionicons name="lock-closed" size={16} color="#FFFFFF" />
+          <Text style={styles.headerSecure}>Secure Checkout</Text>
+        </View>
+      </View>
+
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Secure Checkout Label */}
+        <View style={styles.secureLabel}>
+          <Text style={styles.secureLabelText}>Secure Checkout</Text>
+          <Ionicons name="lock-closed" size={14} color="#F59E0B" />
+        </View>
+
         {/* Product Image */}
         <View style={styles.imageContainer}>
           {product.image ? (
@@ -82,58 +127,111 @@ export default function ProductPage() {
         </View>
 
         {/* Product Info */}
-        <View style={styles.infoContainer}>
+        <View style={styles.productInfo}>
           <Text style={styles.productName}>{product.name}</Text>
-          <Text style={styles.productPrice}>{formatTZS(product.price)}</Text>
+          <View style={styles.priceRow}>
+            <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
+            <Text style={styles.productPrice}>{formatPrice(displayPrice, selectedCurrency)}</Text>
+          </View>
+        </View>
 
-          {product.description && (
-            <Text style={styles.description}>{product.description}</Text>
-          )}
-
-          {/* Seller Info */}
-          <View style={styles.sellerInfo}>
-            <View style={styles.sellerIcon}>
-              <Ionicons name="person" size={24} color="#7C3AED" />
+        {/* Diaspora Currency Selector */}
+        {product.international_shipping && (
+          <View style={styles.currencySelector}>
+            <Text style={styles.currencyLabel}>Pay in your currency:</Text>
+            <View style={styles.currencyOptions}>
+              {['TZS', 'USD', 'GBP', 'EUR'].map((curr) => (
+                <TouchableOpacity
+                  key={curr}
+                  style={[
+                    styles.currencyOption,
+                    selectedCurrency === curr && styles.currencyOptionActive,
+                  ]}
+                  onPress={() => setSelectedCurrency(curr)}
+                >
+                  <Text
+                    style={[
+                      styles.currencyOptionText,
+                      selectedCurrency === curr && styles.currencyOptionTextActive,
+                    ]}
+                  >
+                    {curr}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
-            <View style={styles.sellerDetails}>
-              <Text style={styles.sellerLabel}>Seller</Text>
+          </View>
+        )}
+
+        {/* Seller Info */}
+        <View style={styles.sellerSection}>
+          <View style={styles.sellerRow}>
+            <View style={styles.sellerAvatar}>
+              <Ionicons name="person" size={24} color="#16A34A" />
+            </View>
+            <View style={styles.sellerInfo}>
               <Text style={styles.sellerName}>
                 {product.seller_business || product.seller_name}
               </Text>
+              {product.seller_is_women_owned && (
+                <View style={styles.verifiedBadge}>
+                  <Ionicons name="shield-checkmark" size={12} color="#F59E0B" />
+                  <Text style={styles.verifiedText}>Verified Artisan</Text>
+                </View>
+              )}
             </View>
-            {product.seller_verified && (
-              <View style={styles.verifiedBadge}>
-                <Ionicons name="checkmark-circle" size={20} color="#059669" />
-                <Text style={styles.verifiedText}>Verified</Text>
-              </View>
-            )}
           </View>
+          
+          {/* Trade Metrics */}
+          {product.seller_trade_metrics && product.seller_trade_metrics.successful_transactions > 0 && (
+            <View style={styles.tradeMetrics}>
+              <Ionicons name="star" size={14} color="#F59E0B" />
+              <Text style={styles.tradeMetricsText}>
+                {product.seller_trade_metrics.success_rate}% success rate • {product.seller_trade_metrics.successful_transactions} orders completed
+              </Text>
+            </View>
+          )}
+        </View>
 
-          {/* Trust Badge */}
-          <TrustBadge />
-
-          {/* Price Breakdown */}
-          <View style={styles.priceBreakdown}>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Product Price</Text>
-              <Text style={styles.priceValue}>{formatTZS(product.price)}</Text>
-            </View>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Protection Fee (3%)</Text>
-              <Text style={styles.priceValue}>{formatTZS(product.buyer_protection_fee)}</Text>
-            </View>
-            <View style={[styles.priceRow, styles.totalRow]}>
-              <Text style={styles.totalLabel}>Total</Text>
-              <Text style={styles.totalValue}>{formatTZS(product.total_buyer_pays)}</Text>
-            </View>
+        {/* Trust Badges - Buyer Protection */}
+        <View style={styles.trustSection}>
+          <View style={styles.trustHeader}>
+            <Ionicons name="shield-checkmark" size={20} color="#F59E0B" />
+            <Text style={styles.trustTitle}>Buyer Protection</Text>
+          </View>
+          
+          <View style={styles.trustItem}>
+            <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
+            <Text style={styles.trustText}>Payment held in escrow</Text>
+          </View>
+          <View style={styles.trustItem}>
+            <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
+            <Text style={styles.trustText}>Seller paid after delivery</Text>
+          </View>
+          <View style={styles.trustItem}>
+            <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
+            <Text style={styles.trustText}>Full refund if not delivered</Text>
           </View>
         </View>
+
+        {/* Delivery Info */}
+        <View style={styles.deliverySection}>
+          <Ionicons name="car" size={18} color="#6B7280" />
+          <Text style={styles.deliveryText}>Delivery: 2-4 days in Dar es Salaam</Text>
+        </View>
+
+        {/* International Badge */}
+        {product.international_shipping && (
+          <View style={styles.internationalBadge}>
+            <Ionicons name="globe" size={16} color="#3B82F6" />
+            <Text style={styles.internationalText}>International shipping available via NALA</Text>
+          </View>
+        )}
       </ScrollView>
 
       {/* Buy Button */}
       <View style={styles.footer}>
         <TouchableOpacity style={styles.buyButton} onPress={handleBuy}>
-          <Ionicons name="shield-checkmark" size={24} color="#FFFFFF" />
           <Text style={styles.buyButtonText}>Buy Safely</Text>
         </TouchableOpacity>
       </View>
@@ -150,6 +248,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#6B7280',
   },
   errorContainer: {
     flex: 1,
@@ -169,12 +272,59 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
+  header: {
+    backgroundColor: '#16A34A',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  headerSecure: {
+    fontSize: 12,
+    color: '#FFFFFF',
+  },
   scrollContent: {
-    flexGrow: 1,
+    padding: 16,
+  },
+  secureLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 16,
+  },
+  secureLabelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
   },
   imageContainer: {
     aspectRatio: 1,
     backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 16,
   },
   productImage: {
     width: '100%',
@@ -185,47 +335,75 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  infoContainer: {
-    padding: 20,
-    gap: 16,
+  productInfo: {
+    marginBottom: 16,
   },
   productName: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#1F2937',
+    marginBottom: 8,
   },
-  productPrice: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#7C3AED',
-  },
-  description: {
-    fontSize: 16,
-    color: '#6B7280',
-    lineHeight: 24,
-  },
-  sellerInfo: {
+  priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    padding: 16,
+    gap: 6,
+  },
+  productPrice: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#16A34A',
+  },
+  currencySelector: {
+    backgroundColor: '#EFF6FF',
+    padding: 12,
     borderRadius: 12,
+    marginBottom: 16,
+  },
+  currencyLabel: {
+    fontSize: 14,
+    color: '#1E40AF',
+    marginBottom: 8,
+  },
+  currencyOptions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  currencyOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#DBEAFE',
+  },
+  currencyOptionActive: {
+    backgroundColor: '#3B82F6',
+  },
+  currencyOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1E40AF',
+  },
+  currencyOptionTextActive: {
+    color: '#FFFFFF',
+  },
+  sellerSection: {
+    marginBottom: 16,
+  },
+  sellerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
   },
-  sellerIcon: {
+  sellerAvatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#EDE9FE',
+    backgroundColor: '#DCFCE7',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  sellerDetails: {
+  sellerInfo: {
     flex: 1,
-  },
-  sellerLabel: {
-    fontSize: 12,
-    color: '#6B7280',
   },
   sellerName: {
     fontSize: 16,
@@ -236,67 +414,90 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
+    marginTop: 4,
   },
   verifiedText: {
     fontSize: 12,
-    color: '#059669',
+    color: '#F59E0B',
     fontWeight: '500',
   },
-  priceBreakdown: {
-    backgroundColor: '#F9FAFB',
-    padding: 16,
-    borderRadius: 12,
-    gap: 12,
-  },
-  priceRow: {
+  tradeMetrics: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
   },
-  priceLabel: {
-    fontSize: 14,
+  tradeMetricsText: {
+    fontSize: 12,
     color: '#6B7280',
   },
-  priceValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#1F2937',
+  trustSection: {
+    backgroundColor: '#FEFCE8',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
   },
-  totalRow: {
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    paddingTop: 12,
+  trustHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
   },
-  totalLabel: {
+  trustTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1F2937',
   },
-  totalValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#7C3AED',
+  trustItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  trustText: {
+    fontSize: 14,
+    color: '#374151',
+  },
+  deliverySection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    marginBottom: 16,
+  },
+  deliveryText: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  internationalBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#EFF6FF',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  internationalText: {
+    fontSize: 14,
+    color: '#3B82F6',
   },
   footer: {
-    padding: 20,
+    padding: 16,
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
   },
   buyButton: {
-    backgroundColor: '#7C3AED',
+    backgroundColor: '#16A34A',
     paddingVertical: 18,
     borderRadius: 12,
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
   },
   buyButtonText: {
     color: '#FFFFFF',
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
   },
 });

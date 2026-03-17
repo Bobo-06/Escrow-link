@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,10 +14,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { ordersApi } from '../../src/api/api';
 
 const orderSteps = [
-  { key: 'paid', label: 'Payment Received', icon: 'card' },
-  { key: 'preparing', label: 'Preparing Order', icon: 'cube' },
-  { key: 'shipped', label: 'Out for Delivery', icon: 'car' },
-  { key: 'delivered', label: 'Delivered', icon: 'checkmark-circle' },
+  { key: 'paid', label: 'Payment Secured' },
+  { key: 'preparing', label: 'Preparing Order' },
+  { key: 'shipped', label: 'Out for Delivery' },
+  { key: 'delivered', label: 'Delivered' },
 ];
 
 const statusOrder = ['pending_payment', 'paid', 'preparing', 'shipped', 'delivered', 'completed'];
@@ -51,8 +52,7 @@ export default function TrackOrder() {
 
   const getCurrentStepIndex = () => {
     if (!order) return -1;
-    const currentStatus = order.status;
-    return statusOrder.indexOf(currentStatus);
+    return statusOrder.indexOf(order.status);
   };
 
   const isStepComplete = (stepKey: string) => {
@@ -61,17 +61,20 @@ export default function TrackOrder() {
     return stepIndex <= currentIndex;
   };
 
-  const isStepActive = (stepKey: string) => {
-    return order?.status === stepKey;
-  };
-
-  const formatTZS = (amount: number) => `TZS ${amount?.toLocaleString() || 0}`;
+  const formatPrice = (amount: number) => `TZS ${amount?.toLocaleString() || 0}`;
 
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Your Order</Text>
+          <View style={{ width: 40 }} />
+        </View>
         <View style={styles.loadingContainer}>
-          <Ionicons name="hourglass" size={48} color="#7C3AED" />
+          <Ionicons name="hourglass" size={48} color="#16A34A" />
           <Text style={styles.loadingText}>Loading order...</Text>
         </View>
       </SafeAreaView>
@@ -81,6 +84,13 @@ export default function TrackOrder() {
   if (!order) {
     return (
       <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Your Order</Text>
+          <View style={{ width: 40 }} />
+        </View>
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle" size={64} color="#EF4444" />
           <Text style={styles.errorTitle}>Order Not Found</Text>
@@ -93,121 +103,103 @@ export default function TrackOrder() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Green Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Your Order</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color="#1F2937" />
-          </TouchableOpacity>
-          <Text style={styles.title}>Order Progress</Text>
-          <View style={styles.placeholder} />
-        </View>
-
-        {/* Product Info */}
+        {/* Product Card */}
         <View style={styles.productCard}>
-          <Text style={styles.productName}>{order.product_name}</Text>
-          <Text style={styles.productPrice}>{formatTZS(order.total_paid)}</Text>
+          <View style={styles.productImageContainer}>
+            {order.product_image ? (
+              <Image source={{ uri: order.product_image }} style={styles.productImage} />
+            ) : (
+              <View style={styles.productImagePlaceholder}>
+                <Ionicons name="cube" size={40} color="#9CA3AF" />
+              </View>
+            )}
+          </View>
+          <View style={styles.productInfo}>
+            <Text style={styles.productName}>{order.product_name}</Text>
+            <Text style={styles.productPrice}>{formatPrice(order.total_paid)}</Text>
+          </View>
         </View>
 
-        {/* Progress Steps */}
+        {/* Progress Steps - Matching the design */}
         <View style={styles.progressContainer}>
           {orderSteps.map((step, index) => {
             const complete = isStepComplete(step.key);
-            const active = isStepActive(step.key);
 
             return (
-              <View key={step.key} style={styles.stepContainer}>
+              <View key={step.key} style={styles.stepRow}>
                 <View style={styles.stepIndicator}>
-                  <View
-                    style={[
-                      styles.stepCircle,
-                      complete && styles.stepCircleComplete,
-                      active && styles.stepCircleActive,
-                    ]}
-                  >
-                    {complete ? (
-                      <Ionicons name="checkmark" size={20} color="#FFFFFF" />
-                    ) : (
-                      <Ionicons
-                        name={step.icon as any}
-                        size={20}
-                        color={active ? '#7C3AED' : '#D1D5DB'}
-                      />
-                    )}
-                  </View>
-                  {index < orderSteps.length - 1 && (
-                    <View
-                      style={[
-                        styles.stepLine,
-                        complete && styles.stepLineComplete,
-                      ]}
-                    />
+                  {complete ? (
+                    <Ionicons name="checkmark-circle" size={24} color="#16A34A" />
+                  ) : (
+                    <View style={styles.emptyCheckbox} />
                   )}
                 </View>
-                <View style={styles.stepContent}>
-                  <Text
-                    style={[
-                      styles.stepLabel,
-                      complete && styles.stepLabelComplete,
-                      active && styles.stepLabelActive,
-                    ]}
-                  >
-                    {step.label}
-                  </Text>
-                </View>
+                <Text style={[
+                  styles.stepLabel,
+                  complete && styles.stepLabelComplete
+                ]}>
+                  {step.label}
+                </Text>
               </View>
             );
           })}
         </View>
 
+        {/* Updates Section */}
+        <View style={styles.updatesSection}>
+          {order.status !== 'pending_payment' && (
+            <>
+              <View style={styles.updateItem}>
+                <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
+                <Text style={styles.updateText}>Order confirmed by seller</Text>
+              </View>
+              {(order.status === 'preparing' || statusOrder.indexOf(order.status) > statusOrder.indexOf('preparing')) && (
+                <View style={styles.updateItem}>
+                  <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
+                  <Text style={styles.updateText}>Materials purchased</Text>
+                </View>
+              )}
+            </>
+          )}
+        </View>
+
         {/* Escrow Status */}
-        <View style={styles.escrowCard}>
-          <Ionicons
-            name={order.escrow_status === 'held' ? 'lock-closed' : 'lock-open'}
-            size={24}
-            color={order.escrow_status === 'held' ? '#059669' : '#F59E0B'}
-          />
-          <View style={styles.escrowContent}>
-            <Text style={styles.escrowTitle}>
-              {order.escrow_status === 'held'
-                ? 'Payment Protected'
-                : order.escrow_status === 'released'
-                ? 'Payment Released'
-                : 'Awaiting Payment'}
-            </Text>
-            <Text style={styles.escrowText}>
-              {order.escrow_status === 'held'
-                ? 'Your money is held safely in escrow'
-                : order.escrow_status === 'released'
-                ? 'Payment has been released to seller'
-                : 'Waiting for payment confirmation'}
-            </Text>
-          </View>
+        <View style={styles.escrowStatus}>
+          <Ionicons name="shield-checkmark" size={18} color="#16A34A" />
+          <Text style={styles.escrowText}>
+            {order.escrow_status === 'held'
+              ? 'Your payment is still protected'
+              : order.escrow_status === 'released'
+              ? 'Payment released to seller'
+              : 'Awaiting payment'}
+          </Text>
         </View>
 
-        {/* Seller Info */}
-        <View style={styles.infoCard}>
-          <Text style={styles.infoTitle}>Seller</Text>
-          <Text style={styles.infoValue}>{order.seller_name}</Text>
-        </View>
+        {/* Contact Support Button */}
+        <TouchableOpacity style={styles.supportButton}>
+          <Ionicons name="call" size={18} color="#FFFFFF" />
+          <Text style={styles.supportButtonText}>Contact Support</Text>
+        </TouchableOpacity>
 
-        {/* Delivery Info */}
-        <View style={styles.infoCard}>
-          <Text style={styles.infoTitle}>Delivery Address</Text>
-          <Text style={styles.infoValue}>{order.buyer_location}</Text>
-        </View>
-      </ScrollView>
-
-      {/* Action Button */}
-      {showConfirmButton && order.status !== 'completed' && (
-        <View style={styles.footer}>
+        {/* Confirm Delivery Button - Only show when shipped */}
+        {showConfirmButton && order.status !== 'completed' && (
           <TouchableOpacity
-            style={styles.confirmButton}
+            style={styles.confirmDeliveryButton}
             onPress={() =>
               router.push({
                 pathname: '/confirm/[orderId]',
@@ -215,10 +207,21 @@ export default function TrackOrder() {
               })
             }
           >
-            <Text style={styles.confirmButtonText}>Confirm Delivery</Text>
+            <Text style={styles.confirmDeliveryText}>Received your order?</Text>
+            <Ionicons name="chevron-forward" size={20} color="#16A34A" />
           </TouchableOpacity>
-        </View>
-      )}
+        )}
+
+        {/* International Order Badge */}
+        {order.is_international && (
+          <View style={styles.internationalBadge}>
+            <Ionicons name="globe" size={16} color="#3B82F6" />
+            <Text style={styles.internationalText}>
+              International order via NALA
+            </Text>
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -226,7 +229,26 @@ export default function TrackOrder() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FFFFFF',
+  },
+  header: {
+    backgroundColor: '#16A34A',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   loadingContainer: {
     flex: 1,
@@ -252,152 +274,143 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
   },
-  header: {
+  productCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 16,
+    padding: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
     marginBottom: 24,
   },
-  backButton: {
-    width: 44,
-    height: 44,
+  productImageContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#E5E7EB',
+  },
+  productImage: {
+    width: '100%',
+    height: '100%',
+  },
+  productImagePlaceholder: {
+    flex: 1,
     justifyContent: 'center',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  placeholder: {
-    width: 44,
-  },
-  productCard: {
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 24,
     alignItems: 'center',
   },
+  productInfo: {
+    flex: 1,
+  },
   productName: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600',
     color: '#1F2937',
   },
   productPrice: {
-    fontSize: 18,
-    color: '#7C3AED',
+    fontSize: 16,
+    color: '#16A34A',
+    fontWeight: '500',
     marginTop: 4,
   },
   progressContainer: {
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 16,
     marginBottom: 24,
   },
-  stepContainer: {
+  stepRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   stepIndicator: {
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  stepCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
+    width: 24,
+    height: 24,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  emptyCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
     borderWidth: 2,
-    borderColor: '#E5E7EB',
-  },
-  stepCircleComplete: {
-    backgroundColor: '#059669',
-    borderColor: '#059669',
-  },
-  stepCircleActive: {
-    backgroundColor: '#EDE9FE',
-    borderColor: '#7C3AED',
-  },
-  stepLine: {
-    width: 2,
-    height: 32,
-    backgroundColor: '#E5E7EB',
-  },
-  stepLineComplete: {
-    backgroundColor: '#059669',
-  },
-  stepContent: {
-    flex: 1,
-    paddingTop: 8,
-    paddingBottom: 24,
+    borderColor: '#D1D5DB',
   },
   stepLabel: {
     fontSize: 16,
     color: '#9CA3AF',
   },
   stepLabelComplete: {
-    color: '#059669',
-    fontWeight: '500',
-  },
-  stepLabelActive: {
-    color: '#7C3AED',
-    fontWeight: '600',
-  },
-  escrowCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ECFDF5',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-    gap: 12,
-  },
-  escrowContent: {
-    flex: 1,
-  },
-  escrowTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#065F46',
-  },
-  escrowText: {
-    fontSize: 14,
-    color: '#047857',
-    marginTop: 2,
-  },
-  infoCard: {
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  infoTitle: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 4,
-  },
-  infoValue: {
-    fontSize: 16,
     color: '#1F2937',
     fontWeight: '500',
   },
-  footer: {
-    padding: 20,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+  updatesSection: {
+    marginBottom: 20,
   },
-  confirmButton: {
-    backgroundColor: '#059669',
-    paddingVertical: 18,
-    borderRadius: 12,
+  updateItem: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
   },
-  confirmButtonText: {
+  updateText: {
+    fontSize: 14,
+    color: '#374151',
+  },
+  escrowStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 14,
+    backgroundColor: '#DCFCE7',
+    borderRadius: 10,
+    marginBottom: 20,
+  },
+  escrowText: {
+    fontSize: 14,
+    color: '#16A34A',
+    fontWeight: '500',
+  },
+  supportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#3B82F6',
+    paddingVertical: 14,
+    borderRadius: 10,
+    marginBottom: 16,
+  },
+  supportButtonText: {
     color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  confirmDeliveryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: '#DCFCE7',
+    borderRadius: 10,
+    marginBottom: 16,
+  },
+  confirmDeliveryText: {
+    fontSize: 16,
+    color: '#16A34A',
+    fontWeight: '500',
+  },
+  internationalBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 8,
+  },
+  internationalText: {
+    fontSize: 14,
+    color: '#3B82F6',
   },
 });

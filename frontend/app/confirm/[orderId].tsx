@@ -4,7 +4,9 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  TextInput,
   Alert,
+  Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,8 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { ordersApi } from '../../src/api/api';
 
 const disputeReasons = [
-  { id: 'not_delivered', label: 'Not delivered' },
-  { id: 'wrong_item', label: 'Wrong item' },
+  { id: 'not_delivered', label: 'Item not delivered' },
+  { id: 'wrong_item', label: 'Wrong product' },
   { id: 'poor_quality', label: 'Poor quality' },
 ];
 
@@ -23,6 +25,7 @@ export default function ConfirmDelivery() {
   const [order, setOrder] = useState<any>(null);
   const [showDispute, setShowDispute] = useState(false);
   const [selectedReason, setSelectedReason] = useState('');
+  const [comment, setComment] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -61,7 +64,7 @@ export default function ConfirmDelivery() {
 
   const handleSubmitDispute = async () => {
     if (!selectedReason) {
-      Alert.alert('Error', 'Please select a reason');
+      Alert.alert('Required', 'Please select a reason');
       return;
     }
 
@@ -69,7 +72,7 @@ export default function ConfirmDelivery() {
     try {
       await ordersApi.createDispute(orderId || '', selectedReason);
       Alert.alert(
-        'Dispute Submitted',
+        'Case Submitted',
         'We will review your case and contact you shortly.',
         [
           {
@@ -79,28 +82,49 @@ export default function ConfirmDelivery() {
         ]
       );
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.detail || 'Could not submit dispute');
+      Alert.alert('Error', error.response?.data?.detail || 'Could not submit case');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const formatTZS = (amount: number) => `TZS ${amount?.toLocaleString() || 0}`;
+  const formatPrice = (amount: number) => `TZS ${amount?.toLocaleString() || 0}`;
 
+  // Dispute Screen - Matching the design
   if (showDispute) {
     return (
       <SafeAreaView style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => setShowDispute(false)}>
+            <Ionicons name="chevron-back" size={24} color="#1F2937" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitleDark}>Delivery Confirmation</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
         <View style={styles.content}>
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => setShowDispute(false)}
-            >
-              <Ionicons name="arrow-back" size={24} color="#1F2937" />
-            </TouchableOpacity>
-            <Text style={styles.title}>Report Issue</Text>
-            <View style={styles.placeholder} />
+          {/* Question */}
+          <Text style={styles.disputeTitle}>Order Delivered?</Text>
+          <Text style={styles.disputeSubtitle}>Have you received your item?</Text>
+
+          {/* Release Payment Button */}
+          <TouchableOpacity
+            style={styles.releaseButton}
+            onPress={() => setShowDispute(false)}
+          >
+            <Text style={styles.releaseButtonText}>Yes, Release Payment</Text>
+          </TouchableOpacity>
+
+          {/* Report Problem Button */}
+          <TouchableOpacity style={styles.reportButton}>
+            <Text style={styles.reportButtonText}>Report a Problem</Text>
+          </TouchableOpacity>
+
+          {/* Protection Message */}
+          <View style={styles.protectionMessage}>
+            <Ionicons name="shield-checkmark" size={18} color="#F59E0B" />
+            <Text style={styles.protectionText}>Your payment is still protected.</Text>
           </View>
 
           {/* Dispute Reasons */}
@@ -115,20 +139,25 @@ export default function ConfirmDelivery() {
                 onPress={() => setSelectedReason(reason.id)}
               >
                 <View style={styles.radioOuter}>
-                  {selectedReason === reason.id && (
-                    <View style={styles.radioInner} />
-                  )}
+                  {selectedReason === reason.id && <View style={styles.radioInner} />}
                 </View>
-                <Text
-                  style={[
-                    styles.reasonText,
-                    selectedReason === reason.id && styles.reasonTextSelected,
-                  ]}
-                >
-                  {reason.label}
-                </Text>
+                <Text style={styles.reasonText}>{reason.label}</Text>
               </TouchableOpacity>
             ))}
+          </View>
+
+          {/* Comment Field */}
+          <View style={styles.commentContainer}>
+            <Text style={styles.commentLabel}>Add a Comment (Optional)</Text>
+            <TextInput
+              style={styles.commentInput}
+              placeholder="Describe the issue..."
+              placeholderTextColor="#9CA3AF"
+              value={comment}
+              onChangeText={setComment}
+              multiline
+              numberOfLines={3}
+            />
           </View>
 
           {/* Submit Button */}
@@ -138,7 +167,7 @@ export default function ConfirmDelivery() {
             disabled={isLoading}
           >
             <Text style={styles.submitButtonText}>
-              {isLoading ? 'Submitting...' : 'Submit'}
+              {isLoading ? 'Submitting...' : 'Submit Case'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -146,58 +175,62 @@ export default function ConfirmDelivery() {
     );
   }
 
+  // Main Delivery Confirmation Screen - Matching the design
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={24} color="#1F2937" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitleDark}>Delivery Confirmation</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
       <View style={styles.content}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color="#1F2937" />
-          </TouchableOpacity>
-          <Text style={styles.title}>Confirm Delivery</Text>
-          <View style={styles.placeholder} />
-        </View>
-
-        {/* Question */}
-        <View style={styles.questionContainer}>
-          <View style={styles.questionIcon}>
-            <Ionicons name="cube" size={48} color="#7C3AED" />
+        {/* Product Image (if available) */}
+        {order?.product_image && (
+          <View style={styles.productImageContainer}>
+            <Image source={{ uri: order.product_image }} style={styles.productImage} />
           </View>
-          <Text style={styles.questionText}>Did you receive your order?</Text>
-          {order && (
-            <Text style={styles.orderInfo}>
-              {order.product_name} - {formatTZS(order.total_paid)}
-            </Text>
-          )}
-        </View>
+        )}
 
-        {/* Action Buttons */}
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={[styles.confirmButton, isLoading && styles.buttonDisabled]}
-            onPress={handleConfirmDelivery}
-            disabled={isLoading}
-          >
-            <Ionicons name="checkmark-circle" size={24} color="#FFFFFF" />
-            <Text style={styles.confirmButtonText}>
-              {isLoading ? 'Processing...' : 'Yes, Release Payment'}
-            </Text>
-          </TouchableOpacity>
+        {/* Main Question */}
+        <Text style={styles.mainQuestion}>Order Delivered?</Text>
+        <Text style={styles.subQuestion}>Have you received your item?</Text>
 
-          <TouchableOpacity
-            style={styles.reportButton}
-            onPress={() => setShowDispute(true)}
-          >
-            <Ionicons name="alert-circle-outline" size={20} color="#EF4444" />
-            <Text style={styles.reportButtonText}>Report Issue</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Product Info */}
+        {order && (
+          <View style={styles.orderInfo}>
+            <Text style={styles.orderProductName}>{order.product_name}</Text>
+            <Text style={styles.orderPrice}>{formatPrice(order.total_paid)}</Text>
+          </View>
+        )}
 
-        {/* Info */}
-        <View style={styles.infoBox}>
-          <Ionicons name="information-circle" size={20} color="#6B7280" />
-          <Text style={styles.infoText}>
-            By confirming, you agree that you have received your order in good condition and the payment will be released to the seller.
+        {/* Yes, Release Payment Button */}
+        <TouchableOpacity
+          style={[styles.confirmButton, isLoading && styles.buttonDisabled]}
+          onPress={handleConfirmDelivery}
+          disabled={isLoading}
+        >
+          <Text style={styles.confirmButtonText}>
+            {isLoading ? 'Processing...' : 'Yes, Release Payment'}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Report a Problem Button */}
+        <TouchableOpacity
+          style={styles.problemButton}
+          onPress={() => setShowDispute(true)}
+        >
+          <Text style={styles.problemButtonText}>Report a Problem</Text>
+        </TouchableOpacity>
+
+        {/* Protection Badge */}
+        <View style={styles.protectionBadge}>
+          <Ionicons name="shield-checkmark" size={18} color="#F59E0B" />
+          <Text style={styles.protectionBadgeText}>
+            Your payment is still protected.
           </Text>
         </View>
       </View>
@@ -210,124 +243,191 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  content: {
-    flex: 1,
-    padding: 20,
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 32,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
   backButton: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
+  headerTitleDark: {
+    fontSize: 18,
+    fontWeight: '600',
     color: '#1F2937',
   },
-  placeholder: {
-    width: 44,
-  },
-  questionContainer: {
+  content: {
+    flex: 1,
+    padding: 24,
     alignItems: 'center',
-    marginBottom: 32,
   },
-  questionIcon: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#EDE9FE',
-    justifyContent: 'center',
-    alignItems: 'center',
+  productImageContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 12,
+    overflow: 'hidden',
     marginBottom: 24,
+    backgroundColor: '#F3F4F6',
   },
-  questionText: {
-    fontSize: 24,
+  productImage: {
+    width: '100%',
+    height: '100%',
+  },
+  mainQuestion: {
+    fontSize: 26,
     fontWeight: 'bold',
     color: '#1F2937',
     textAlign: 'center',
+    marginBottom: 8,
   },
-  orderInfo: {
+  subQuestion: {
     fontSize: 16,
     color: '#6B7280',
-    marginTop: 8,
-  },
-  actions: {
-    gap: 16,
+    textAlign: 'center',
     marginBottom: 24,
   },
-  confirmButton: {
-    backgroundColor: '#059669',
-    paddingVertical: 18,
-    borderRadius: 12,
-    flexDirection: 'row',
+  orderInfo: {
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
+    marginBottom: 32,
+  },
+  orderProductName: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: '#1F2937',
+  },
+  orderPrice: {
+    fontSize: 16,
+    color: '#16A34A',
+    marginTop: 4,
+  },
+  confirmButton: {
+    backgroundColor: '#16A34A',
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 10,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   buttonDisabled: {
     opacity: 0.7,
   },
   confirmButtonText: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  problemButton: {
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 10,
+    width: '100%',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginBottom: 24,
+  },
+  problemButtonText: {
+    color: '#374151',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  protectionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEFCE8',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+  },
+  protectionBadgeText: {
+    fontSize: 14,
+    color: '#92400E',
+  },
+  // Dispute Screen Styles
+  disputeTitle: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    textAlign: 'center',
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  disputeSubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  releaseButton: {
+    backgroundColor: '#16A34A',
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 10,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  releaseButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
     fontWeight: '600',
   },
   reportButton: {
-    backgroundColor: '#FEE2E2',
-    paddingVertical: 18,
-    borderRadius: 12,
-    flexDirection: 'row',
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 10,
+    width: '100%',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    marginBottom: 16,
   },
   reportButtonText: {
-    color: '#EF4444',
-    fontSize: 18,
-    fontWeight: '600',
+    color: '#374151',
+    fontSize: 16,
+    fontWeight: '500',
   },
-  infoBox: {
+  protectionMessage: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    backgroundColor: '#F9FAFB',
-    padding: 16,
-    borderRadius: 12,
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 24,
   },
-  infoText: {
-    flex: 1,
+  protectionText: {
     fontSize: 14,
-    color: '#6B7280',
-    lineHeight: 20,
+    color: '#92400E',
   },
   reasonsContainer: {
+    width: '100%',
     gap: 12,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   reasonOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
     gap: 12,
   },
   reasonOptionSelected: {
-    borderColor: '#EF4444',
+    borderColor: '#DC2626',
     backgroundColor: '#FEF2F2',
   },
   radioOuter: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     borderWidth: 2,
     borderColor: '#D1D5DB',
     justifyContent: 'center',
@@ -337,25 +437,43 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#DC2626',
   },
   reasonText: {
     fontSize: 16,
     color: '#374151',
   },
-  reasonTextSelected: {
-    color: '#EF4444',
-    fontWeight: '600',
+  commentContainer: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  commentLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 8,
+  },
+  commentInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    padding: 14,
+    fontSize: 16,
+    color: '#1F2937',
+    height: 80,
+    textAlignVertical: 'top',
   },
   submitButton: {
-    backgroundColor: '#EF4444',
-    paddingVertical: 18,
-    borderRadius: 12,
+    backgroundColor: '#DC2626',
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 10,
+    width: '100%',
     alignItems: 'center',
   },
   submitButtonText: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
   },
 });

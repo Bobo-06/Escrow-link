@@ -20,8 +20,16 @@ api.interceptors.request.use(async (config) => {
 
 // Products API
 export const productsApi = {
-  create: (data: { name: string; price: number; description?: string; image?: string }) => 
-    api.post('/products', data),
+  create: (data: { 
+    name: string; 
+    price: number; 
+    currency?: string;
+    description?: string; 
+    image?: string;
+    export_category?: string;
+    international_shipping?: boolean;
+    shipping_countries?: string[];
+  }) => api.post('/products', data),
   getAll: () => api.get('/products'),
   get: (productId: string) => api.get(`/products/${productId}`),
   delete: (productId: string) => api.delete(`/products/${productId}`),
@@ -29,7 +37,8 @@ export const productsApi = {
 
 // Public product API (buyer view)
 export const paymentLinkApi = {
-  getByCode: (code: string) => api.get(`/pay/${code}`),
+  getByCode: (code: string, currency: string = 'TZS') => 
+    api.get(`/pay/${code}?currency=${currency}`),
 };
 
 // Orders API
@@ -39,7 +48,9 @@ export const ordersApi = {
     buyer_name: string;
     buyer_phone: string;
     buyer_location: string;
+    buyer_country?: string;
     payment_method: string;
+    buyer_currency?: string;
   }) => api.post('/orders', data),
   get: (orderId: string) => api.get(`/orders/${orderId}`),
   getSellerOrders: () => api.get('/seller/orders'),
@@ -60,6 +71,13 @@ export const paymentsApi = {
 // Stats API
 export const statsApi = {
   getSellerStats: () => api.get('/seller/stats'),
+  getTradeHistory: () => api.get('/seller/trade-history'),
+};
+
+// Currency API
+export const currencyApi = {
+  getCurrencies: () => api.get('/currencies'),
+  getExportCategories: () => api.get('/export-categories'),
 };
 
 export default api;

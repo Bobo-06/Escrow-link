@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,23 @@ import {
   ScrollView,
   Alert,
   Image,
+  Switch,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { productsApi } from '../../src/api/api';
+import { productsApi, currencyApi } from '../../src/api/api';
+
+const exportCategories = [
+  { id: 'textiles_fashion', label: 'Textiles & Fashion', icon: 'shirt' },
+  { id: 'handicrafts_art', label: 'Handicrafts & Art', icon: 'brush' },
+  { id: 'food_beverages', label: 'Food & Beverages', icon: 'cafe' },
+  { id: 'beauty_cosmetics', label: 'Beauty & Cosmetics', icon: 'flower' },
+  { id: 'jewelry_accessories', label: 'Jewelry & Accessories', icon: 'diamond' },
+  { id: 'home_decor', label: 'Home Decor', icon: 'home' },
+  { id: 'agricultural_products', label: 'Agricultural Products', icon: 'leaf' },
+];
 
 export default function CreateProduct() {
   const router = useRouter();
@@ -24,6 +35,11 @@ export default function CreateProduct() {
   const [description, setDescription] = useState('');
   const [image, setImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // New trade finance fields
+  const [internationalShipping, setInternationalShipping] = useState(false);
+  const [exportCategory, setExportCategory] = useState('');
+  const [showCategories, setShowCategories] = useState(false);
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -41,13 +57,13 @@ export default function CreateProduct() {
 
   const handleCreate = async () => {
     if (!name.trim()) {
-      Alert.alert('Error', 'Please enter a product name');
+      Alert.alert('Required', 'Please enter a product name');
       return;
     }
 
     const priceNum = parseFloat(price);
     if (!price || isNaN(priceNum) || priceNum <= 0) {
-      Alert.alert('Error', 'Please enter a valid price');
+      Alert.alert('Required', 'Please enter a valid price');
       return;
     }
 
@@ -56,11 +72,13 @@ export default function CreateProduct() {
       const response = await productsApi.create({
         name: name.trim(),
         price: priceNum,
+        currency: 'TZS',
         description: description.trim() || undefined,
         image: image || undefined,
+        export_category: exportCategory || undefined,
+        international_shipping: internationalShipping,
       });
 
-      // Navigate to link created screen with product data
       router.push({
         pathname: '/seller/link-created',
         params: {
@@ -68,6 +86,7 @@ export default function CreateProduct() {
           code: response.data.payment_link_code,
           name: response.data.name,
           price: response.data.price.toString(),
+          international: internationalShipping ? 'true' : 'false',
         },
       });
     } catch (error: any) {
@@ -81,15 +100,19 @@ export default function CreateProduct() {
     const priceNum = parseFloat(price) || 0;
     const buyerFee = priceNum * 0.03;
     const sellerFee = priceNum * 0.02;
+    const diasporaBuyerFee = priceNum * 0.02; // Lower for international
     return {
       buyerFee: buyerFee.toFixed(0),
       sellerFee: sellerFee.toFixed(0),
       totalBuyer: (priceNum + buyerFee).toFixed(0),
       sellerReceives: (priceNum - sellerFee).toFixed(0),
+      diasporaBuyerFee: diasporaBuyerFee.toFixed(0),
+      diasporaTotal: (priceNum + diasporaBuyerFee).toFixed(0),
     };
   };
 
   const fees = calculateFees();
+  const selectedCategory = exportCategories.find(c => c.id === exportCategory);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -97,37 +120,33 @@ export default function CreateProduct() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
+        {/* Green Header */}
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Create Payment Link</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.back()}
-            >
-              <Ionicons name="arrow-back" size={24} color="#1F2937" />
-            </TouchableOpacity>
-            <Text style={styles.title}>Create Payment Link</Text>
-            <View style={styles.placeholder} />
-          </View>
+          {/* Image Upload */}
+          <TouchableOpacity style={styles.imageUpload} onPress={pickImage}>
+            {image ? (
+              <Image source={{ uri: image }} style={styles.productImage} />
+            ) : (
+              <View style={styles.imagePlaceholder}>
+                <Ionicons name="camera" size={32} color="#9CA3AF" />
+                <Text style={styles.uploadText}>Upload Photo</Text>
+              </View>
+            )}
+          </TouchableOpacity>
 
           {/* Form */}
           <View style={styles.form}>
-            {/* Image Upload */}
-            <TouchableOpacity style={styles.imageUpload} onPress={pickImage}>
-              {image ? (
-                <Image source={{ uri: image }} style={styles.productImage} />
-              ) : (
-                <View style={styles.imagePlaceholder}>
-                  <Ionicons name="camera" size={32} color="#9CA3AF" />
-                  <Text style={styles.uploadText}>Upload Photo</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-
-            {/* Product Name */}
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Product Name *</Text>
               <TextInput
@@ -139,7 +158,6 @@ export default function CreateProduct() {
               />
             </View>
 
-            {/* Price */}
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Price (TZS) *</Text>
               <TextInput
@@ -152,9 +170,8 @@ export default function CreateProduct() {
               />
             </View>
 
-            {/* Description */}
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Description (optional)</Text>
+              <Text style={styles.label}>Description</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 placeholder="Describe your product..."
@@ -166,17 +183,107 @@ export default function CreateProduct() {
               />
             </View>
 
+            {/* International Shipping Toggle */}
+            <View style={styles.toggleSection}>
+              <View style={styles.toggleHeader}>
+                <View style={styles.toggleInfo}>
+                  <Ionicons name="globe" size={22} color="#3B82F6" />
+                  <View>
+                    <Text style={styles.toggleTitle}>Enable Diaspora Sales</Text>
+                    <Text style={styles.toggleSubtitle}>Accept payments via NALA from UK, US, EU</Text>
+                  </View>
+                </View>
+                <Switch
+                  value={internationalShipping}
+                  onValueChange={setInternationalShipping}
+                  trackColor={{ false: '#D1D5DB', true: '#86EFAC' }}
+                  thumbColor={internationalShipping ? '#16A34A' : '#F9FAFB'}
+                />
+              </View>
+            </View>
+
+            {/* Export Category (shown if international enabled) */}
+            {internationalShipping && (
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Export Category</Text>
+                <TouchableOpacity
+                  style={styles.categorySelector}
+                  onPress={() => setShowCategories(!showCategories)}
+                >
+                  {selectedCategory ? (
+                    <View style={styles.selectedCategory}>
+                      <Ionicons name={selectedCategory.icon as any} size={18} color="#16A34A" />
+                      <Text style={styles.selectedCategoryText}>{selectedCategory.label}</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.categorySelectorPlaceholder}>Select category</Text>
+                  )}
+                  <Ionicons name={showCategories ? 'chevron-up' : 'chevron-down'} size={20} color="#6B7280" />
+                </TouchableOpacity>
+
+                {showCategories && (
+                  <View style={styles.categoryList}>
+                    {exportCategories.map((cat) => (
+                      <TouchableOpacity
+                        key={cat.id}
+                        style={[
+                          styles.categoryOption,
+                          exportCategory === cat.id && styles.categoryOptionActive,
+                        ]}
+                        onPress={() => {
+                          setExportCategory(cat.id);
+                          setShowCategories(false);
+                        }}
+                      >
+                        <Ionicons
+                          name={cat.icon as any}
+                          size={18}
+                          color={exportCategory === cat.id ? '#16A34A' : '#6B7280'}
+                        />
+                        <Text
+                          style={[
+                            styles.categoryOptionText,
+                            exportCategory === cat.id && styles.categoryOptionTextActive,
+                          ]}
+                        >
+                          {cat.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+
             {/* Fee Preview */}
             {parseFloat(price) > 0 && (
               <View style={styles.feePreview}>
                 <Text style={styles.feeTitle}>Fee Breakdown</Text>
-                <View style={styles.feeRow}>
-                  <Text style={styles.feeLabel}>Buyer pays (3% protection fee)</Text>
-                  <Text style={styles.feeValue}>TZS {parseInt(fees.totalBuyer).toLocaleString()}</Text>
+                
+                <View style={styles.feeSection}>
+                  <Text style={styles.feeSectionTitle}>Local Buyers (TZ)</Text>
+                  <View style={styles.feeRow}>
+                    <Text style={styles.feeLabel}>Buyer pays (3% protection)</Text>
+                    <Text style={styles.feeValue}>TZS {parseInt(fees.totalBuyer).toLocaleString()}</Text>
+                  </View>
                 </View>
-                <View style={styles.feeRow}>
-                  <Text style={styles.feeLabel}>You receive (after 2% fee)</Text>
-                  <Text style={[styles.feeValue, styles.greenText]}>TZS {parseInt(fees.sellerReceives).toLocaleString()}</Text>
+
+                {internationalShipping && (
+                  <View style={styles.feeSection}>
+                    <View style={styles.diasporaHeader}>
+                      <Ionicons name="globe" size={16} color="#3B82F6" />
+                      <Text style={styles.feeSectionTitleBlue}>Diaspora Buyers (UK, US, EU)</Text>
+                    </View>
+                    <View style={styles.feeRow}>
+                      <Text style={styles.feeLabel}>Buyer pays (2% - reduced!)</Text>
+                      <Text style={styles.feeValueBlue}>TZS {parseInt(fees.diasporaTotal).toLocaleString()}</Text>
+                    </View>
+                  </View>
+                )}
+
+                <View style={styles.feeRowHighlight}>
+                  <Text style={styles.feeLabelBold}>You receive (after 2% fee)</Text>
+                  <Text style={styles.feeValueGreen}>TZS {parseInt(fees.sellerReceives).toLocaleString()}</Text>
                 </View>
               </View>
             )}
@@ -207,42 +314,39 @@ const styles = StyleSheet.create({
   keyboardView: {
     flex: 1,
   },
-  scrollContent: {
-    flexGrow: 1,
-    padding: 20,
-  },
   header: {
+    backgroundColor: '#16A34A',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
   backButton: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1F2937',
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
-  placeholder: {
-    width: 44,
-  },
-  form: {
-    gap: 20,
+  scrollContent: {
+    padding: 20,
   },
   imageUpload: {
     alignSelf: 'center',
-    width: 160,
-    height: 160,
-    borderRadius: 16,
+    width: 140,
+    height: 140,
+    borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: '#F3F4F6',
     borderWidth: 2,
     borderColor: '#E5E7EB',
     borderStyle: 'dashed',
+    marginBottom: 24,
   },
   productImage: {
     width: '100%',
@@ -258,26 +362,107 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
   },
+  form: {
+    gap: 16,
+  },
   inputContainer: {
     gap: 8,
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#374151',
   },
   input: {
     backgroundColor: '#F9FAFB',
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 10,
+    padding: 14,
     fontSize: 16,
     color: '#1F2937',
   },
   textArea: {
-    height: 100,
+    height: 80,
     textAlignVertical: 'top',
+  },
+  toggleSection: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  toggleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  toggleInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  toggleTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1E40AF',
+  },
+  toggleSubtitle: {
+    fontSize: 12,
+    color: '#3B82F6',
+    marginTop: 2,
+  },
+  categorySelector: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  selectedCategory: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  selectedCategoryText: {
+    fontSize: 16,
+    color: '#16A34A',
+    fontWeight: '500',
+  },
+  categorySelectorPlaceholder: {
+    fontSize: 16,
+    color: '#9CA3AF',
+  },
+  categoryList: {
+    marginTop: 8,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  categoryOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  categoryOptionActive: {
+    backgroundColor: '#DCFCE7',
+  },
+  categoryOptionText: {
+    fontSize: 14,
+    color: '#374151',
+  },
+  categoryOptionTextActive: {
+    color: '#16A34A',
+    fontWeight: '500',
   },
   feePreview: {
     backgroundColor: '#F9FAFB',
@@ -286,30 +471,70 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   feeTitle: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#374151',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  feeSection: {
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  feeSectionTitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6B7280',
+    marginBottom: 6,
+  },
+  feeSectionTitleBlue: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#3B82F6',
+  },
+  diasporaHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
   },
   feeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
+  feeRowHighlight: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 8,
+  },
   feeLabel: {
     fontSize: 14,
     color: '#6B7280',
   },
+  feeLabelBold: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+  },
   feeValue: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#1F2937',
   },
-  greenText: {
-    color: '#059669',
+  feeValueBlue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#3B82F6',
+  },
+  feeValueGreen: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#16A34A',
   },
   createButton: {
-    backgroundColor: '#7C3AED',
-    paddingVertical: 18,
-    borderRadius: 12,
+    backgroundColor: '#16A34A',
+    paddingVertical: 16,
+    borderRadius: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -321,7 +546,7 @@ const styles = StyleSheet.create({
   },
   createButtonText: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
   },
 });

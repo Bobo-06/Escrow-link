@@ -9,12 +9,12 @@ import {
   Platform,
   ScrollView,
   Alert,
+  Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { ordersApi, paymentsApi } from '../../src/api/api';
-import TrustBadge from '../../src/components/TrustBadge';
+import { ordersApi, paymentsApi, paymentLinkApi } from '../../src/api/api';
 import axios from 'axios';
 import Constants from 'expo-constants';
 
@@ -26,25 +26,34 @@ const paymentMethods = [
   { id: 'mpesa', name: 'M-Pesa', icon: 'phone-portrait-outline' },
   { id: 'airtel', name: 'Airtel Money', icon: 'phone-portrait-outline' },
   { id: 'tigo', name: 'Tigo Pesa', icon: 'phone-portrait-outline' },
+  { id: 'nala', name: 'NALA (Diaspora)', icon: 'globe-outline' },
+];
+
+const countries = [
+  { code: 'TZ', name: 'Tanzania' },
+  { code: 'US', name: 'United States' },
+  { code: 'GB', name: 'United Kingdom' },
+  { code: 'KE', name: 'Kenya' },
+  { code: 'UG', name: 'Uganda' },
 ];
 
 export default function Checkout() {
   const router = useRouter();
-  const { orderId, productId } = useLocalSearchParams<{ orderId: string; productId: string }>();
+  const { productId, currency } = useLocalSearchParams<{ orderId: string; productId: string; currency: string }>();
   const [step, setStep] = useState<Step>('delivery');
   const [order, setOrder] = useState<any>(null);
+  const [product, setProduct] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const [deliveryData, setDeliveryData] = useState({
     buyer_name: '',
     buyer_phone: '',
     buyer_location: '',
+    buyer_country: 'TZ',
   });
 
   const [selectedPayment, setSelectedPayment] = useState('mpesa');
-
-  // Load product details if creating new order
-  const [product, setProduct] = useState<any>(null);
+  const selectedCurrency = currency || 'TZS';
 
   useEffect(() => {
     if (productId) {
@@ -54,26 +63,28 @@ export default function Checkout() {
 
   const loadProduct = async () => {
     try {
-      // Get product by ID via pay endpoint (we need to get it differently)
-      const response = await axios.get(`${API_URL}/api/products/${productId}`);
-      setProduct(response.data);
+      // Get product info from the payment link API
+      const products = await axios.get(`${API_URL}/api/products`);
+      const prod = products.data.find((p: any) => p.product_id === productId);
+      if (prod) {
+        setProduct(prod);
+      }
     } catch (error) {
-      // Try to get product info from the order
-      console.log('Could not load product directly');
+      console.log('Could not load product');
     }
   };
 
   const handleDeliverySubmit = () => {
     if (!deliveryData.buyer_name.trim()) {
-      Alert.alert('Error', 'Please enter your name');
+      Alert.alert('Required', 'Please enter your name');
       return;
     }
     if (!deliveryData.buyer_phone.trim()) {
-      Alert.alert('Error', 'Please enter your phone number');
+      Alert.alert('Required', 'Please enter your phone number');
       return;
     }
     if (!deliveryData.buyer_location.trim()) {
-      Alert.alert('Error', 'Please enter your delivery location');
+      Alert.alert('Required', 'Please enter your delivery location');
       return;
     }
     setStep('payment');
@@ -84,18 +95,17 @@ export default function Checkout() {
     setStep('processing');
 
     try {
-      // Create order
       const orderResponse = await ordersApi.create({
         product_id: productId || '',
         buyer_name: deliveryData.buyer_name,
         buyer_phone: deliveryData.buyer_phone,
         buyer_location: deliveryData.buyer_location,
+        buyer_country: deliveryData.buyer_country,
         payment_method: selectedPayment,
+        buyer_currency: selectedCurrency,
       });
 
       const newOrder = orderResponse.data;
-
-      // Simulate payment
       await paymentsApi.simulate(newOrder.order_id, selectedPayment);
 
       setOrder(newOrder);
@@ -108,7 +118,13 @@ export default function Checkout() {
     }
   };
 
-  const formatTZS = (amount: number) => `TZS ${amount?.toLocaleString() || 0}`;
+  const formatPrice = (amount: number, curr: string = 'TZS') => {
+    if (curr === 'TZS') return `TZS ${amount?.toLocaleString() || 0}`;
+    if (curr === 'USD') return `$${amount?.toFixed(2) || 0}`;
+    if (curr === 'GBP') return `£${amount?.toFixed(2) || 0}`;
+    if (curr === 'EUR') return `€${amount?.toFixed(2) || 0}`;
+    return `${curr} ${amount?.toLocaleString() || 0}`;
+  };
 
   // Delivery Details Step
   if (step === 'delivery') {
@@ -118,30 +134,21 @@ export default function Checkout() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardView}
         >
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-          >
-            {/* Header */}
-            <View style={styles.header}>
-              <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-                <Ionicons name="arrow-back" size={24} color="#1F2937" />
-              </TouchableOpacity>
-              <Text style={styles.title}>Delivery Details</Text>
-              <View style={styles.placeholder} />
-            </View>
+          {/* Green Header */}
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+              <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Secure Checkout</Text>
+            <Ionicons name="lock-closed" size={18} color="#FFFFFF" />
+          </View>
 
-            {/* Progress */}
-            <View style={styles.progress}>
-              <View style={[styles.progressDot, styles.progressActive]} />
-              <View style={styles.progressLine} />
-              <View style={styles.progressDot} />
-            </View>
+          <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+            <Text style={styles.stepTitle}>Where should we deliver?</Text>
 
-            {/* Form */}
             <View style={styles.form}>
               <View style={styles.inputContainer}>
-                <Text style={styles.label}>Your Name</Text>
+                <Text style={styles.label}>Full Name</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="Enter your full name"
@@ -167,7 +174,7 @@ export default function Checkout() {
                 <Text style={styles.label}>Delivery Location</Text>
                 <TextInput
                   style={[styles.input, styles.textArea]}
-                  placeholder="Enter your full address"
+                  placeholder="Full address for delivery"
                   placeholderTextColor="#9CA3AF"
                   value={deliveryData.buyer_location}
                   onChangeText={(text) => setDeliveryData({ ...deliveryData, buyer_location: text })}
@@ -175,15 +182,43 @@ export default function Checkout() {
                   numberOfLines={3}
                 />
               </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Country</Text>
+                <View style={styles.countrySelector}>
+                  {countries.map((country) => (
+                    <TouchableOpacity
+                      key={country.code}
+                      style={[
+                        styles.countryOption,
+                        deliveryData.buyer_country === country.code && styles.countryOptionActive,
+                      ]}
+                      onPress={() => setDeliveryData({ ...deliveryData, buyer_country: country.code })}
+                    >
+                      <Text
+                        style={[
+                          styles.countryOptionText,
+                          deliveryData.buyer_country === country.code && styles.countryOptionTextActive,
+                        ]}
+                      >
+                        {country.code}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
             </View>
 
-            <TrustBadge variant="compact" />
+            {/* Trust Badge */}
+            <View style={styles.trustBadge}>
+              <Ionicons name="shield-checkmark" size={20} color="#16A34A" />
+              <Text style={styles.trustBadgeText}>Your payment is protected</Text>
+            </View>
           </ScrollView>
 
-          {/* Continue Button */}
           <View style={styles.footer}>
             <TouchableOpacity style={styles.continueButton} onPress={handleDeliverySubmit}>
-              <Text style={styles.continueButtonText}>Continue</Text>
+              <Text style={styles.continueButtonText}>Continue to Payment</Text>
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -191,82 +226,77 @@ export default function Checkout() {
     );
   }
 
-  // Payment Step
+  // Payment Step - Matching the design exactly
   if (step === 'payment') {
+    const price = product?.price_tzs || product?.price || 0;
+    const protectionFee = price * 0.03;
+    const total = price + protectionFee;
+
     return (
       <SafeAreaView style={styles.container}>
+        {/* Green Header */}
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => setStep('delivery')}>
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <View style={styles.headerTitleRow}>
+            <Text style={styles.headerTitle}>Payment Secured</Text>
+            <Ionicons name="lock-closed" size={16} color="#F59E0B" />
+          </View>
+          <View style={{ width: 40 }} />
+        </View>
+
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.backButton} onPress={() => setStep('delivery')}>
-              <Ionicons name="arrow-back" size={24} color="#1F2937" />
-            </TouchableOpacity>
-            <Text style={styles.title}>Choose Payment</Text>
-            <View style={styles.placeholder} />
+          {/* Product Summary */}
+          <View style={styles.productSummary}>
+            <View style={styles.productImageSmall}>
+              {product?.image ? (
+                <Image source={{ uri: product.image }} style={styles.productImageSmallImg} />
+              ) : (
+                <Ionicons name="cube" size={32} color="#9CA3AF" />
+              )}
+            </View>
+            <View style={styles.productSummaryInfo}>
+              <Text style={styles.productSummaryName}>{product?.name || 'Product'}</Text>
+              <Text style={styles.productSummaryPrice}>{formatPrice(price)}</Text>
+            </View>
           </View>
 
-          {/* Progress */}
-          <View style={styles.progress}>
-            <View style={[styles.progressDot, styles.progressComplete]} />
-            <View style={[styles.progressLine, styles.progressLineActive]} />
-            <View style={[styles.progressDot, styles.progressActive]} />
+          {/* Order Breakdown */}
+          <View style={styles.orderBreakdown}>
+            <View style={styles.breakdownRow}>
+              <Text style={styles.breakdownLabel}>Order:</Text>
+              <Text style={styles.breakdownValue}>{formatPrice(price)}</Text>
+            </View>
+            <View style={styles.breakdownRow}>
+              <Text style={styles.breakdownLabel}>Protection Fee:</Text>
+              <Text style={styles.breakdownValue}>{formatPrice(protectionFee)}</Text>
+            </View>
+          </View>
+
+          {/* Escrow Message */}
+          <View style={styles.escrowMessage}>
+            <Ionicons name="shield-checkmark" size={20} color="#F59E0B" />
+            <View style={styles.escrowTextContainer}>
+              <Text style={styles.escrowTitle}>Payment held securely in escrow.</Text>
+              <Text style={styles.escrowSubtitle}>Seller paid after delivery.</Text>
+            </View>
           </View>
 
           {/* Payment Methods */}
           <View style={styles.paymentMethods}>
-            <Text style={styles.sectionTitle}>Select Payment Method</Text>
             {paymentMethods.map((method) => (
               <TouchableOpacity
                 key={method.id}
-                style={[
-                  styles.paymentOption,
-                  selectedPayment === method.id && styles.paymentOptionSelected,
-                ]}
+                style={styles.paymentOption}
                 onPress={() => setSelectedPayment(method.id)}
               >
-                <Ionicons
-                  name={method.icon as any}
-                  size={24}
-                  color={selectedPayment === method.id ? '#7C3AED' : '#6B7280'}
-                />
-                <Text
-                  style={[
-                    styles.paymentOptionText,
-                    selectedPayment === method.id && styles.paymentOptionTextSelected,
-                  ]}
-                >
-                  {method.name}
-                </Text>
                 <View style={styles.radioOuter}>
                   {selectedPayment === method.id && <View style={styles.radioInner} />}
                 </View>
+                <Text style={styles.paymentOptionText}>{method.name}</Text>
               </TouchableOpacity>
             ))}
-          </View>
-
-          {/* Order Summary */}
-          {product && (
-            <View style={styles.orderSummary}>
-              <Text style={styles.sectionTitle}>Order Summary</Text>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>{product.name}</Text>
-                <Text style={styles.summaryValue}>{formatTZS(product.price)}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Protection Fee</Text>
-                <Text style={styles.summaryValue}>{formatTZS(product.buyer_protection_fee)}</Text>
-              </View>
-              <View style={[styles.summaryRow, styles.totalRow]}>
-                <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalValue}>{formatTZS(product.total_buyer_pays)}</Text>
-              </View>
-            </View>
-          )}
-
-          {/* Escrow Info */}
-          <View style={styles.escrowInfo}>
-            <Ionicons name="lock-closed" size={20} color="#059669" />
-            <Text style={styles.escrowText}>Held safely in escrow until delivery</Text>
           </View>
         </ScrollView>
 
@@ -277,8 +307,7 @@ export default function Checkout() {
             onPress={handlePayment}
             disabled={isLoading}
           >
-            <Ionicons name="shield-checkmark" size={24} color="#FFFFFF" />
-            <Text style={styles.payButtonText}>Pay Now</Text>
+            <Text style={styles.payButtonText}>Pay {formatPrice(total)}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -289,30 +318,55 @@ export default function Checkout() {
   if (step === 'processing') {
     return (
       <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <View style={{ width: 40 }} />
+          <Text style={styles.headerTitle}>Processing</Text>
+          <View style={{ width: 40 }} />
+        </View>
         <View style={styles.processingContainer}>
           <View style={styles.processingIcon}>
-            <Ionicons name="hourglass" size={48} color="#7C3AED" />
+            <Ionicons name="hourglass" size={48} color="#16A34A" />
           </View>
           <Text style={styles.processingTitle}>Processing Payment</Text>
-          <Text style={styles.processingText}>
-            Please wait while we confirm your payment...
-          </Text>
+          <Text style={styles.processingText}>Please wait...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  // Success Step
+  // Success Step - Matching the design exactly
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.successContainer}>
-        <View style={styles.successIcon}>
-          <Ionicons name="checkmark-circle" size={80} color="#059669" />
+      {/* Green Header with Checkmark */}
+      <View style={styles.header}>
+        <View style={{ width: 40 }} />
+        <View style={styles.headerTitleRow}>
+          <Text style={styles.headerTitle}>Payment Secured</Text>
+          <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
         </View>
-        <Text style={styles.successTitle}>Payment Successful</Text>
-        <Text style={styles.successText}>Your money is safe in escrow.</Text>
-        <Text style={styles.successSubtext}>Seller will now prepare your order.</Text>
+        <View style={{ width: 40 }} />
+      </View>
 
+      <View style={styles.successContainer}>
+        <Text style={styles.successMessage}>Your money is safely held in escrow.</Text>
+
+        {/* What happens next */}
+        <View style={styles.nextSteps}>
+          <View style={styles.nextStepItem}>
+            <Ionicons name="checkmark-circle" size={22} color="#16A34A" />
+            <Text style={styles.nextStepText}>Seller notified</Text>
+          </View>
+          <View style={styles.nextStepItem}>
+            <Ionicons name="checkmark-circle" size={22} color="#16A34A" />
+            <Text style={styles.nextStepText}>Order being prepared</Text>
+          </View>
+          <View style={styles.nextStepItem}>
+            <Ionicons name="checkmark-circle" size={22} color="#16A34A" />
+            <Text style={styles.nextStepText}>Track your progress</Text>
+          </View>
+        </View>
+
+        {/* Track Order Button */}
         <TouchableOpacity
           style={styles.trackButton}
           onPress={() => router.replace({
@@ -320,8 +374,7 @@ export default function Checkout() {
             params: { orderId: order?.order_id }
           })}
         >
-          <Ionicons name="location" size={20} color="#FFFFFF" />
-          <Text style={styles.trackButtonText}>Track Order</Text>
+          <Text style={styles.trackButtonText}>Track Your Order</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -336,73 +389,57 @@ const styles = StyleSheet.create({
   keyboardView: {
     flex: 1,
   },
-  scrollContent: {
-    flexGrow: 1,
-    padding: 20,
-  },
   header: {
+    backgroundColor: '#16A34A',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
   backButton: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1F2937',
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
-  placeholder: {
-    width: 44,
-  },
-  progress: {
+  headerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 32,
+    gap: 8,
   },
-  progressDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#E5E7EB',
+  scrollContent: {
+    padding: 20,
+    flexGrow: 1,
   },
-  progressActive: {
-    backgroundColor: '#7C3AED',
-  },
-  progressComplete: {
-    backgroundColor: '#059669',
-  },
-  progressLine: {
-    width: 80,
-    height: 2,
-    backgroundColor: '#E5E7EB',
-  },
-  progressLineActive: {
-    backgroundColor: '#059669',
+  stepTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 20,
   },
   form: {
-    gap: 20,
-    marginBottom: 24,
+    gap: 16,
   },
   inputContainer: {
     gap: 8,
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#374151',
   },
   input: {
     backgroundColor: '#F9FAFB',
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 10,
+    padding: 14,
     fontSize: 16,
     color: '#1F2937',
   },
@@ -410,59 +447,150 @@ const styles = StyleSheet.create({
     height: 80,
     textAlignVertical: 'top',
   },
+  countrySelector: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  countryOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+  },
+  countryOptionActive: {
+    backgroundColor: '#16A34A',
+  },
+  countryOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  countryOptionTextActive: {
+    color: '#FFFFFF',
+  },
+  trustBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 24,
+    padding: 12,
+    backgroundColor: '#DCFCE7',
+    borderRadius: 10,
+  },
+  trustBadgeText: {
+    fontSize: 14,
+    color: '#16A34A',
+    fontWeight: '500',
+  },
   footer: {
     padding: 20,
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
   },
   continueButton: {
-    backgroundColor: '#7C3AED',
-    paddingVertical: 18,
-    borderRadius: 12,
+    backgroundColor: '#16A34A',
+    paddingVertical: 16,
+    borderRadius: 10,
     alignItems: 'center',
   },
   continueButtonText: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
   },
-  paymentMethods: {
-    marginBottom: 24,
+  // Payment Page Styles
+  productSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    marginBottom: 16,
   },
-  sectionTitle: {
+  productImageSmall: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  productImageSmallImg: {
+    width: '100%',
+    height: '100%',
+  },
+  productSummaryInfo: {
+    flex: 1,
+  },
+  productSummaryName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1F2937',
+  },
+  productSummaryPrice: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  orderBreakdown: {
     marginBottom: 16,
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  breakdownLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  breakdownValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1F2937',
+  },
+  escrowMessage: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    backgroundColor: '#FEFCE8',
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 20,
+  },
+  escrowTextContainer: {
+    flex: 1,
+  },
+  escrowTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  escrowSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  paymentMethods: {
+    gap: 12,
   },
   paymentOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
     gap: 12,
   },
-  paymentOptionSelected: {
-    borderColor: '#7C3AED',
-    backgroundColor: '#F5F3FF',
-  },
-  paymentOptionText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#374151',
-  },
-  paymentOptionTextSelected: {
-    color: '#7C3AED',
-    fontWeight: '600',
-  },
   radioOuter: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     borderWidth: 2,
     borderColor: '#D1D5DB',
     justifyContent: 'center',
@@ -472,75 +600,27 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#7C3AED',
+    backgroundColor: '#16A34A',
   },
-  orderSummary: {
-    backgroundColor: '#F9FAFB',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  summaryLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  summaryValue: {
-    fontSize: 14,
-    color: '#1F2937',
-  },
-  totalRow: {
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    paddingTop: 12,
-    marginTop: 8,
-    marginBottom: 0,
-  },
-  totalLabel: {
+  paymentOptionText: {
     fontSize: 16,
-    fontWeight: '600',
     color: '#1F2937',
-  },
-  totalValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#7C3AED',
-  },
-  escrowInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    padding: 16,
-    backgroundColor: '#ECFDF5',
-    borderRadius: 12,
-  },
-  escrowText: {
-    fontSize: 14,
-    color: '#059669',
-    fontWeight: '500',
   },
   payButton: {
-    backgroundColor: '#7C3AED',
-    paddingVertical: 18,
-    borderRadius: 12,
-    flexDirection: 'row',
+    backgroundColor: '#16A34A',
+    paddingVertical: 16,
+    borderRadius: 10,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
   },
   buttonDisabled: {
     opacity: 0.7,
   },
   payButtonText: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
   },
+  // Processing Styles
   processingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -551,13 +631,13 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: '#EDE9FE',
+    backgroundColor: '#DCFCE7',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
   },
   processingTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#1F2937',
     marginBottom: 8,
@@ -565,46 +645,45 @@ const styles = StyleSheet.create({
   processingText: {
     fontSize: 16,
     color: '#6B7280',
-    textAlign: 'center',
   },
+  // Success Styles
   successContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  successIcon: {
-    marginBottom: 24,
-  },
-  successTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  successText: {
+  successMessage: {
     fontSize: 18,
-    color: '#059669',
-    fontWeight: '500',
-  },
-  successSubtext: {
-    fontSize: 16,
-    color: '#6B7280',
-    marginTop: 8,
+    color: '#1F2937',
+    textAlign: 'center',
     marginBottom: 32,
   },
-  trackButton: {
-    backgroundColor: '#7C3AED',
-    paddingVertical: 18,
-    paddingHorizontal: 32,
-    borderRadius: 12,
+  nextSteps: {
+    width: '100%',
+    gap: 16,
+    marginBottom: 32,
+  },
+  nextStepItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
+  },
+  nextStepText: {
+    fontSize: 16,
+    color: '#374151',
+  },
+  trackButton: {
+    backgroundColor: '#16A34A',
+    paddingVertical: 16,
+    paddingHorizontal: 48,
+    borderRadius: 10,
+    alignItems: 'center',
+    width: '100%',
   },
   trackButtonText: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
   },
 });

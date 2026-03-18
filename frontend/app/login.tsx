@@ -19,6 +19,21 @@ import Constants from 'expo-constants';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL || process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
+const COLORS = {
+  primary: '#0D9488',
+  primaryDark: '#0F766E',
+  primaryLight: '#14B8A6',
+  gold: '#F59E0B',
+  dark: '#0F172A',
+  darkGray: '#1E293B',
+  gray: '#64748B',
+  lightGray: '#E2E8F0',
+  inputBg: '#F1F5F9',
+  background: '#F8FAFC',
+  white: '#FFFFFF',
+  error: '#EF4444',
+};
+
 export default function Login() {
   const router = useRouter();
   const { login } = useAuthStore();
@@ -29,7 +44,7 @@ export default function Login() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please enter email and password');
+      Alert.alert('Required', 'Please enter email and password');
       return;
     }
 
@@ -45,7 +60,6 @@ export default function Login() {
   };
 
   const handleGoogleLogin = () => {
-    // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
     const redirectUrl = `${API_URL}/auth-callback`;
     const authUrl = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
     Linking.openURL(authUrl);
@@ -53,6 +67,20 @@ export default function Login() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()} data-testid="back-btn">
+          <Ionicons name="chevron-back" size={24} color={COLORS.white} />
+        </TouchableOpacity>
+        <View style={styles.headerTitleRow}>
+          <Ionicons name="shield-checkmark" size={18} color={COLORS.white} />
+          <Text style={styles.headerTitle}>CraftHer</Text>
+        </View>
+        <View style={styles.headerRight}>
+          <Ionicons name="lock-closed" size={14} color={COLORS.gold} />
+        </View>
+      </View>
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -61,57 +89,57 @@ export default function Login() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Back Button */}
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#1F2937" />
-          </TouchableOpacity>
-
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.logoIcon}>
-              <Ionicons name="shield-checkmark" size={32} color="#FFFFFF" />
+          {/* Welcome Section */}
+          <View style={styles.welcomeSection}>
+            <View style={styles.welcomeIconOuter}>
+              <View style={styles.welcomeIcon}>
+                <Ionicons name="person" size={28} color={COLORS.primary} />
+              </View>
             </View>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Sign in to manage your payment links</Text>
+            <Text style={styles.welcomeTitle}>Welcome Back</Text>
+            <Text style={styles.welcomeSubtitle}>Sign in to manage your payment links</Text>
           </View>
 
           {/* Form */}
           <View style={styles.form}>
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="your@email.com"
-                placeholderTextColor="#9CA3AF"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
+              <View style={styles.inputWrapper}>
+                <Ionicons name="mail-outline" size={20} color={COLORS.gray} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="your@email.com"
+                  placeholderTextColor={COLORS.gray}
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  data-testid="email-input"
+                />
+              </View>
             </View>
 
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Password</Text>
-              <View style={styles.passwordContainer}>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="lock-closed-outline" size={20} color={COLORS.gray} style={styles.inputIcon} />
                 <TextInput
-                  style={styles.passwordInput}
+                  style={styles.input}
                   placeholder="Enter password"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={COLORS.gray}
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
+                  data-testid="password-input"
                 />
                 <TouchableOpacity
                   style={styles.eyeButton}
                   onPress={() => setShowPassword(!showPassword)}
                 >
                   <Ionicons
-                    name={showPassword ? 'eye-off' : 'eye'}
-                    size={24}
-                    color="#6B7280"
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color={COLORS.gray}
                   />
                 </TouchableOpacity>
               </View>
@@ -121,6 +149,7 @@ export default function Login() {
               style={[styles.loginButton, isLoading && styles.buttonDisabled]}
               onPress={handleLogin}
               disabled={isLoading}
+              data-testid="login-submit-btn"
             >
               <Text style={styles.loginButtonText}>
                 {isLoading ? 'Signing in...' : 'Sign In'}
@@ -135,11 +164,8 @@ export default function Login() {
             </View>
 
             {/* Google Login */}
-            <TouchableOpacity
-              style={styles.googleButton}
-              onPress={handleGoogleLogin}
-            >
-              <Ionicons name="logo-google" size={20} color="#374151" />
+            <TouchableOpacity style={styles.googleButton} onPress={handleGoogleLogin} data-testid="google-login-btn">
+              <Ionicons name="logo-google" size={20} color={COLORS.dark} />
               <Text style={styles.googleButtonText}>Continue with Google</Text>
             </TouchableOpacity>
 
@@ -151,6 +177,12 @@ export default function Login() {
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Trust Badge */}
+          <View style={styles.trustBadge}>
+            <Ionicons name="shield-checkmark" size={16} color={COLORS.primary} />
+            <Text style={styles.trustText}>Your data is secure with us</Text>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -160,7 +192,39 @@ export default function Login() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.white,
+  },
+  header: {
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.white,
+  },
+  headerRight: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   keyboardView: {
     flex: 1,
@@ -169,37 +233,42 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: 24,
   },
-  backButton: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-  },
-  header: {
+  welcomeSection: {
     alignItems: 'center',
-    marginTop: 24,
     marginBottom: 32,
   },
-  logoIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: '#7C3AED',
+  welcomeIconOuter: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
+    backgroundColor: COLORS.background,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.lightGray,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1F2937',
+  welcomeIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: '#CCFBF1',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#6B7280',
+  welcomeTitle: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: COLORS.dark,
+    letterSpacing: -0.5,
+  },
+  welcomeSubtitle: {
+    fontSize: 15,
+    color: COLORS.gray,
     marginTop: 8,
   },
   form: {
-    gap: 20,
+    gap: 18,
   },
   inputContainer: {
     gap: 8,
@@ -207,48 +276,48 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#374151',
+    color: COLORS.darkGray,
   },
-  input: {
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#1F2937',
-  },
-  passwordContainer: {
+  inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: COLORS.inputBg,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
+    borderColor: COLORS.lightGray,
+    borderRadius: 14,
+    paddingHorizontal: 14,
   },
-  passwordInput: {
+  inputIcon: {
+    marginRight: 10,
+  },
+  input: {
     flex: 1,
-    padding: 16,
+    paddingVertical: 16,
     fontSize: 16,
-    color: '#1F2937',
+    color: COLORS.dark,
   },
   eyeButton: {
-    padding: 12,
+    padding: 8,
   },
   loginButton: {
-    backgroundColor: '#7C3AED',
+    backgroundColor: COLORS.primary,
     paddingVertical: 18,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: 'center',
     marginTop: 8,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
   },
   buttonDisabled: {
     opacity: 0.7,
   },
   loginButtonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
+    color: COLORS.white,
+    fontSize: 17,
+    fontWeight: '700',
   },
   divider: {
     flexDirection: 'row',
@@ -258,26 +327,26 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: COLORS.lightGray,
   },
   dividerText: {
     marginHorizontal: 16,
-    color: '#9CA3AF',
+    color: COLORS.gray,
     fontSize: 14,
   },
   googleButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: COLORS.white,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.lightGray,
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     gap: 12,
   },
   googleButtonText: {
-    color: '#374151',
+    color: COLORS.dark,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -287,12 +356,27 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   registerText: {
-    color: '#6B7280',
+    color: COLORS.gray,
     fontSize: 14,
   },
   registerLink: {
-    color: '#7C3AED',
+    color: COLORS.primary,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
+  },
+  trustBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 32,
+    paddingVertical: 14,
+    backgroundColor: '#F0FDFA',
+    borderRadius: 12,
+  },
+  trustText: {
+    fontSize: 13,
+    color: COLORS.primary,
+    fontWeight: '500',
   },
 });

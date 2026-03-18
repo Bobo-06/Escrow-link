@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,25 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { productsApi, currencyApi } from '../../src/api/api';
+import { productsApi } from '../../src/api/api';
+
+const COLORS = {
+  primary: '#0D9488',
+  primaryLight: '#14B8A6',
+  gold: '#F59E0B',
+  goldBg: '#FFFBEB',
+  dark: '#0F172A',
+  darkGray: '#1E293B',
+  gray: '#64748B',
+  lightGray: '#E2E8F0',
+  inputBg: '#F1F5F9',
+  background: '#F8FAFC',
+  white: '#FFFFFF',
+  success: '#10B981',
+  successBg: '#ECFDF5',
+  blue: '#3B82F6',
+  blueBg: '#EFF6FF',
+};
 
 const exportCategories = [
   { id: 'textiles_fashion', label: 'Textiles & Fashion', icon: 'shirt' },
@@ -36,7 +54,7 @@ export default function CreateProduct() {
   const [image, setImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   
-  // New trade finance fields
+  // Trade finance fields
   const [internationalShipping, setInternationalShipping] = useState(false);
   const [exportCategory, setExportCategory] = useState('');
   const [showCategories, setShowCategories] = useState(false);
@@ -100,7 +118,7 @@ export default function CreateProduct() {
     const priceNum = parseFloat(price) || 0;
     const buyerFee = priceNum * 0.03;
     const sellerFee = priceNum * 0.02;
-    const diasporaBuyerFee = priceNum * 0.02; // Lower for international
+    const diasporaBuyerFee = priceNum * 0.02;
     return {
       buyerFee: buyerFee.toFixed(0),
       sellerFee: sellerFee.toFixed(0),
@@ -120,10 +138,10 @@ export default function CreateProduct() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        {/* Green Header */}
+        {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} data-testid="back-btn">
+            <Ionicons name="chevron-back" size={24} color={COLORS.white} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Create Payment Link</Text>
           <View style={{ width: 40 }} />
@@ -134,13 +152,16 @@ export default function CreateProduct() {
           keyboardShouldPersistTaps="handled"
         >
           {/* Image Upload */}
-          <TouchableOpacity style={styles.imageUpload} onPress={pickImage}>
+          <TouchableOpacity style={styles.imageUpload} onPress={pickImage} data-testid="image-upload">
             {image ? (
               <Image source={{ uri: image }} style={styles.productImage} />
             ) : (
               <View style={styles.imagePlaceholder}>
-                <Ionicons name="camera" size={32} color="#9CA3AF" />
-                <Text style={styles.uploadText}>Upload Photo</Text>
+                <View style={styles.cameraIconBg}>
+                  <Ionicons name="camera" size={28} color={COLORS.primary} />
+                </View>
+                <Text style={styles.uploadText}>Upload Product Photo</Text>
+                <Text style={styles.uploadHint}>Tap to add image</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -149,76 +170,88 @@ export default function CreateProduct() {
           <View style={styles.form}>
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Product Name *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Handwoven Basket"
-                placeholderTextColor="#9CA3AF"
-                value={name}
-                onChangeText={setName}
-              />
+              <View style={styles.inputWrapper}>
+                <Ionicons name="pricetag-outline" size={20} color={COLORS.gray} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. Handwoven Basket"
+                  placeholderTextColor={COLORS.gray}
+                  value={name}
+                  onChangeText={setName}
+                  data-testid="product-name-input"
+                />
+              </View>
             </View>
 
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Price (TZS) *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 45000"
-                placeholderTextColor="#9CA3AF"
-                value={price}
-                onChangeText={setPrice}
-                keyboardType="numeric"
-              />
+              <View style={styles.inputWrapper}>
+                <Text style={styles.currencyPrefix}>TZS</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="45,000"
+                  placeholderTextColor={COLORS.gray}
+                  value={price}
+                  onChangeText={setPrice}
+                  keyboardType="numeric"
+                  data-testid="price-input"
+                />
+              </View>
             </View>
 
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Description</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Describe your product..."
-                placeholderTextColor="#9CA3AF"
-                value={description}
-                onChangeText={setDescription}
-                multiline
-                numberOfLines={3}
-              />
+              <View style={[styles.inputWrapper, styles.inputWrapperLarge]}>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder="Describe your product..."
+                  placeholderTextColor={COLORS.gray}
+                  value={description}
+                  onChangeText={setDescription}
+                  multiline
+                  numberOfLines={3}
+                  data-testid="description-input"
+                />
+              </View>
             </View>
 
             {/* International Shipping Toggle */}
             <View style={styles.toggleSection}>
               <View style={styles.toggleHeader}>
+                <View style={styles.toggleIconBg}>
+                  <Ionicons name="globe" size={22} color={COLORS.blue} />
+                </View>
                 <View style={styles.toggleInfo}>
-                  <Ionicons name="globe" size={22} color="#3B82F6" />
-                  <View>
-                    <Text style={styles.toggleTitle}>Enable Diaspora Sales</Text>
-                    <Text style={styles.toggleSubtitle}>Accept payments via NALA from UK, US, EU</Text>
-                  </View>
+                  <Text style={styles.toggleTitle}>Enable Diaspora Sales</Text>
+                  <Text style={styles.toggleSubtitle}>Accept payments via NALA from UK, US, EU</Text>
                 </View>
                 <Switch
                   value={internationalShipping}
                   onValueChange={setInternationalShipping}
-                  trackColor={{ false: '#D1D5DB', true: '#86EFAC' }}
-                  thumbColor={internationalShipping ? '#16A34A' : '#F9FAFB'}
+                  trackColor={{ false: '#D1D5DB', true: '#99F6E4' }}
+                  thumbColor={internationalShipping ? COLORS.primary : '#F9FAFB'}
                 />
               </View>
             </View>
 
-            {/* Export Category (shown if international enabled) */}
+            {/* Export Category */}
             {internationalShipping && (
               <View style={styles.inputContainer}>
                 <Text style={styles.label}>Export Category</Text>
                 <TouchableOpacity
                   style={styles.categorySelector}
                   onPress={() => setShowCategories(!showCategories)}
+                  data-testid="category-selector"
                 >
                   {selectedCategory ? (
                     <View style={styles.selectedCategory}>
-                      <Ionicons name={selectedCategory.icon as any} size={18} color="#16A34A" />
+                      <Ionicons name={selectedCategory.icon as any} size={18} color={COLORS.primary} />
                       <Text style={styles.selectedCategoryText}>{selectedCategory.label}</Text>
                     </View>
                   ) : (
                     <Text style={styles.categorySelectorPlaceholder}>Select category</Text>
                   )}
-                  <Ionicons name={showCategories ? 'chevron-up' : 'chevron-down'} size={20} color="#6B7280" />
+                  <Ionicons name={showCategories ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.gray} />
                 </TouchableOpacity>
 
                 {showCategories && (
@@ -234,11 +267,12 @@ export default function CreateProduct() {
                           setExportCategory(cat.id);
                           setShowCategories(false);
                         }}
+                        data-testid={`category-${cat.id}`}
                       >
                         <Ionicons
                           name={cat.icon as any}
                           size={18}
-                          color={exportCategory === cat.id ? '#16A34A' : '#6B7280'}
+                          color={exportCategory === cat.id ? COLORS.primary : COLORS.gray}
                         />
                         <Text
                           style={[
@@ -258,10 +292,13 @@ export default function CreateProduct() {
             {/* Fee Preview */}
             {parseFloat(price) > 0 && (
               <View style={styles.feePreview}>
-                <Text style={styles.feeTitle}>Fee Breakdown</Text>
+                <View style={styles.feeHeader}>
+                  <Ionicons name="calculator" size={18} color={COLORS.primary} />
+                  <Text style={styles.feeTitle}>Fee Breakdown</Text>
+                </View>
                 
                 <View style={styles.feeSection}>
-                  <Text style={styles.feeSectionTitle}>Local Buyers (TZ)</Text>
+                  <Text style={styles.feeSectionTitle}>Local Buyers (Tanzania)</Text>
                   <View style={styles.feeRow}>
                     <Text style={styles.feeLabel}>Buyer pays (3% protection)</Text>
                     <Text style={styles.feeValue}>TZS {parseInt(fees.totalBuyer).toLocaleString()}</Text>
@@ -271,7 +308,7 @@ export default function CreateProduct() {
                 {internationalShipping && (
                   <View style={styles.feeSection}>
                     <View style={styles.diasporaHeader}>
-                      <Ionicons name="globe" size={16} color="#3B82F6" />
+                      <Ionicons name="globe" size={14} color={COLORS.blue} />
                       <Text style={styles.feeSectionTitleBlue}>Diaspora Buyers (UK, US, EU)</Text>
                     </View>
                     <View style={styles.feeRow}>
@@ -293,8 +330,9 @@ export default function CreateProduct() {
               style={[styles.createButton, isLoading && styles.buttonDisabled]}
               onPress={handleCreate}
               disabled={isLoading}
+              data-testid="create-link-btn"
             >
-              <Ionicons name="link" size={20} color="#FFFFFF" />
+              <Ionicons name="link" size={20} color={COLORS.white} />
               <Text style={styles.createButtonText}>
                 {isLoading ? 'Creating...' : 'Generate Secure Link'}
               </Text>
@@ -309,13 +347,13 @@ export default function CreateProduct() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.white,
   },
   keyboardView: {
     flex: 1,
   },
   header: {
-    backgroundColor: '#16A34A',
+    backgroundColor: COLORS.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -327,24 +365,26 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: '700',
+    color: COLORS.white,
   },
   scrollContent: {
     padding: 20,
   },
   imageUpload: {
     alignSelf: 'center',
-    width: 140,
-    height: 140,
-    borderRadius: 12,
+    width: 160,
+    height: 160,
+    borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: COLORS.background,
     borderWidth: 2,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.lightGray,
     borderStyle: 'dashed',
     marginBottom: 24,
   },
@@ -358,37 +398,71 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  cameraIconBg: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: '#CCFBF1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   uploadText: {
     fontSize: 14,
-    color: '#6B7280',
+    fontWeight: '600',
+    color: COLORS.dark,
+  },
+  uploadHint: {
+    fontSize: 12,
+    color: COLORS.gray,
   },
   form: {
-    gap: 16,
+    gap: 18,
   },
   inputContainer: {
     gap: 8,
   },
   label: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#374151',
+    fontWeight: '600',
+    color: COLORS.darkGray,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.inputBg,
+    borderWidth: 1,
+    borderColor: COLORS.lightGray,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+  },
+  inputWrapperLarge: {
+    alignItems: 'flex-start',
+    paddingTop: 4,
+  },
+  inputIcon: {
+    marginRight: 10,
+  },
+  currencyPrefix: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.primary,
+    marginRight: 10,
   },
   input: {
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 10,
-    padding: 14,
+    flex: 1,
+    paddingVertical: 16,
     fontSize: 16,
-    color: '#1F2937',
+    color: COLORS.dark,
   },
   textArea: {
     height: 80,
     textAlignVertical: 'top',
+    paddingTop: 12,
   },
   toggleSection: {
-    backgroundColor: '#EFF6FF',
-    borderRadius: 12,
+    backgroundColor: COLORS.blueBg,
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
     borderColor: '#BFDBFE',
@@ -396,30 +470,35 @@ const styles = StyleSheet.create({
   toggleHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+  },
+  toggleIconBg: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: COLORS.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   toggleInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
     flex: 1,
   },
   toggleTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: '#1E40AF',
   },
   toggleSubtitle: {
     fontSize: 12,
-    color: '#3B82F6',
+    color: COLORS.blue,
     marginTop: 2,
   },
   categorySelector: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: COLORS.inputBg,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 10,
-    padding: 14,
+    borderColor: COLORS.lightGray,
+    borderRadius: 14,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -427,76 +506,82 @@ const styles = StyleSheet.create({
   selectedCategory: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   selectedCategoryText: {
     fontSize: 16,
-    color: '#16A34A',
-    fontWeight: '500',
+    color: COLORS.primary,
+    fontWeight: '600',
   },
   categorySelectorPlaceholder: {
     fontSize: 16,
-    color: '#9CA3AF',
+    color: COLORS.gray,
   },
   categoryList: {
     marginTop: 8,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 10,
+    backgroundColor: COLORS.white,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.lightGray,
+    overflow: 'hidden',
   },
   categoryOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    padding: 14,
+    gap: 12,
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: COLORS.lightGray,
   },
   categoryOptionActive: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#F0FDFA',
   },
   categoryOptionText: {
-    fontSize: 14,
-    color: '#374151',
+    fontSize: 15,
+    color: COLORS.dark,
   },
   categoryOptionTextActive: {
-    color: '#16A34A',
-    fontWeight: '500',
+    color: COLORS.primary,
+    fontWeight: '600',
   },
   feePreview: {
-    backgroundColor: '#F9FAFB',
-    padding: 16,
-    borderRadius: 12,
-    gap: 12,
+    backgroundColor: COLORS.background,
+    padding: 18,
+    borderRadius: 16,
+    gap: 14,
+  },
+  feeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 4,
   },
   feeTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 4,
+    fontWeight: '700',
+    color: COLORS.dark,
   },
   feeSection: {
-    paddingBottom: 12,
+    paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: COLORS.lightGray,
   },
   feeSectionTitle: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#6B7280',
-    marginBottom: 6,
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.gray,
+    marginBottom: 8,
   },
   feeSectionTitleBlue: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#3B82F6',
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.blue,
   },
   diasporaHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   feeRow: {
     flexDirection: 'row',
@@ -509,44 +594,49 @@ const styles = StyleSheet.create({
   },
   feeLabel: {
     fontSize: 14,
-    color: '#6B7280',
+    color: COLORS.gray,
   },
   feeLabelBold: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#374151',
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.dark,
   },
   feeValue: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#1F2937',
+    fontWeight: '600',
+    color: COLORS.dark,
   },
   feeValueBlue: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#3B82F6',
+    fontWeight: '600',
+    color: COLORS.blue,
   },
   feeValueGreen: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#16A34A',
+    fontSize: 17,
+    fontWeight: '700',
+    color: COLORS.success,
   },
   createButton: {
-    backgroundColor: '#16A34A',
-    paddingVertical: 16,
-    borderRadius: 10,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 18,
+    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 10,
     marginTop: 8,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
   },
   buttonDisabled: {
     opacity: 0.7,
   },
   createButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+    color: COLORS.white,
+    fontSize: 17,
+    fontWeight: '700',
   },
 });

@@ -10,7 +10,7 @@ import time
 from datetime import datetime
 
 # Base URL from environment - testing uses the public URL
-BASE_URL = "https://pay-secure-3.preview.emergentagent.com/api"
+BASE_URL = "https://escrow-link.preview.emergentagent.com/api"
 
 # Test credentials provided in request
 TEST_CREDENTIALS = {

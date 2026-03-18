@@ -14,6 +14,28 @@ import { useAuthStore } from '../../src/store/authStore';
 import { statsApi, productsApi } from '../../src/api/api';
 import LoadingScreen from '../../src/components/LoadingScreen';
 
+const COLORS = {
+  primary: '#0D9488',
+  primaryLight: '#14B8A6',
+  gold: '#F59E0B',
+  goldBg: '#FFFBEB',
+  dark: '#0F172A',
+  darkGray: '#1E293B',
+  gray: '#64748B',
+  lightGray: '#E2E8F0',
+  background: '#F8FAFC',
+  white: '#FFFFFF',
+  success: '#10B981',
+  successBg: '#ECFDF5',
+  blue: '#3B82F6',
+  blueBg: '#EFF6FF',
+  purple: '#7C3AED',
+  purpleBg: '#F5F3FF',
+  pink: '#EC4899',
+  pinkBg: '#FDF2F8',
+  error: '#EF4444',
+};
+
 export default function SellerDashboard() {
   const router = useRouter();
   const { user, isAuthenticated, isLoading, checkAuth, logout } = useAuthStore();
@@ -77,14 +99,14 @@ export default function SellerDashboard() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Header with Women-Owned Badge */}
+        {/* Header */}
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Welcome back,</Text>
             <Text style={styles.name}>{user?.business_name || user?.name || 'Seller'}</Text>
             {(user?.is_women_owned || stats?.is_women_owned) && (
               <View style={styles.womenOwnedBadge}>
-                <Ionicons name="heart" size={14} color="#EC4899" />
+                <Ionicons name="heart" size={12} color={COLORS.pink} />
                 <Text style={styles.womenOwnedText}>Women-Owned Business</Text>
               </View>
             )}
@@ -92,8 +114,9 @@ export default function SellerDashboard() {
           <TouchableOpacity
             style={styles.profileButton}
             onPress={() => router.push('/seller/profile')}
+            data-testid="profile-btn"
           >
-            <Ionicons name="person-circle-outline" size={40} color="#7C3AED" />
+            <Ionicons name="person-circle-outline" size={40} color={COLORS.primary} />
           </TouchableOpacity>
         </View>
 
@@ -101,10 +124,13 @@ export default function SellerDashboard() {
         {stats?.trade_metrics && (
           <View style={styles.tradeMetricsCard}>
             <View style={styles.tradeMetricsHeader}>
-              <Ionicons name="trending-up" size={20} color="#059669" />
+              <View style={styles.tradeMetricsIconBg}>
+                <Ionicons name="trending-up" size={18} color={COLORS.success} />
+              </View>
               <Text style={styles.tradeMetricsTitle}>Trade Finance Profile</Text>
               {stats.trade_metrics.credit_score_eligible && (
                 <View style={styles.creditBadge}>
+                  <Ionicons name="checkmark-circle" size={12} color={COLORS.success} />
                   <Text style={styles.creditBadgeText}>Credit Eligible</Text>
                 </View>
               )}
@@ -114,10 +140,12 @@ export default function SellerDashboard() {
                 <Text style={styles.tradeMetricValue}>{stats.trade_metrics.success_rate}%</Text>
                 <Text style={styles.tradeMetricLabel}>Success Rate</Text>
               </View>
+              <View style={styles.tradeMetricDivider} />
               <View style={styles.tradeMetricItem}>
                 <Text style={styles.tradeMetricValue}>{stats.trade_metrics.successful_transactions}</Text>
                 <Text style={styles.tradeMetricLabel}>Completed</Text>
               </View>
+              <View style={styles.tradeMetricDivider} />
               <View style={styles.tradeMetricItem}>
                 <Text style={styles.tradeMetricValue}>{stats.trade_metrics.repeat_buyers}</Text>
                 <Text style={styles.tradeMetricLabel}>Repeat Buyers</Text>
@@ -129,16 +157,22 @@ export default function SellerDashboard() {
         {/* Stats Cards */}
         <View style={styles.statsContainer}>
           <View style={styles.statsRow}>
-            <View style={[styles.statCard, styles.purpleCard]}>
-              <Text style={styles.statLabel}>Total Earnings</Text>
+            <View style={[styles.statCard, styles.primaryCard]}>
+              <View style={styles.statCardHeader}>
+                <Ionicons name="wallet" size={20} color={COLORS.white} />
+                <Text style={styles.statLabel}>Total Earnings</Text>
+              </View>
               <Text style={styles.statValue}>{formatTZS(stats?.total_earnings || 0)}</Text>
               <Text style={styles.statValueSmall}>≈ {formatUSD(stats?.total_earnings || 0)} USD</Text>
             </View>
-            <View style={[styles.statCard, styles.greenCard]}>
-              <Text style={styles.statLabelDark}>In Escrow</Text>
+            <View style={[styles.statCard, styles.successCard]}>
+              <View style={styles.statCardHeader}>
+                <Ionicons name="lock-closed" size={18} color={COLORS.success} />
+                <Text style={styles.statLabelDark}>In Escrow</Text>
+              </View>
               <Text style={styles.statValueDark}>{formatTZS(stats?.pending_earnings || 0)}</Text>
               <View style={styles.escrowBadge}>
-                <Ionicons name="lock-closed" size={12} color="#059669" />
+                <Ionicons name="shield-checkmark" size={12} color={COLORS.success} />
                 <Text style={styles.escrowText}>NMB Protected</Text>
               </View>
             </View>
@@ -146,9 +180,9 @@ export default function SellerDashboard() {
           
           {/* International Earnings */}
           {(stats?.international_orders > 0 || stats?.international_earnings > 0) && (
-            <View style={[styles.statCard, styles.blueCard]}>
+            <View style={[styles.statCardFull, styles.blueCard]}>
               <View style={styles.internationalHeader}>
-                <Ionicons name="globe-outline" size={20} color="#FFFFFF" />
+                <Ionicons name="globe" size={22} color={COLORS.white} />
                 <Text style={styles.internationalLabel}>Diaspora Sales</Text>
               </View>
               <Text style={styles.statValue}>{formatTZS(stats?.international_earnings || 0)}</Text>
@@ -158,17 +192,23 @@ export default function SellerDashboard() {
 
           <View style={styles.statsRow}>
             <View style={styles.statCardSmall}>
-              <Ionicons name="cube-outline" size={24} color="#7C3AED" />
+              <View style={[styles.statIconBg, { backgroundColor: COLORS.purpleBg }]}>
+                <Ionicons name="cube" size={20} color={COLORS.purple} />
+              </View>
               <Text style={styles.statNumber}>{stats?.products_count || 0}</Text>
               <Text style={styles.statLabelSmall}>Products</Text>
             </View>
             <View style={styles.statCardSmall}>
-              <Ionicons name="cart-outline" size={24} color="#F59E0B" />
+              <View style={[styles.statIconBg, { backgroundColor: COLORS.goldBg }]}>
+                <Ionicons name="cart" size={20} color={COLORS.gold} />
+              </View>
               <Text style={styles.statNumber}>{stats?.total_orders || 0}</Text>
               <Text style={styles.statLabelSmall}>Orders</Text>
             </View>
             <View style={styles.statCardSmall}>
-              <Ionicons name="globe-outline" size={24} color="#3B82F6" />
+              <View style={[styles.statIconBg, { backgroundColor: COLORS.blueBg }]}>
+                <Ionicons name="globe" size={20} color={COLORS.blue} />
+              </View>
               <Text style={styles.statNumber}>{stats?.international_orders || 0}</Text>
               <Text style={styles.statLabelSmall}>Global</Text>
             </View>
@@ -182,18 +222,20 @@ export default function SellerDashboard() {
             <TouchableOpacity
               style={styles.actionCard}
               onPress={() => router.push('/seller/create')}
+              data-testid="create-link-btn"
             >
-              <View style={[styles.actionIcon, { backgroundColor: '#EDE9FE' }]}>
-                <Ionicons name="add-circle" size={28} color="#7C3AED" />
+              <View style={[styles.actionIcon, { backgroundColor: COLORS.purpleBg }]}>
+                <Ionicons name="add-circle" size={28} color={COLORS.purple} />
               </View>
               <Text style={styles.actionText}>Create Link</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionCard}
               onPress={() => router.push('/seller/orders')}
+              data-testid="view-orders-btn"
             >
-              <View style={[styles.actionIcon, { backgroundColor: '#FEF3C7' }]}>
-                <Ionicons name="list" size={28} color="#F59E0B" />
+              <View style={[styles.actionIcon, { backgroundColor: COLORS.goldBg }]}>
+                <Ionicons name="list" size={28} color={COLORS.gold} />
               </View>
               <Text style={styles.actionText}>View Orders</Text>
             </TouchableOpacity>
@@ -202,17 +244,19 @@ export default function SellerDashboard() {
 
         {/* NALA Payment Info */}
         <View style={styles.nalaCard}>
-          <View style={styles.nalaHeader}>
-            <Ionicons name="globe" size={24} color="#3B82F6" />
-            <Text style={styles.nalaTitle}>Receive Diaspora Payments</Text>
+          <View style={styles.nalaIconBg}>
+            <Ionicons name="globe" size={24} color={COLORS.blue} />
           </View>
-          <Text style={styles.nalaText}>
-            Accept payments from UK, US, EU via NALA. Lower fees for international buyers.
-          </Text>
-          <View style={styles.currencyRow}>
-            <View style={styles.currencyBadge}><Text style={styles.currencyText}>USD</Text></View>
-            <View style={styles.currencyBadge}><Text style={styles.currencyText}>GBP</Text></View>
-            <View style={styles.currencyBadge}><Text style={styles.currencyText}>EUR</Text></View>
+          <View style={styles.nalaContent}>
+            <Text style={styles.nalaTitle}>Receive Diaspora Payments</Text>
+            <Text style={styles.nalaText}>
+              Accept payments from UK, US, EU via NALA with lower fees.
+            </Text>
+            <View style={styles.currencyRow}>
+              <View style={styles.currencyBadge}><Text style={styles.currencyText}>USD</Text></View>
+              <View style={styles.currencyBadge}><Text style={styles.currencyText}>GBP</Text></View>
+              <View style={styles.currencyBadge}><Text style={styles.currencyText}>EUR</Text></View>
+            </View>
           </View>
         </View>
 
@@ -228,13 +272,16 @@ export default function SellerDashboard() {
           </View>
           {products.length === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons name="cube-outline" size={48} color="#D1D5DB" />
+              <View style={styles.emptyIconBg}>
+                <Ionicons name="cube-outline" size={40} color={COLORS.lightGray} />
+              </View>
               <Text style={styles.emptyText}>No products yet</Text>
               <TouchableOpacity
                 style={styles.emptyButton}
                 onPress={() => router.push('/seller/create')}
               >
                 <Text style={styles.emptyButtonText}>Create your first payment link</Text>
+                <Ionicons name="arrow-forward" size={16} color={COLORS.primary} />
               </TouchableOpacity>
             </View>
           ) : (
@@ -245,13 +292,13 @@ export default function SellerDashboard() {
                   <Text style={styles.productPrice}>{formatTZS(product.price_tzs || product.price)}</Text>
                   {product.international_shipping && (
                     <View style={styles.exportBadge}>
-                      <Ionicons name="airplane" size={12} color="#3B82F6" />
+                      <Ionicons name="airplane" size={11} color={COLORS.blue} />
                       <Text style={styles.exportText}>Export Ready</Text>
                     </View>
                   )}
                 </View>
                 <View style={styles.productCode}>
-                  <Ionicons name="link" size={16} color="#7C3AED" />
+                  <Ionicons name="link" size={14} color={COLORS.primary} />
                   <Text style={styles.codeText}>{product.payment_link_code}</Text>
                 </View>
               </View>
@@ -260,8 +307,8 @@ export default function SellerDashboard() {
         </View>
 
         {/* Logout */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={20} color="#EF4444" />
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} data-testid="logout-btn">
+          <Ionicons name="log-out-outline" size={20} color={COLORS.error} />
           <Text style={styles.logoutText}>Sign Out</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -272,7 +319,7 @@ export default function SellerDashboard() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: COLORS.background,
   },
   scrollContent: {
     padding: 20,
@@ -285,28 +332,29 @@ const styles = StyleSheet.create({
   },
   greeting: {
     fontSize: 14,
-    color: '#6B7280',
+    color: COLORS.gray,
   },
   name: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1F2937',
+    fontWeight: '700',
+    color: COLORS.dark,
+    letterSpacing: -0.5,
   },
   womenOwnedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 6,
-    backgroundColor: '#FDF2F8',
+    marginTop: 8,
+    backgroundColor: COLORS.pinkBg,
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
     alignSelf: 'flex-start',
   },
   womenOwnedText: {
     fontSize: 12,
-    color: '#EC4899',
-    fontWeight: '500',
+    color: COLORS.pink,
+    fontWeight: '600',
   },
   profileButton: {
     width: 44,
@@ -315,52 +363,70 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tradeMetricsCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.white,
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
     borderLeftWidth: 4,
-    borderLeftColor: '#059669',
+    borderLeftColor: COLORS.success,
   },
   tradeMetricsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
+    gap: 10,
+    marginBottom: 16,
+  },
+  tradeMetricsIconBg: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: COLORS.successBg,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   tradeMetricsTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#1F2937',
+    color: COLORS.dark,
     flex: 1,
   },
   creditBadge: {
-    backgroundColor: '#ECFDF5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.successBg,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: 20,
   },
   creditBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
-    color: '#059669',
+    color: COLORS.success,
   },
   tradeMetricsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
+    alignItems: 'center',
   },
   tradeMetricItem: {
     alignItems: 'center',
+    flex: 1,
+  },
+  tradeMetricDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: COLORS.lightGray,
   },
   tradeMetricValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1F2937',
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.dark,
   },
   tradeMetricLabel: {
     fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
+    color: COLORS.gray,
+    marginTop: 4,
   },
   statsContainer: {
     gap: 12,
@@ -375,101 +441,129 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16,
   },
-  purpleCard: {
-    backgroundColor: '#7C3AED',
+  statCardFull: {
+    padding: 16,
+    borderRadius: 16,
   },
-  greenCard: {
-    backgroundColor: '#ECFDF5',
+  primaryCard: {
+    backgroundColor: COLORS.primary,
+  },
+  successCard: {
+    backgroundColor: COLORS.successBg,
   },
   blueCard: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: COLORS.blue,
   },
-  statLabel: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
-    marginBottom: 4,
-  },
-  statLabelDark: {
-    fontSize: 12,
-    color: '#065F46',
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  statValueSmall: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: 2,
-  },
-  statValueDark: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#059669',
-  },
-  escrowBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 6,
-  },
-  escrowText: {
-    fontSize: 10,
-    color: '#059669',
-  },
-  internationalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  internationalLabel: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.9)',
-  },
-  statCardSmall: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginTop: 8,
-  },
-  statLabelSmall: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  nalaCard: {
-    backgroundColor: '#EFF6FF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  nalaHeader: {
+  statCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginBottom: 8,
   },
+  statLabel: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.85)',
+    fontWeight: '500',
+  },
+  statLabelDark: {
+    fontSize: 13,
+    color: COLORS.success,
+    fontWeight: '500',
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.white,
+  },
+  statValueSmall: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 4,
+  },
+  statValueDark: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.success,
+  },
+  escrowBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+  },
+  escrowText: {
+    fontSize: 11,
+    color: COLORS.success,
+    fontWeight: '500',
+  },
+  internationalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
+  internationalLabel: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.9)',
+    fontWeight: '600',
+  },
+  statCardSmall: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    padding: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  statIconBg: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  statNumber: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.dark,
+  },
+  statLabelSmall: {
+    fontSize: 12,
+    color: COLORS.gray,
+    marginTop: 4,
+  },
+  nalaCard: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.blueBg,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    gap: 14,
+  },
+  nalaIconBg: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: COLORS.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  nalaContent: {
+    flex: 1,
+  },
   nalaTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#1E40AF',
+    marginBottom: 4,
   },
   nalaText: {
-    fontSize: 14,
-    color: '#3B82F6',
+    fontSize: 13,
+    color: COLORS.blue,
     marginBottom: 12,
+    lineHeight: 18,
   },
   currencyRow: {
     flexDirection: 'row',
@@ -497,14 +591,14 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
+    fontWeight: '700',
+    color: COLORS.dark,
     marginBottom: 12,
   },
   seeAllText: {
     fontSize: 14,
-    color: '#7C3AED',
-    fontWeight: '500',
+    color: COLORS.primary,
+    fontWeight: '600',
   },
   actionsContainer: {
     flexDirection: 'row',
@@ -512,7 +606,7 @@ const styles = StyleSheet.create({
   },
   actionCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.white,
     padding: 20,
     borderRadius: 16,
     alignItems: 'center',
@@ -528,31 +622,42 @@ const styles = StyleSheet.create({
   actionText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1F2937',
+    color: COLORS.dark,
   },
   emptyState: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.white,
     padding: 32,
     borderRadius: 16,
     alignItems: 'center',
   },
+  emptyIconBg: {
+    width: 72,
+    height: 72,
+    borderRadius: 20,
+    backgroundColor: COLORS.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   emptyText: {
     fontSize: 16,
-    color: '#6B7280',
-    marginTop: 12,
+    color: COLORS.gray,
   },
   emptyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     marginTop: 16,
   },
   emptyButtonText: {
     fontSize: 14,
-    color: '#7C3AED',
+    color: COLORS.primary,
     fontWeight: '600',
   },
   productCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.white,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     marginBottom: 8,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -563,43 +668,43 @@ const styles = StyleSheet.create({
   },
   productName: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#1F2937',
+    fontWeight: '600',
+    color: COLORS.dark,
   },
   productPrice: {
     fontSize: 14,
-    color: '#6B7280',
+    color: COLORS.gray,
     marginTop: 4,
   },
   exportBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 6,
-    backgroundColor: '#EFF6FF',
+    marginTop: 8,
+    backgroundColor: COLORS.blueBg,
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
     alignSelf: 'flex-start',
   },
   exportText: {
-    fontSize: 10,
-    color: '#3B82F6',
+    fontSize: 11,
+    color: COLORS.blue,
     fontWeight: '500',
   },
   productCode: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    gap: 6,
+    backgroundColor: '#F0FDFA',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
   },
   codeText: {
     fontSize: 12,
-    color: '#7C3AED',
-    fontWeight: '500',
+    color: COLORS.primary,
+    fontWeight: '600',
   },
   logoutButton: {
     flexDirection: 'row',
@@ -608,10 +713,12 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 16,
     marginTop: 8,
+    backgroundColor: COLORS.white,
+    borderRadius: 14,
   },
   logoutText: {
     fontSize: 16,
-    color: '#EF4444',
-    fontWeight: '500',
+    color: COLORS.error,
+    fontWeight: '600',
   },
 });

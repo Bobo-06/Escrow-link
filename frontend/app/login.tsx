@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,13 @@ import {
   Platform,
   ScrollView,
   Alert,
-  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../src/store/authStore';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import Constants from 'expo-constants';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL || process.env.EXPO_PUBLIC_BACKEND_URL || '';
@@ -36,7 +37,7 @@ const COLORS = {
 
 export default function Login() {
   const router = useRouter();
-  const { login } = useAuthStore();
+  const { login, exchangeSession } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -59,10 +60,40 @@ export default function Login() {
     }
   };
 
-  const handleGoogleLogin = () => {
-    const redirectUrl = `${API_URL}/auth-callback`;
-    const authUrl = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
-    Linking.openURL(authUrl);
+  const handleGoogleLogin = async () => {
+    try {
+      // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
+      // For web preview, use the current origin
+      const redirectUrl = Platform.OS === 'web' 
+        ? `${window.location.origin}/auth-callback`
+        : Linking.createURL('/auth-callback');
+      
+      const authUrl = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+      
+      if (Platform.OS === 'web') {
+        // On web, redirect directly
+        window.location.href = authUrl;
+      } else {
+        // On native, use WebBrowser
+        const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
+        
+        if (result.type === 'success' && result.url) {
+          // Extract session_id from the returned URL
+          const url = result.url;
+          const fragmentMatch = url.match(/#session_id=([^&]+)/);
+          const queryMatch = url.match(/[?&]session_id=([^&#]+)/);
+          const sessionId = fragmentMatch?.[1] || queryMatch?.[1];
+          
+          if (sessionId) {
+            await exchangeSession(sessionId);
+            router.replace('/seller');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Google login error:', error);
+      Alert.alert('Error', 'Could not complete Google sign-in');
+    }
   };
 
   return (

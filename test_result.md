@@ -296,9 +296,9 @@ frontend:
 
   - task: "Login Screen"
     implemented: true
-    working: true
+    working: false
     file: "app/login.tsx"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
     needs_retesting: false
     status_history:
@@ -308,12 +308,15 @@ frontend:
       - working: true
         agent: "testing"
         comment: "✅ Tested: Login form loads correctly with email/password fields, Sign In button, Continue with Google button, and Sign Up link. Navigation from landing page works. Form accepts input properly."
+      - working: false
+        agent: "testing"
+        comment: "❌ E2E TEST PARTIAL FAILURE: Login page UI works correctly with Google OAuth button present and styled properly. However, Google OAuth button doesn't initiate proper auth flow to auth.emergentagent.com when clicked. Backend logs show OAuth error: 401: Invalid session_id"
 
   - task: "Register Screen"
     implemented: true
-    working: true
+    working: false
     file: "app/register.tsx"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
     needs_retesting: false
     status_history:
@@ -323,6 +326,9 @@ frontend:
       - working: true
         agent: "testing"
         comment: "✅ Tested: Registration form displays all required fields (Full Name, Email, Password, Phone Number, Business Name), Women-Owned Business toggle present and functional. Navigation from login page works correctly."
+      - working: false
+        agent: "testing"
+        comment: "❌ E2E TEST FAILED: Registration form submits successfully but doesn't redirect to /seller dashboard. User remains on /register page after clicking Create Account. Form validation and UI work correctly, but backend integration or routing is broken. Tested with unique email artisan_test_1773831917@test.com"
 
   - task: "Seller Dashboard"
     implemented: true
@@ -386,7 +392,7 @@ frontend:
 
   - task: "Buyer Product Page"
     implemented: true
-    working: "NA"
+    working: true
     file: "app/pay/[code].tsx"
     stuck_count: 0
     priority: "medium"
@@ -398,6 +404,9 @@ frontend:
       - working: "NA"
         agent: "testing"
         comment: "Not tested - requires product link code from creation flow"
+      - working: true
+        agent: "testing"
+        comment: "✅ E2E TESTED: Product page structure loads correctly at /pay/TEST123. Shows appropriate 'Product Not Found' message for test data (expected). Page layout, navigation, and mobile responsiveness verified. Minor: Unable to test complete flow with real product data due to authentication issues."
 
   - task: "Checkout Flow"
     implemented: true
@@ -416,7 +425,7 @@ frontend:
 
   - task: "Order Tracking Screen"
     implemented: true
-    working: "NA"
+    working: true
     file: "app/track/[orderId].tsx"
     stuck_count: 0
     priority: "medium"
@@ -428,6 +437,9 @@ frontend:
       - working: "NA"
         agent: "testing"
         comment: "Not tested - requires existing order ID"
+      - working: true
+        agent: "testing"
+        comment: "✅ E2E TESTED: Order tracking page structure loads correctly at /track/ORDER123. Shows appropriate 'Order Not Found' message for test data (expected). Page contains order progress content and mobile layout verified. Minor: Unable to test with real order data due to authentication flow issues."
 
   - task: "Delivery Confirmation Screen"
     implemented: true
@@ -451,8 +463,12 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus: []
-  stuck_tasks: []
+  current_focus:
+    - "Register Screen"
+    - "Login Screen"
+  stuck_tasks:
+    - "Register Screen"
+    - "Login Screen"
   test_all: false
   test_priority: "high_first"
 
@@ -544,3 +560,33 @@ agent_communication:
       - Backend integration confirmed working from previous API tests
       
       RECOMMENDATION: Frontend UI is production-ready for mobile users.
+  
+  - agent: "testing"
+    message: |
+      🚨 COMPREHENSIVE E2E TESTING COMPLETE - CRITICAL ISSUES IDENTIFIED
+      
+      Completed full end-to-end testing of CraftHer platform using public URL https://escrow-link.preview.emergentagent.com in mobile viewport (390x844):
+      
+      ❌ CRITICAL FAILURES:
+      1. REGISTRATION FLOW BROKEN: Registration form submits successfully but doesn't redirect to /seller dashboard. User remains stuck on /register page after successful form submission.
+      
+      2. GOOGLE OAUTH INTEGRATION BROKEN: "Continue with Google" button present and styled correctly but doesn't initiate proper auth flow to auth.emergentagent.com when clicked.
+      
+      ✅ WORKING COMPONENTS:
+      - All UI forms render correctly and accept input
+      - Page navigation and routing works
+      - Mobile responsiveness excellent (390x844)
+      - Product page structure (/pay/TEST123) loads correctly
+      - Order tracking page (/track/ORDER123) loads correctly
+      - Women-Owned Business toggle functional
+      
+      🔍 ROOT CAUSE ANALYSIS:
+      Backend logs show: "OAuth error: 401: Invalid session_id" and "POST /api/auth/session HTTP/1.1 500 Internal Server Error"
+      
+      ⚠️ IMPACT: 
+      - New users cannot complete registration
+      - Authentication system non-functional
+      - Complete E2E user journey blocked
+      - Product creation and purchase flows untestable due to auth issues
+      
+      URGENT ACTION REQUIRED: Fix frontend-backend authentication integration before production deployment.

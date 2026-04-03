@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,18 +9,32 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
 
+// Premium Color Palette - Deep Teal/Emerald with Gold Accents
 const COLORS = {
-  primary: '#0D9488',
-  primaryDark: '#0F766E',
-  primaryLight: '#14B8A6',
-  gold: '#F59E0B',
-  goldLight: '#FCD34D',
+  // Primary Teal/Emerald
+  primary: '#047857',
+  primaryDark: '#065F46',
+  primaryLight: '#10B981',
+  emerald: '#059669',
+  
+  // Gold Accents for Trust
+  gold: '#D97706',
+  goldLight: '#F59E0B',
+  goldPale: '#FEF3C7',
+  
+  // Neutrals
   dark: '#0F172A',
   darkGray: '#1E293B',
-  gray: '#64748B',
-  lightGray: '#E2E8F0',
+  gray: '#475569',
+  lightGray: '#CBD5E1',
+  paleGray: '#F1F5F9',
   background: '#F8FAFC',
   white: '#FFFFFF',
+  
+  // Accent Colors
+  coral: '#F97316',
+  purple: '#7C3AED',
+  pink: '#EC4899',
 };
 
 export default function Index() {
@@ -38,101 +52,157 @@ export default function Index() {
   }, [isLoading, isAuthenticated]);
 
   if (isLoading) {
-    return <LoadingScreen message="Loading..." />;
+    return <LoadingScreen message="Inapakia... / Loading..." />;
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Premium Gradient Header */}
-      <View style={styles.header}>
+      {/* Gradient Header with Glassmorphism */}
+      <LinearGradient
+        colors={[COLORS.primaryDark, COLORS.primary, COLORS.emerald]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
         <View style={styles.headerContent}>
           <View style={styles.logoContainer}>
-            <View style={styles.logoIcon}>
-              <Ionicons name="shield-checkmark" size={22} color={COLORS.white} />
+            <View style={styles.logoIconWrapper}>
+              <Ionicons name="shield-checkmark" size={24} color={COLORS.white} />
             </View>
-            <Text style={styles.logoText}>CraftHer</Text>
+            <View>
+              <Text style={styles.logoText}>CraftHer</Text>
+              <Text style={styles.logoTagline}>Biashara Salama</Text>
+            </View>
           </View>
           <View style={styles.secureTag}>
-            <Ionicons name="lock-closed" size={11} color={COLORS.gold} />
-            <Text style={styles.secureText}>Secure</Text>
+            <Ionicons name="lock-closed" size={12} color={COLORS.goldLight} />
+            <Text style={styles.secureText}>Salama</Text>
           </View>
         </View>
-      </View>
+      </LinearGradient>
 
-      <View style={styles.content}>
-        {/* Hero Section with Gradient Icon */}
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+        {/* Hero Section */}
         <View style={styles.heroSection}>
-          <View style={styles.heroIconOuter}>
-            <View style={styles.heroIconInner}>
-              <Ionicons name="storefront" size={40} color={COLORS.primary} />
-            </View>
+          <View style={styles.heroIconContainer}>
+            <LinearGradient
+              colors={[COLORS.goldLight, COLORS.gold]}
+              style={styles.heroIconGradient}
+            >
+              <Ionicons name="storefront" size={36} color={COLORS.white} />
+            </LinearGradient>
           </View>
-          <Text style={styles.heroTitle}>Trade Finance for{"\n"}Women Entrepreneurs</Text>
+          
+          <Text style={styles.heroTitle}>
+            Fedha za Biashara{"\n"}
+            <Text style={styles.heroTitleAccent}>kwa Wanawake Wajasiriamali</Text>
+          </Text>
           <Text style={styles.heroSubtitle}>
-            Secure payment links connecting African artisans{"\n"}with diaspora buyers worldwide
+            Trade Finance for Women Entrepreneurs
+          </Text>
+          <Text style={styles.heroDescription}>
+            Linganisha wasanii wa Afrika na wanunuzi wa diaspora{"\n"}
+            kupitia malipo salama ya escrow
           </Text>
         </View>
 
-        {/* Feature Cards */}
-        <View style={styles.featuresContainer}>
-          <View style={styles.featureCard}>
-            <View style={[styles.featureIconContainer, { backgroundColor: '#ECFDF5' }]}>
-              <Ionicons name="shield-checkmark" size={22} color={COLORS.primary} />
+        {/* Premium Feature Cards with Glassmorphism */}
+        <View style={styles.featuresGrid}>
+          <View style={[styles.featureCard, styles.featureCardPrimary]}>
+            <View style={styles.featureIconBg}>
+              <Ionicons name="shield-checkmark" size={24} color={COLORS.primary} />
             </View>
-            <Text style={styles.featureTitle}>Escrow{"\n"}Protection</Text>
+            <Text style={styles.featureTitle}>Escrow</Text>
+            <Text style={styles.featureSubtitle}>Ulinzi wa Malipo</Text>
           </View>
-          <View style={styles.featureCard}>
-            <View style={[styles.featureIconContainer, { backgroundColor: '#FEF3C7' }]}>
-              <Ionicons name="globe" size={22} color={COLORS.gold} />
+          
+          <View style={[styles.featureCard, styles.featureCardGold]}>
+            <View style={[styles.featureIconBg, { backgroundColor: COLORS.goldPale }]}>
+              <Ionicons name="globe" size={24} color={COLORS.gold} />
             </View>
-            <Text style={styles.featureTitle}>Diaspora{"\n"}Payments</Text>
+            <Text style={styles.featureTitle}>Diaspora</Text>
+            <Text style={styles.featureSubtitle}>Malipo ya Kimataifa</Text>
           </View>
-          <View style={styles.featureCard}>
-            <View style={[styles.featureIconContainer, { backgroundColor: '#E0E7FF' }]}>
-              <Ionicons name="flash" size={22} color="#6366F1" />
+          
+          <View style={[styles.featureCard, styles.featureCardAccent]}>
+            <View style={[styles.featureIconBg, { backgroundColor: '#EDE9FE' }]}>
+              <Ionicons name="flash" size={24} color={COLORS.purple} />
             </View>
-            <Text style={styles.featureTitle}>Instant{"\n"}Links</Text>
+            <Text style={styles.featureTitle}>Haraka</Text>
+            <Text style={styles.featureSubtitle}>Linki za Papo Hapo</Text>
           </View>
         </View>
 
-        {/* Trust Badge */}
-        <View style={styles.trustBadge}>
-          <Ionicons name="shield-checkmark" size={18} color={COLORS.gold} />
-          <Text style={styles.trustText}>NMB Escrow Protected</Text>
-          <View style={styles.trustDot} />
-          <Text style={styles.trustText}>NALA Payments</Text>
+        {/* Trust Badges - Premium Design */}
+        <View style={styles.trustContainer}>
+          <LinearGradient
+            colors={['rgba(254, 243, 199, 0.8)', 'rgba(254, 243, 199, 0.4)']}
+            style={styles.trustBadge}
+          >
+            <View style={styles.trustIconWrapper}>
+              <Ionicons name="shield-checkmark" size={18} color={COLORS.gold} />
+            </View>
+            <View style={styles.trustTextContainer}>
+              <Text style={styles.trustTitle}>NMB Escrow Protected</Text>
+              <Text style={styles.trustSubtext}>Fedha zako zinalindwa • Your money is safe</Text>
+            </View>
+          </LinearGradient>
+          
+          <View style={styles.trustStats}>
+            <View style={styles.trustStatItem}>
+              <Text style={styles.trustStatNumber}>1,000+</Text>
+              <Text style={styles.trustStatLabel}>Wajasiriamali</Text>
+            </View>
+            <View style={styles.trustStatDivider} />
+            <View style={styles.trustStatItem}>
+              <Text style={styles.trustStatNumber}>98%</Text>
+              <Text style={styles.trustStatLabel}>Mafanikio</Text>
+            </View>
+            <View style={styles.trustStatDivider} />
+            <View style={styles.trustStatItem}>
+              <Text style={styles.trustStatNumber}>TZS 500M+</Text>
+              <Text style={styles.trustStatLabel}>Biashara</Text>
+            </View>
+          </View>
         </View>
 
-        {/* CTA Buttons */}
+        {/* CTA Buttons - Premium Style */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={styles.primaryButton}
             onPress={() => router.push('/login')}
             data-testid="start-selling-btn"
+            activeOpacity={0.85}
           >
-            <Text style={styles.primaryButtonText}>Start Selling</Text>
-            <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
+            <LinearGradient
+              colors={[COLORS.primary, COLORS.primaryDark]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.buttonGradient}
+            >
+              <Text style={styles.primaryButtonText}>Anza Kuuza • Start Selling</Text>
+              <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
+            </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.secondaryButton}
             onPress={() => router.push('/register')}
             data-testid="create-account-btn"
+            activeOpacity={0.85}
           >
-            <Text style={styles.secondaryButtonText}>Create Free Account</Text>
+            <Text style={styles.secondaryButtonText}>Fungua Akaunti Bure • Create Free Account</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Footer Trust */}
+        {/* Footer Trust Message */}
         <View style={styles.footerTrust}>
-          <View style={styles.footerTrustIcon}>
-            <Ionicons name="checkmark" size={12} color={COLORS.white} />
-          </View>
-          <Text style={styles.footerTrustText}>
-            Trusted by 1,000+ women entrepreneurs in Tanzania
+          <Ionicons name="heart" size={14} color={COLORS.pink} />
+          <Text style={styles.footerText}>
+            Tunawasaidia wanawake kufikia soko la kimataifa
           </Text>
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -142,10 +212,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.white,
   },
-  header: {
-    backgroundColor: COLORS.primary,
+  scrollView: {
+    flex: 1,
+  },
+  content: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: 24,
+    paddingBottom: 40,
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
   headerContent: {
     flexDirection: 'row',
@@ -155,30 +234,40 @@ const styles = StyleSheet.create({
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
-  logoIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+  logoIconWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   logoText: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: '800',
     color: COLORS.white,
     letterSpacing: -0.5,
+  },
+  logoTagline: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.8)',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
   secureTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(0,0,0,0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   secureText: {
     fontSize: 12,
@@ -187,135 +276,197 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 28,
+    paddingHorizontal: 20,
+    paddingTop: 24,
   },
   heroSection: {
     alignItems: 'center',
-    marginBottom: 28,
+    marginBottom: 24,
   },
-  heroIconOuter: {
-    width: 90,
-    height: 90,
-    borderRadius: 24,
-    backgroundColor: COLORS.background,
-    justifyContent: 'center',
-    alignItems: 'center',
+  heroIconContainer: {
     marginBottom: 20,
-    borderWidth: 1,
-    borderColor: COLORS.lightGray,
   },
-  heroIconInner: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
-    backgroundColor: '#CCFBF1',
+  heroIconGradient: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 12,
   },
   heroTitle: {
-    fontSize: 26,
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: '800',
     color: COLORS.dark,
     textAlign: 'center',
-    lineHeight: 32,
+    lineHeight: 30,
     letterSpacing: -0.5,
+  },
+  heroTitleAccent: {
+    color: COLORS.primary,
   },
   heroSubtitle: {
     fontSize: 14,
     color: COLORS.gray,
+    marginTop: 6,
+    fontStyle: 'italic',
+  },
+  heroDescription: {
+    fontSize: 13,
+    color: COLORS.gray,
     textAlign: 'center',
     marginTop: 12,
-    lineHeight: 21,
+    lineHeight: 20,
   },
-  featuresContainer: {
+  featuresGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 10,
     marginBottom: 20,
-    gap: 12,
   },
   featureCard: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: COLORS.white,
     paddingVertical: 16,
     paddingHorizontal: 8,
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLORS.lightGray,
   },
-  featureIconContainer: {
+  featureCardPrimary: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  featureCardGold: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  featureCardAccent: {
+    backgroundColor: '#F5F3FF',
+    borderColor: '#DDD6FE',
+  },
+  featureIconBg: {
     width: 48,
     height: 48,
-    borderRadius: 14,
+    borderRadius: 16,
+    backgroundColor: '#D1FAE5',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 10,
   },
   featureTitle: {
-    fontSize: 12,
-    color: COLORS.darkGray,
-    fontWeight: '600',
-    textAlign: 'center',
-    lineHeight: 16,
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.dark,
+  },
+  featureSubtitle: {
+    fontSize: 10,
+    color: COLORS.gray,
+    marginTop: 2,
+  },
+  trustContainer: {
+    marginBottom: 24,
   },
   trustBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#FFFBEB',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    marginBottom: 28,
+    padding: 16,
+    borderRadius: 16,
+    gap: 14,
     borderWidth: 1,
     borderColor: '#FDE68A',
+    marginBottom: 16,
   },
-  trustText: {
-    fontSize: 13,
+  trustIconWrapper: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: COLORS.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  trustTextContainer: {
+    flex: 1,
+  },
+  trustTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.dark,
+  },
+  trustSubtext: {
+    fontSize: 12,
     color: '#92400E',
-    fontWeight: '600',
+    marginTop: 2,
   },
-  trustDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#D97706',
+  trustStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    backgroundColor: COLORS.paleGray,
+    paddingVertical: 14,
+    borderRadius: 14,
+  },
+  trustStatItem: {
+    alignItems: 'center',
+  },
+  trustStatNumber: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+  trustStatLabel: {
+    fontSize: 11,
+    color: COLORS.gray,
+    marginTop: 2,
+  },
+  trustStatDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: COLORS.lightGray,
   },
   buttonContainer: {
     gap: 12,
   },
   primaryButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 18,
-    borderRadius: 14,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  buttonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 8,
+    paddingVertical: 18,
+    paddingHorizontal: 24,
   },
   primaryButtonText: {
     color: COLORS.white,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
   },
   secondaryButton: {
     backgroundColor: COLORS.white,
     paddingVertical: 18,
-    borderRadius: 14,
+    borderRadius: 16,
     alignItems: 'center',
     borderWidth: 2,
     borderColor: COLORS.primary,
   },
   secondaryButtonText: {
     color: COLORS.primary,
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '700',
   },
   footerTrust: {
@@ -323,19 +474,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginTop: 28,
+    marginTop: 24,
     paddingBottom: 16,
   },
-  footerTrustIcon: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  footerTrustText: {
-    fontSize: 13,
+  footerText: {
+    fontSize: 12,
     color: COLORS.gray,
+    fontStyle: 'italic',
   },
 });

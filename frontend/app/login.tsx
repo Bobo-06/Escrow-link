@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -16,23 +16,27 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../src/store/authStore';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import { LinearGradient } from 'expo-linear-gradient';
 import Constants from 'expo-constants';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL || process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 const COLORS = {
-  primary: '#0D9488',
-  primaryDark: '#0F766E',
-  primaryLight: '#14B8A6',
-  gold: '#F59E0B',
+  primary: '#047857',
+  primaryDark: '#065F46',
+  primaryLight: '#10B981',
+  emerald: '#059669',
+  gold: '#D97706',
+  goldLight: '#F59E0B',
+  goldPale: '#FEF3C7',
   dark: '#0F172A',
   darkGray: '#1E293B',
-  gray: '#64748B',
-  lightGray: '#E2E8F0',
+  gray: '#475569',
+  lightGray: '#CBD5E1',
   inputBg: '#F1F5F9',
-  background: '#F8FAFC',
+  paleGray: '#F8FAFC',
   white: '#FFFFFF',
-  error: '#EF4444',
+  error: '#DC2626',
 };
 
 export default function Login() {
@@ -45,7 +49,7 @@ export default function Login() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Required', 'Please enter email and password');
+      Alert.alert('Taarifa Zinakosekana', 'Tafadhali jaza barua pepe na nenosiri / Please enter email and password');
       return;
     }
 
@@ -54,7 +58,7 @@ export default function Login() {
       await login(email, password);
       router.replace('/seller');
     } catch (error: any) {
-      Alert.alert('Login Failed', error.response?.data?.detail || 'Invalid credentials');
+      Alert.alert('Imeshindikana Kuingia', error.response?.data?.detail || 'Taarifa si sahihi / Invalid credentials');
     } finally {
       setIsLoading(false);
     }
@@ -63,7 +67,6 @@ export default function Login() {
   const handleGoogleLogin = async () => {
     try {
       // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-      // For web preview, use the current origin
       const redirectUrl = Platform.OS === 'web' 
         ? `${window.location.origin}/auth-callback`
         : Linking.createURL('/auth-callback');
@@ -71,14 +74,11 @@ export default function Login() {
       const authUrl = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
       
       if (Platform.OS === 'web') {
-        // On web, redirect directly
         window.location.href = authUrl;
       } else {
-        // On native, use WebBrowser
         const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
         
         if (result.type === 'success' && result.url) {
-          // Extract session_id from the returned URL
           const url = result.url;
           const fragmentMatch = url.match(/#session_id=([^&]+)/);
           const queryMatch = url.match(/[?&]session_id=([^&#]+)/);
@@ -92,25 +92,30 @@ export default function Login() {
       }
     } catch (error) {
       console.error('Google login error:', error);
-      Alert.alert('Error', 'Could not complete Google sign-in');
+      Alert.alert('Kosa', 'Imeshindikana kuingia na Google / Could not complete Google sign-in');
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <LinearGradient
+        colors={[COLORS.primaryDark, COLORS.primary, COLORS.emerald]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()} data-testid="back-btn">
           <Ionicons name="chevron-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
         <View style={styles.headerTitleRow}>
-          <Ionicons name="shield-checkmark" size={18} color={COLORS.white} />
+          <Ionicons name="shield-checkmark" size={20} color={COLORS.white} />
           <Text style={styles.headerTitle}>CraftHer</Text>
         </View>
         <View style={styles.headerRight}>
-          <Ionicons name="lock-closed" size={14} color={COLORS.gold} />
+          <Ionicons name="lock-closed" size={14} color={COLORS.goldLight} />
         </View>
-      </View>
+      </LinearGradient>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -123,24 +128,28 @@ export default function Login() {
           {/* Welcome Section */}
           <View style={styles.welcomeSection}>
             <View style={styles.welcomeIconOuter}>
-              <View style={styles.welcomeIcon}>
-                <Ionicons name="person" size={28} color={COLORS.primary} />
-              </View>
+              <LinearGradient
+                colors={[COLORS.primaryLight, COLORS.primary]}
+                style={styles.welcomeIconGradient}
+              >
+                <Ionicons name="person" size={32} color={COLORS.white} />
+              </LinearGradient>
             </View>
-            <Text style={styles.welcomeTitle}>Welcome Back</Text>
-            <Text style={styles.welcomeSubtitle}>Sign in to manage your payment links</Text>
+            <Text style={styles.welcomeTitle}>Karibu Tena</Text>
+            <Text style={styles.welcomeTitleEn}>Welcome Back</Text>
+            <Text style={styles.welcomeSubtitle}>Ingia kusimamia linki zako za malipo</Text>
           </View>
 
           {/* Form */}
           <View style={styles.form}>
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Email</Text>
+              <Text style={styles.label}>Barua Pepe / Email</Text>
               <View style={styles.inputWrapper}>
                 <Ionicons name="mail-outline" size={20} color={COLORS.gray} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="your@email.com"
-                  placeholderTextColor={COLORS.gray}
+                  placeholder="jina@mfano.com"
+                  placeholderTextColor={COLORS.lightGray}
                   value={email}
                   onChangeText={setEmail}
                   keyboardType="email-address"
@@ -151,13 +160,13 @@ export default function Login() {
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Password</Text>
+              <Text style={styles.label}>Nenosiri / Password</Text>
               <View style={styles.inputWrapper}>
                 <Ionicons name="lock-closed-outline" size={20} color={COLORS.gray} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter password"
-                  placeholderTextColor={COLORS.gray}
+                  placeholder="Weka nenosiri"
+                  placeholderTextColor={COLORS.lightGray}
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
@@ -181,30 +190,38 @@ export default function Login() {
               onPress={handleLogin}
               disabled={isLoading}
               data-testid="login-submit-btn"
+              activeOpacity={0.85}
             >
-              <Text style={styles.loginButtonText}>
-                {isLoading ? 'Signing in...' : 'Sign In'}
-              </Text>
+              <LinearGradient
+                colors={[COLORS.primary, COLORS.primaryDark]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.buttonGradient}
+              >
+                <Text style={styles.loginButtonText}>
+                  {isLoading ? 'Inaingia... / Signing in...' : 'Ingia / Sign In'}
+                </Text>
+              </LinearGradient>
             </TouchableOpacity>
 
             {/* Divider */}
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or</Text>
+              <Text style={styles.dividerText}>au / or</Text>
               <View style={styles.dividerLine} />
             </View>
 
             {/* Google Login */}
             <TouchableOpacity style={styles.googleButton} onPress={handleGoogleLogin} data-testid="google-login-btn">
               <Ionicons name="logo-google" size={20} color={COLORS.dark} />
-              <Text style={styles.googleButtonText}>Continue with Google</Text>
+              <Text style={styles.googleButtonText}>Endelea na Google / Continue with Google</Text>
             </TouchableOpacity>
 
             {/* Register Link */}
             <View style={styles.registerContainer}>
-              <Text style={styles.registerText}>Don't have an account? </Text>
+              <Text style={styles.registerText}>Huna akaunti? / Don't have an account? </Text>
               <TouchableOpacity onPress={() => router.push('/register')}>
-                <Text style={styles.registerLink}>Sign Up</Text>
+                <Text style={styles.registerLink}>Jisajili / Sign Up</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -212,7 +229,7 @@ export default function Login() {
           {/* Trust Badge */}
           <View style={styles.trustBadge}>
             <Ionicons name="shield-checkmark" size={16} color={COLORS.primary} />
-            <Text style={styles.trustText}>Your data is secure with us</Text>
+            <Text style={styles.trustText}>Taarifa zako ziko salama / Your data is secure with us</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -226,20 +243,23 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
   },
   header: {
-    backgroundColor: COLORS.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 16,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 42,
+    height: 42,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   headerTitleRow: {
     flexDirection: 'row',
@@ -247,13 +267,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '800',
     color: COLORS.white,
   },
   headerRight: {
-    width: 40,
-    height: 40,
+    width: 42,
+    height: 42,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -269,34 +289,36 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   welcomeIconOuter: {
+    marginBottom: 20,
+  },
+  welcomeIconGradient: {
     width: 80,
     height: 80,
     borderRadius: 24,
-    backgroundColor: COLORS.background,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: COLORS.lightGray,
-  },
-  welcomeIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: '#CCFBF1',
-    justifyContent: 'center',
-    alignItems: 'center',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
   welcomeTitle: {
-    fontSize: 26,
-    fontWeight: '700',
+    fontSize: 28,
+    fontWeight: '800',
     color: COLORS.dark,
     letterSpacing: -0.5,
   },
+  welcomeTitleEn: {
+    fontSize: 16,
+    color: COLORS.gray,
+    marginTop: 2,
+  },
   welcomeSubtitle: {
-    fontSize: 15,
+    fontSize: 14,
     color: COLORS.gray,
     marginTop: 8,
+    textAlign: 'center',
   },
   form: {
     gap: 18,
@@ -313,13 +335,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.inputBg,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: COLORS.lightGray,
-    borderRadius: 14,
-    paddingHorizontal: 14,
+    borderRadius: 16,
+    paddingHorizontal: 16,
   },
   inputIcon: {
-    marginRight: 10,
+    marginRight: 12,
   },
   input: {
     flex: 1,
@@ -331,16 +353,18 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   loginButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 18,
-    borderRadius: 14,
-    alignItems: 'center',
+    borderRadius: 16,
+    overflow: 'hidden',
     marginTop: 8,
     shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 12,
     elevation: 8,
+  },
+  buttonGradient: {
+    paddingVertical: 18,
+    alignItems: 'center',
   },
   buttonDisabled: {
     opacity: 0.7,
@@ -363,28 +387,29 @@ const styles = StyleSheet.create({
   dividerText: {
     marginHorizontal: 16,
     color: COLORS.gray,
-    fontSize: 14,
+    fontSize: 13,
   },
   googleButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.white,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: COLORS.lightGray,
     paddingVertical: 16,
-    borderRadius: 14,
+    borderRadius: 16,
     gap: 12,
   },
   googleButtonText: {
     color: COLORS.dark,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
   },
   registerContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: 16,
+    flexWrap: 'wrap',
   },
   registerText: {
     color: COLORS.gray,
@@ -402,8 +427,10 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 32,
     paddingVertical: 14,
-    backgroundColor: '#F0FDFA',
-    borderRadius: 12,
+    backgroundColor: '#ECFDF5',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
   trustText: {
     fontSize: 13,

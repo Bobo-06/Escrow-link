@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
   RefreshControl,
+  Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,27 +14,32 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/store/authStore';
 import { statsApi, productsApi } from '../../src/api/api';
 import LoadingScreen from '../../src/components/LoadingScreen';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const COLORS = {
-  primary: '#0D9488',
-  primaryLight: '#14B8A6',
-  gold: '#F59E0B',
-  goldBg: '#FFFBEB',
+  primary: '#047857',
+  primaryDark: '#065F46',
+  primaryLight: '#10B981',
+  emerald: '#059669',
+  gold: '#D97706',
+  goldLight: '#F59E0B',
+  goldPale: '#FEF3C7',
   dark: '#0F172A',
   darkGray: '#1E293B',
-  gray: '#64748B',
-  lightGray: '#E2E8F0',
+  gray: '#475569',
+  lightGray: '#CBD5E1',
+  paleGray: '#F1F5F9',
   background: '#F8FAFC',
   white: '#FFFFFF',
-  success: '#10B981',
+  success: '#059669',
   successBg: '#ECFDF5',
-  blue: '#3B82F6',
+  blue: '#2563EB',
   blueBg: '#EFF6FF',
   purple: '#7C3AED',
   purpleBg: '#F5F3FF',
   pink: '#EC4899',
   pinkBg: '#FDF2F8',
-  error: '#EF4444',
+  error: '#DC2626',
 };
 
 export default function SellerDashboard() {
@@ -80,207 +86,220 @@ export default function SellerDashboard() {
   };
 
   if (isLoading) {
-    return <LoadingScreen message="Loading..." />;
+    return <LoadingScreen message="Inapakia... / Loading..." />;
   }
 
-  const formatTZS = (amount: number) => {
-    return `TZS ${amount?.toLocaleString() || 0}`;
-  };
-
-  const formatUSD = (amount: number) => {
-    return `$${(amount / 2500).toFixed(0)}`;
-  };
+  const formatTZS = (amount: number) => `TZS ${amount?.toLocaleString() || 0}`;
+  const formatUSD = (amount: number) => `$${(amount / 2500).toFixed(0)}`;
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />
         }
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Welcome back,</Text>
-            <Text style={styles.name}>{user?.business_name || user?.name || 'Seller'}</Text>
-            {(user?.is_women_owned || stats?.is_women_owned) && (
-              <View style={styles.womenOwnedBadge}>
-                <Ionicons name="heart" size={12} color={COLORS.pink} />
-                <Text style={styles.womenOwnedText}>Women-Owned Business</Text>
-              </View>
-            )}
+        {/* Header Card */}
+        <LinearGradient
+          colors={[COLORS.primaryDark, COLORS.primary, COLORS.emerald]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerCard}
+        >
+          <View style={styles.headerContent}>
+            <View>
+              <Text style={styles.greeting}>Karibu tena / Welcome back</Text>
+              <Text style={styles.name}>{user?.business_name || user?.name || 'Mjasiriamali'}</Text>
+              {(user?.is_women_owned || stats?.is_women_owned) && (
+                <View style={styles.womenOwnedBadge}>
+                  <Ionicons name="heart" size={12} color={COLORS.pink} />
+                  <Text style={styles.womenOwnedText}>Biashara ya Mwanamke</Text>
+                </View>
+              )}
+            </View>
+            <TouchableOpacity
+              style={styles.profileButton}
+              onPress={() => {}}
+              data-testid="profile-btn"
+            >
+              <Ionicons name="person-circle" size={44} color="rgba(255,255,255,0.9)" />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            style={styles.profileButton}
-            onPress={() => router.push('/seller/profile')}
-            data-testid="profile-btn"
-          >
-            <Ionicons name="person-circle-outline" size={40} color={COLORS.primary} />
-          </TouchableOpacity>
-        </View>
 
-        {/* Trade Finance Metrics */}
+          {/* Quick Stats in Header */}
+          <View style={styles.headerStats}>
+            <View style={styles.headerStatItem}>
+              <Text style={styles.headerStatValue}>{formatTZS(stats?.total_earnings || 0)}</Text>
+              <Text style={styles.headerStatLabel}>Mapato Yote / Total Earnings</Text>
+            </View>
+          </View>
+        </LinearGradient>
+
+        {/* Trade Finance Profile Card */}
         {stats?.trade_metrics && (
-          <View style={styles.tradeMetricsCard}>
-            <View style={styles.tradeMetricsHeader}>
-              <View style={styles.tradeMetricsIconBg}>
-                <Ionicons name="trending-up" size={18} color={COLORS.success} />
+          <View style={styles.tradeCard}>
+            <View style={styles.tradeCardHeader}>
+              <View style={styles.tradeIconBg}>
+                <Ionicons name="trending-up" size={20} color={COLORS.success} />
               </View>
-              <Text style={styles.tradeMetricsTitle}>Trade Finance Profile</Text>
+              <View style={styles.tradeHeaderText}>
+                <Text style={styles.tradeTitle}>Profaili ya Biashara</Text>
+                <Text style={styles.tradeTitleEn}>Trade Finance Profile</Text>
+              </View>
               {stats.trade_metrics.credit_score_eligible && (
                 <View style={styles.creditBadge}>
-                  <Ionicons name="checkmark-circle" size={12} color={COLORS.success} />
-                  <Text style={styles.creditBadgeText}>Credit Eligible</Text>
+                  <Ionicons name="checkmark-circle" size={14} color={COLORS.success} />
+                  <Text style={styles.creditText}>Mkopo</Text>
                 </View>
               )}
             </View>
             <View style={styles.tradeMetricsRow}>
               <View style={styles.tradeMetricItem}>
                 <Text style={styles.tradeMetricValue}>{stats.trade_metrics.success_rate}%</Text>
-                <Text style={styles.tradeMetricLabel}>Success Rate</Text>
+                <Text style={styles.tradeMetricLabel}>Mafanikio</Text>
               </View>
               <View style={styles.tradeMetricDivider} />
               <View style={styles.tradeMetricItem}>
                 <Text style={styles.tradeMetricValue}>{stats.trade_metrics.successful_transactions}</Text>
-                <Text style={styles.tradeMetricLabel}>Completed</Text>
+                <Text style={styles.tradeMetricLabel}>Imekamilika</Text>
               </View>
               <View style={styles.tradeMetricDivider} />
               <View style={styles.tradeMetricItem}>
                 <Text style={styles.tradeMetricValue}>{stats.trade_metrics.repeat_buyers}</Text>
-                <Text style={styles.tradeMetricLabel}>Repeat Buyers</Text>
+                <Text style={styles.tradeMetricLabel}>Wateja Tena</Text>
               </View>
             </View>
           </View>
         )}
 
-        {/* Stats Cards */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statsRow}>
-            <View style={[styles.statCard, styles.primaryCard]}>
-              <View style={styles.statCardHeader}>
-                <Ionicons name="wallet" size={20} color={COLORS.white} />
-                <Text style={styles.statLabel}>Total Earnings</Text>
-              </View>
-              <Text style={styles.statValue}>{formatTZS(stats?.total_earnings || 0)}</Text>
-              <Text style={styles.statValueSmall}>≈ {formatUSD(stats?.total_earnings || 0)} USD</Text>
+        {/* Stats Grid */}
+        <View style={styles.statsGrid}>
+          <View style={[styles.statCard, styles.escrowCard]}>
+            <View style={styles.statIconBg}>
+              <Ionicons name="shield-checkmark" size={22} color={COLORS.gold} />
             </View>
-            <View style={[styles.statCard, styles.successCard]}>
-              <View style={styles.statCardHeader}>
-                <Ionicons name="lock-closed" size={18} color={COLORS.success} />
-                <Text style={styles.statLabelDark}>In Escrow</Text>
-              </View>
-              <Text style={styles.statValueDark}>{formatTZS(stats?.pending_earnings || 0)}</Text>
-              <View style={styles.escrowBadge}>
-                <Ionicons name="shield-checkmark" size={12} color={COLORS.success} />
-                <Text style={styles.escrowText}>NMB Protected</Text>
-              </View>
+            <Text style={styles.statValue}>{formatTZS(stats?.pending_earnings || 0)}</Text>
+            <Text style={styles.statLabel}>Escrow Salama</Text>
+            <View style={styles.statBadge}>
+              <Text style={styles.statBadgeText}>NMB Protected</Text>
             </View>
           </View>
-          
-          {/* International Earnings */}
-          {(stats?.international_orders > 0 || stats?.international_earnings > 0) && (
-            <View style={[styles.statCardFull, styles.blueCard]}>
-              <View style={styles.internationalHeader}>
-                <Ionicons name="globe" size={22} color={COLORS.white} />
-                <Text style={styles.internationalLabel}>Diaspora Sales</Text>
-              </View>
-              <Text style={styles.statValue}>{formatTZS(stats?.international_earnings || 0)}</Text>
-              <Text style={styles.statValueSmall}>{stats?.international_orders || 0} international orders</Text>
-            </View>
-          )}
 
-          <View style={styles.statsRow}>
-            <View style={styles.statCardSmall}>
-              <View style={[styles.statIconBg, { backgroundColor: COLORS.purpleBg }]}>
-                <Ionicons name="cube" size={20} color={COLORS.purple} />
-              </View>
-              <Text style={styles.statNumber}>{stats?.products_count || 0}</Text>
-              <Text style={styles.statLabelSmall}>Products</Text>
+          <View style={[styles.statCard, styles.globalCard]}>
+            <View style={[styles.statIconBg, { backgroundColor: COLORS.blueBg }]}>
+              <Ionicons name="globe" size={22} color={COLORS.blue} />
             </View>
-            <View style={styles.statCardSmall}>
-              <View style={[styles.statIconBg, { backgroundColor: COLORS.goldBg }]}>
-                <Ionicons name="cart" size={20} color={COLORS.gold} />
-              </View>
-              <Text style={styles.statNumber}>{stats?.total_orders || 0}</Text>
-              <Text style={styles.statLabelSmall}>Orders</Text>
+            <Text style={styles.statValue}>{stats?.international_orders || 0}</Text>
+            <Text style={styles.statLabel}>Oda za Kimataifa</Text>
+            <View style={[styles.statBadge, { backgroundColor: COLORS.blueBg }]}>
+              <Text style={[styles.statBadgeText, { color: COLORS.blue }]}>Diaspora</Text>
             </View>
-            <View style={styles.statCardSmall}>
-              <View style={[styles.statIconBg, { backgroundColor: COLORS.blueBg }]}>
-                <Ionicons name="globe" size={20} color={COLORS.blue} />
-              </View>
-              <Text style={styles.statNumber}>{stats?.international_orders || 0}</Text>
-              <Text style={styles.statLabelSmall}>Global</Text>
-            </View>
+          </View>
+        </View>
+
+        {/* Mini Stats */}
+        <View style={styles.miniStatsRow}>
+          <View style={styles.miniStatCard}>
+            <Ionicons name="cube" size={24} color={COLORS.purple} />
+            <Text style={styles.miniStatValue}>{stats?.products_count || 0}</Text>
+            <Text style={styles.miniStatLabel}>Bidhaa</Text>
+          </View>
+          <View style={styles.miniStatCard}>
+            <Ionicons name="cart" size={24} color={COLORS.gold} />
+            <Text style={styles.miniStatValue}>{stats?.total_orders || 0}</Text>
+            <Text style={styles.miniStatLabel}>Oda Zote</Text>
+          </View>
+          <View style={styles.miniStatCard}>
+            <Ionicons name="checkmark-done" size={24} color={COLORS.success} />
+            <Text style={styles.miniStatValue}>{stats?.completed_orders || 0}</Text>
+            <Text style={styles.miniStatLabel}>Imekamilika</Text>
           </View>
         </View>
 
         {/* Quick Actions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.actionsContainer}>
+          <Text style={styles.sectionTitle}>Vitendo vya Haraka / Quick Actions</Text>
+          <View style={styles.actionsRow}>
             <TouchableOpacity
               style={styles.actionCard}
               onPress={() => router.push('/seller/create')}
               data-testid="create-link-btn"
+              activeOpacity={0.85}
             >
-              <View style={[styles.actionIcon, { backgroundColor: COLORS.purpleBg }]}>
-                <Ionicons name="add-circle" size={28} color={COLORS.purple} />
-              </View>
-              <Text style={styles.actionText}>Create Link</Text>
+              <LinearGradient
+                colors={[COLORS.primaryLight, COLORS.primary]}
+                style={styles.actionIconGradient}
+              >
+                <Ionicons name="add" size={28} color={COLORS.white} />
+              </LinearGradient>
+              <Text style={styles.actionTitle}>Unda Linki</Text>
+              <Text style={styles.actionSubtitle}>Create Link</Text>
             </TouchableOpacity>
+
             <TouchableOpacity
               style={styles.actionCard}
               onPress={() => router.push('/seller/orders')}
               data-testid="view-orders-btn"
+              activeOpacity={0.85}
             >
-              <View style={[styles.actionIcon, { backgroundColor: COLORS.goldBg }]}>
-                <Ionicons name="list" size={28} color={COLORS.gold} />
-              </View>
-              <Text style={styles.actionText}>View Orders</Text>
+              <LinearGradient
+                colors={[COLORS.goldLight, COLORS.gold]}
+                style={styles.actionIconGradient}
+              >
+                <Ionicons name="list" size={28} color={COLORS.white} />
+              </LinearGradient>
+              <Text style={styles.actionTitle}>Oda Zangu</Text>
+              <Text style={styles.actionSubtitle}>View Orders</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* NALA Payment Info */}
+        {/* NALA Info Card */}
         <View style={styles.nalaCard}>
-          <View style={styles.nalaIconBg}>
-            <Ionicons name="globe" size={24} color={COLORS.blue} />
-          </View>
-          <View style={styles.nalaContent}>
-            <Text style={styles.nalaTitle}>Receive Diaspora Payments</Text>
-            <Text style={styles.nalaText}>
-              Accept payments from UK, US, EU via NALA with lower fees.
-            </Text>
-            <View style={styles.currencyRow}>
-              <View style={styles.currencyBadge}><Text style={styles.currencyText}>USD</Text></View>
-              <View style={styles.currencyBadge}><Text style={styles.currencyText}>GBP</Text></View>
-              <View style={styles.currencyBadge}><Text style={styles.currencyText}>EUR</Text></View>
+          <LinearGradient
+            colors={['rgba(239, 246, 255, 0.95)', 'rgba(219, 234, 254, 0.8)']}
+            style={styles.nalaGradient}
+          >
+            <View style={styles.nalaIconBg}>
+              <Ionicons name="globe" size={26} color={COLORS.blue} />
             </View>
-          </View>
+            <View style={styles.nalaContent}>
+              <Text style={styles.nalaTitle}>Pokea Malipo ya Diaspora</Text>
+              <Text style={styles.nalaTitleEn}>Receive Diaspora Payments</Text>
+              <Text style={styles.nalaText}>Pokea malipo kutoka UK, US, EU kupitia NALA</Text>
+              <View style={styles.currencyRow}>
+                <View style={styles.currencyBadge}><Text style={styles.currencyText}>USD</Text></View>
+                <View style={styles.currencyBadge}><Text style={styles.currencyText}>GBP</Text></View>
+                <View style={styles.currencyBadge}><Text style={styles.currencyText}>EUR</Text></View>
+              </View>
+            </View>
+          </LinearGradient>
         </View>
 
         {/* Recent Products */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Products</Text>
+            <Text style={styles.sectionTitle}>Bidhaa za Hivi Karibuni / Recent</Text>
             {products.length > 0 && (
               <TouchableOpacity>
-                <Text style={styles.seeAllText}>See All</Text>
+                <Text style={styles.seeAllText}>Ona Zote</Text>
               </TouchableOpacity>
             )}
           </View>
+
           {products.length === 0 ? (
             <View style={styles.emptyState}>
               <View style={styles.emptyIconBg}>
                 <Ionicons name="cube-outline" size={40} color={COLORS.lightGray} />
               </View>
-              <Text style={styles.emptyText}>No products yet</Text>
+              <Text style={styles.emptyTitle}>Hakuna bidhaa bado</Text>
+              <Text style={styles.emptySubtitle}>No products yet</Text>
               <TouchableOpacity
                 style={styles.emptyButton}
                 onPress={() => router.push('/seller/create')}
               >
-                <Text style={styles.emptyButtonText}>Create your first payment link</Text>
+                <Text style={styles.emptyButtonText}>Unda linki ya kwanza ya malipo</Text>
                 <Ionicons name="arrow-forward" size={16} color={COLORS.primary} />
               </TouchableOpacity>
             </View>
@@ -309,7 +328,7 @@ export default function SellerDashboard() {
         {/* Logout */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} data-testid="logout-btn">
           <Ionicons name="log-out-outline" size={20} color={COLORS.error} />
-          <Text style={styles.logoutText}>Sign Out</Text>
+          <Text style={styles.logoutText}>Toka / Sign Out</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -322,84 +341,121 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   scrollContent: {
-    padding: 20,
+    padding: 16,
   },
-  header: {
+  headerCard: {
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 16,
+  },
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 20,
   },
   greeting: {
-    fontSize: 14,
-    color: COLORS.gray,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
   },
   name: {
     fontSize: 24,
-    fontWeight: '700',
-    color: COLORS.dark,
+    fontWeight: '800',
+    color: COLORS.white,
     letterSpacing: -0.5,
+    marginTop: 4,
   },
   womenOwnedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 8,
-    backgroundColor: COLORS.pinkBg,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    gap: 6,
+    marginTop: 10,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 20,
     alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   womenOwnedText: {
     fontSize: 12,
-    color: COLORS.pink,
+    color: COLORS.white,
     fontWeight: '600',
   },
   profileButton: {
-    width: 44,
-    height: 44,
+    width: 48,
+    height: 48,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  tradeMetricsCard: {
+  headerStats: {
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.2)',
+  },
+  headerStatItem: {
+    alignItems: 'center',
+  },
+  headerStatValue: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: COLORS.white,
+  },
+  headerStatLabel: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 4,
+  },
+  tradeCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 20,
+    padding: 18,
     marginBottom: 16,
     borderLeftWidth: 4,
     borderLeftColor: COLORS.success,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  tradeMetricsHeader: {
+  tradeCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     marginBottom: 16,
   },
-  tradeMetricsIconBg: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+  tradeIconBg: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     backgroundColor: COLORS.successBg,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  tradeMetricsTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.dark,
+  tradeHeaderText: {
     flex: 1,
+  },
+  tradeTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.dark,
+  },
+  tradeTitleEn: {
+    fontSize: 12,
+    color: COLORS.gray,
   },
   creditBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     backgroundColor: COLORS.successBg,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 20,
   },
-  creditBadgeText: {
+  creditText: {
     fontSize: 11,
     fontWeight: '600',
     color: COLORS.success,
@@ -407,7 +463,6 @@ const styles = StyleSheet.create({
   tradeMetricsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    alignItems: 'center',
   },
   tradeMetricItem: {
     alignItems: 'center',
@@ -416,191 +471,122 @@ const styles = StyleSheet.create({
   tradeMetricDivider: {
     width: 1,
     height: 40,
-    backgroundColor: COLORS.lightGray,
+    backgroundColor: COLORS.paleGray,
   },
   tradeMetricValue: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: '800',
     color: COLORS.dark,
   },
   tradeMetricLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.gray,
     marginTop: 4,
   },
-  statsContainer: {
-    gap: 12,
-    marginBottom: 24,
-  },
-  statsRow: {
+  statsGrid: {
     flexDirection: 'row',
     gap: 12,
+    marginBottom: 12,
   },
   statCard: {
     flex: 1,
-    padding: 16,
-    borderRadius: 16,
-  },
-  statCardFull: {
-    padding: 16,
-    borderRadius: 16,
-  },
-  primaryCard: {
-    backgroundColor: COLORS.primary,
-  },
-  successCard: {
-    backgroundColor: COLORS.successBg,
-  },
-  blueCard: {
-    backgroundColor: COLORS.blue,
-  },
-  statCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  statLabel: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.85)',
-    fontWeight: '500',
-  },
-  statLabelDark: {
-    fontSize: 13,
-    color: COLORS.success,
-    fontWeight: '500',
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.white,
-  },
-  statValueSmall: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: 4,
-  },
-  statValueDark: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.success,
-  },
-  escrowBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 8,
-  },
-  escrowText: {
-    fontSize: 11,
-    color: COLORS.success,
-    fontWeight: '500',
-  },
-  internationalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 8,
-  },
-  internationalLabel: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.9)',
-    fontWeight: '600',
-  },
-  statCardSmall: {
-    flex: 1,
     backgroundColor: COLORS.white,
+    borderRadius: 18,
     padding: 16,
-    borderRadius: 16,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  escrowCard: {
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  globalCard: {
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
   },
   statIconBg: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: COLORS.goldPale,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
-  statNumber: {
-    fontSize: 22,
-    fontWeight: '700',
+  statValue: {
+    fontSize: 18,
+    fontWeight: '800',
     color: COLORS.dark,
   },
-  statLabelSmall: {
+  statLabel: {
     fontSize: 12,
     color: COLORS.gray,
     marginTop: 4,
   },
-  nalaCard: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.blueBg,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    gap: 14,
+  statBadge: {
+    backgroundColor: COLORS.goldPale,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 10,
   },
-  nalaIconBg: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: COLORS.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  nalaContent: {
-    flex: 1,
-  },
-  nalaTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1E40AF',
-    marginBottom: 4,
-  },
-  nalaText: {
-    fontSize: 13,
-    color: COLORS.blue,
-    marginBottom: 12,
-    lineHeight: 18,
-  },
-  currencyRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  currencyBadge: {
-    backgroundColor: '#DBEAFE',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  currencyText: {
-    fontSize: 12,
+  statBadgeText: {
+    fontSize: 10,
     fontWeight: '600',
-    color: '#1E40AF',
+    color: COLORS.gold,
+  },
+  miniStatsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 20,
+  },
+  miniStatCard: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    padding: 14,
+    borderRadius: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  miniStatValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.dark,
+    marginTop: 6,
+  },
+  miniStatLabel: {
+    fontSize: 11,
+    color: COLORS.gray,
+    marginTop: 2,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
     color: COLORS.dark,
-    marginBottom: 12,
   },
   seeAllText: {
     fontSize: 14,
     color: COLORS.primary,
     fontWeight: '600',
   },
-  actionsContainer: {
+  actionsRow: {
     flexDirection: 'row',
     gap: 12,
   },
@@ -608,40 +594,117 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.white,
     padding: 20,
-    borderRadius: 16,
+    borderRadius: 20,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  actionIcon: {
+  actionIconGradient: {
     width: 56,
     height: 56,
-    borderRadius: 16,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
-  actionText: {
-    fontSize: 14,
-    fontWeight: '600',
+  actionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
     color: COLORS.dark,
+  },
+  actionSubtitle: {
+    fontSize: 12,
+    color: COLORS.gray,
+    marginTop: 2,
+  },
+  nalaCard: {
+    marginBottom: 20,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  nalaGradient: {
+    flexDirection: 'row',
+    padding: 18,
+    gap: 14,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 20,
+  },
+  nalaIconBg: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: COLORS.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: COLORS.blue,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  nalaContent: {
+    flex: 1,
+  },
+  nalaTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1E40AF',
+  },
+  nalaTitleEn: {
+    fontSize: 12,
+    color: COLORS.blue,
+    marginTop: 1,
+  },
+  nalaText: {
+    fontSize: 12,
+    color: COLORS.gray,
+    marginTop: 6,
+    lineHeight: 18,
+  },
+  currencyRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  currencyBadge: {
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  currencyText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E40AF',
   },
   emptyState: {
     backgroundColor: COLORS.white,
     padding: 32,
-    borderRadius: 16,
+    borderRadius: 20,
     alignItems: 'center',
   },
   emptyIconBg: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    backgroundColor: COLORS.background,
+    width: 80,
+    height: 80,
+    borderRadius: 24,
+    backgroundColor: COLORS.paleGray,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
   },
-  emptyText: {
+  emptyTitle: {
     fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.dark,
+  },
+  emptySubtitle: {
+    fontSize: 14,
     color: COLORS.gray,
+    marginTop: 4,
   },
   emptyButton: {
     flexDirection: 'row',
@@ -657,11 +720,16 @@ const styles = StyleSheet.create({
   productCard: {
     backgroundColor: COLORS.white,
     padding: 16,
-    borderRadius: 14,
-    marginBottom: 8,
+    borderRadius: 16,
+    marginBottom: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
   },
   productInfo: {
     flex: 1,
@@ -673,7 +741,8 @@ const styles = StyleSheet.create({
   },
   productPrice: {
     fontSize: 14,
-    color: COLORS.gray,
+    color: COLORS.primary,
+    fontWeight: '600',
     marginTop: 4,
   },
   exportBadge: {
@@ -682,24 +751,24 @@ const styles = StyleSheet.create({
     gap: 4,
     marginTop: 8,
     backgroundColor: COLORS.blueBg,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
     alignSelf: 'flex-start',
   },
   exportText: {
     fontSize: 11,
     color: COLORS.blue,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   productCode: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#F0FDFA',
+    backgroundColor: '#ECFDF5',
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: 12,
   },
   codeText: {
     fontSize: 12,
@@ -713,11 +782,12 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 16,
     marginTop: 8,
+    marginBottom: 20,
     backgroundColor: COLORS.white,
-    borderRadius: 14,
+    borderRadius: 16,
   },
   logoutText: {
-    fontSize: 16,
+    fontSize: 15,
     color: COLORS.error,
     fontWeight: '600',
   },

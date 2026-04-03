@@ -1,10 +1,12 @@
 import React from 'react';
 import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const COLORS = {
-  primary: '#0D9488',
-  gray: '#64748B',
+  primary: '#047857',
+  primaryDark: '#065F46',
+  gray: '#475569',
   white: '#FFFFFF',
 };
 
@@ -16,9 +18,12 @@ export default function LoadingScreen({ message }: LoadingScreenProps) {
   return (
     <View style={styles.container}>
       <View style={styles.iconContainer}>
-        <View style={styles.iconInner}>
-          <Ionicons name="shield-checkmark" size={32} color={COLORS.primary} />
-        </View>
+        <LinearGradient
+          colors={[COLORS.primary, COLORS.primaryDark]}
+          style={styles.iconGradient}
+        >
+          <Ionicons name="shield-checkmark" size={36} color={COLORS.white} />
+        </LinearGradient>
       </View>
       <ActivityIndicator size="large" color={COLORS.primary} style={styles.spinner} />
       {message && <Text style={styles.message}>{message}</Text>}
@@ -34,21 +39,19 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
   },
   iconContainer: {
+    marginBottom: 24,
+  },
+  iconGradient: {
     width: 80,
     height: 80,
     borderRadius: 24,
-    backgroundColor: '#F0FDFA',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
-  },
-  iconInner: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: '#CCFBF1',
-    justifyContent: 'center',
-    alignItems: 'center',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
   spinner: {
     marginBottom: 16,

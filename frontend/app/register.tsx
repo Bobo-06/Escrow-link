@@ -63,9 +63,14 @@ export default function Register() {
 
     setIsLoading(true);
     try {
-      await register({ ...formData, is_women_owned: isWomenOwned });
-      router.replace('/seller');
+      const result = await register({ ...formData, is_women_owned: isWomenOwned });
+      console.log('Registration successful:', result);
+      // Add small delay before navigation to ensure state is updated
+      setTimeout(() => {
+        router.replace('/seller');
+      }, 100);
     } catch (error: any) {
+      console.error('Registration error:', error);
       Alert.alert('Usajili Umeshindikana', error.response?.data?.detail || 'Imeshindikana kuunda akaunti / Could not create account');
     } finally {
       setIsLoading(false);

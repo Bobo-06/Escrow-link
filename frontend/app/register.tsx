@@ -34,11 +34,16 @@ const COLORS = {
   pink: '#EC4899',
   pinkBg: '#FDF2F8',
   pinkBorder: '#FBCFE8',
+  blue: '#2563EB',
+  blueBg: '#EFF6FF',
 };
+
+type RegisterMethod = 'email' | 'phone';
 
 export default function Register() {
   const router = useRouter();
   const { register } = useAuthStore();
+  const [registerMethod, setRegisterMethod] = useState<RegisterMethod>('phone');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -51,27 +56,48 @@ export default function Register() {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleRegister = async () => {
-    if (!formData.name || !formData.email || !formData.password) {
-      Alert.alert('Taarifa Zinakosekana', 'Tafadhali jaza sehemu zote zinazohitajika / Please fill in all required fields');
+    if (!formData.name) {
+      Alert.alert('Taarifa Zinakosekana', 'Tafadhali weka jina lako / Please enter your name');
       return;
     }
 
-    if (formData.password.length < 6) {
+    if (registerMethod === 'email' && !formData.email) {
+      Alert.alert('Taarifa Zinakosekana', 'Tafadhali weka barua pepe / Please enter email');
+      return;
+    }
+
+    if (registerMethod === 'phone' && !formData.phone) {
+      Alert.alert('Taarifa Zinakosekana', 'Tafadhali weka nambari ya simu / Please enter phone number');
+      return;
+    }
+
+    if (!formData.password || formData.password.length < 6) {
       Alert.alert('Kosa', 'Nenosiri lazima liwe na angalau herufi 6 / Password must be at least 6 characters');
       return;
     }
 
     setIsLoading(true);
     try {
-      const result = await register({ ...formData, is_women_owned: isWomenOwned });
+      const registrationData = {
+        name: formData.name,
+        password: formData.password,
+        business_name: formData.business_name || undefined,
+        is_women_owned: isWomenOwned,
+        ...(registerMethod === 'email' 
+          ? { email: formData.email, phone: formData.phone || undefined }
+          : { phone: formData.phone, email: formData.email || undefined }
+        ),
+      };
+      
+      const result = await register(registrationData);
       console.log('Registration successful:', result);
-      // Add small delay before navigation to ensure state is updated
       setTimeout(() => {
         router.replace('/seller');
       }, 100);
     } catch (error: any) {
       console.error('Registration error:', error);
-      Alert.alert('Usajili Umeshindikana', error.response?.data?.detail || 'Imeshindikana kuunda akaunti / Could not create account');
+      const message = error.response?.data?.detail || 'Imeshindikana kuunda akaunti / Could not create account';
+      Alert.alert('Usajili Umeshindikana', message);
     } finally {
       setIsLoading(false);
     }
@@ -121,6 +147,50 @@ export default function Register() {
             <Text style={styles.welcomeSubtitle}>Anza kuuza na linki salama za malipo</Text>
           </View>
 
+          {/* Registration Method Toggle */}
+          <View style={styles.methodToggle}>
+            <TouchableOpacity
+              style={[
+                styles.methodButton,
+                registerMethod === 'phone' && styles.methodButtonActive
+              ]}
+              onPress={() => setRegisterMethod('phone')}
+              data-testid="method-phone"
+            >
+              <Ionicons 
+                name="call" 
+                size={18} 
+                color={registerMethod === 'phone' ? COLORS.white : COLORS.gray} 
+              />
+              <Text style={[
+                styles.methodButtonText,
+                registerMethod === 'phone' && styles.methodButtonTextActive
+              ]}>
+                Simu / Phone
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.methodButton,
+                registerMethod === 'email' && styles.methodButtonActive
+              ]}
+              onPress={() => setRegisterMethod('email')}
+              data-testid="method-email"
+            >
+              <Ionicons 
+                name="mail" 
+                size={18} 
+                color={registerMethod === 'email' ? COLORS.white : COLORS.gray} 
+              />
+              <Text style={[
+                styles.methodButtonText,
+                registerMethod === 'email' && styles.methodButtonTextActive
+              ]}>
+                Barua Pepe / Email
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Form */}
           <View style={styles.form}>
             <View style={styles.inputContainer}>
@@ -138,22 +208,40 @@ export default function Register() {
               </View>
             </View>
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Barua Pepe / Email *</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="mail-outline" size={20} color={COLORS.gray} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="jina@mfano.com"
-                  placeholderTextColor={COLORS.lightGray}
-                  value={formData.email}
-                  onChangeText={(text) => setFormData({ ...formData, email: text })}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  data-testid="email-input"
-                />
+            {registerMethod === 'phone' ? (
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Nambari ya Simu / Phone Number *</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="call-outline" size={20} color={COLORS.gray} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="+255 xxx xxx xxx"
+                    placeholderTextColor={COLORS.lightGray}
+                    value={formData.phone}
+                    onChangeText={(text) => setFormData({ ...formData, phone: text })}
+                    keyboardType="phone-pad"
+                    data-testid="phone-input"
+                  />
+                </View>
               </View>
-            </View>
+            ) : (
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Barua Pepe / Email *</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="mail-outline" size={20} color={COLORS.gray} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="jina@mfano.com"
+                    placeholderTextColor={COLORS.lightGray}
+                    value={formData.email}
+                    onChangeText={(text) => setFormData({ ...formData, email: text })}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    data-testid="email-input"
+                  />
+                </View>
+              </View>
+            )}
 
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Nenosiri / Password *</Text>
@@ -181,21 +269,41 @@ export default function Register() {
               </View>
             </View>
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Nambari ya Simu / Phone</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="call-outline" size={20} color={COLORS.gray} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="+255 xxx xxx xxx"
-                  placeholderTextColor={COLORS.lightGray}
-                  value={formData.phone}
-                  onChangeText={(text) => setFormData({ ...formData, phone: text })}
-                  keyboardType="phone-pad"
-                  data-testid="phone-input"
-                />
+            {/* Optional: Add the other field if they want both */}
+            {registerMethod === 'phone' && (
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Barua Pepe / Email (Si lazima / Optional)</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="mail-outline" size={20} color={COLORS.gray} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="jina@mfano.com"
+                    placeholderTextColor={COLORS.lightGray}
+                    value={formData.email}
+                    onChangeText={(text) => setFormData({ ...formData, email: text })}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                </View>
               </View>
-            </View>
+            )}
+
+            {registerMethod === 'email' && (
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Nambari ya Simu / Phone (Si lazima / Optional)</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="call-outline" size={20} color={COLORS.gray} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="+255 xxx xxx xxx"
+                    placeholderTextColor={COLORS.lightGray}
+                    value={formData.phone}
+                    onChangeText={(text) => setFormData({ ...formData, phone: text })}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+              </View>
+            )}
 
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Jina la Biashara / Business Name</Text>
@@ -319,7 +427,7 @@ const styles = StyleSheet.create({
   },
   welcomeSection: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   welcomeIconOuter: {
     marginBottom: 16,
@@ -351,6 +459,33 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.gray,
     marginTop: 8,
+  },
+  methodToggle: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.paleGray,
+    borderRadius: 16,
+    padding: 4,
+    marginBottom: 20,
+  },
+  methodButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  methodButtonActive: {
+    backgroundColor: COLORS.primary,
+  },
+  methodButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.gray,
+  },
+  methodButtonTextActive: {
+    color: COLORS.white,
   },
   form: {
     gap: 16,

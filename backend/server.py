@@ -70,17 +70,18 @@ EXPORT_CATEGORIES = [
 # ============== MODELS ==============
 
 class UserCreate(BaseModel):
-    email: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
     password: str
     name: str
-    phone: Optional[str] = None
     business_name: Optional[str] = None
     is_women_owned: bool = True  # Default to women-owned for this platform
     business_type: Optional[str] = None
     export_enabled: bool = False
 
 class UserLogin(BaseModel):
-    email: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
     password: str
 
 class ProductCreate(BaseModel):
@@ -235,14 +236,27 @@ def calculate_trade_metrics(transactions: List[dict]) -> dict:
 
 @api_router.post("/auth/register")
 async def register(user_data: UserCreate, response: Response):
-    """Register new women entrepreneur seller"""
-    existing = await db.users.find_one({"email": user_data.email})
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
+    """Register new women entrepreneur seller with phone or email"""
+    # Require at least phone or email
+    if not user_data.email and not user_data.phone:
+        raise HTTPException(status_code=400, detail="Tafadhali weka barua pepe au nambari ya simu / Please provide email or phone number")
+    
+    # Check for existing user by email or phone
+    if user_data.email:
+        existing = await db.users.find_one({"email": user_data.email})
+        if existing:
+            raise HTTPException(status_code=400, detail="Barua pepe tayari imesajiliwa / Email already registered")
+    
+    if user_data.phone:
+        existing = await db.users.find_one({"phone": user_data.phone})
+        if existing:
+            raise HTTPException(status_code=400, detail="Nambari ya simu tayari imesajiliwa / Phone number already registered")
     
     hashed_password = bcrypt.hashpw(user_data.password.encode(), bcrypt.gensalt()).decode()
     
     user_id = f"user_{uuid.uuid4().hex[:12]}"
+    auth_type = "email" if user_data.email else "phone"
+    
     user = {
         "user_id": user_id,
         "email": user_data.email,
@@ -255,7 +269,7 @@ async def register(user_data: UserCreate, response: Response):
         "is_women_owned": user_data.is_women_owned,
         "business_type": user_data.business_type,
         "export_enabled": user_data.export_enabled,
-        "auth_type": "email",
+        "auth_type": auth_type,
         "created_at": datetime.now(timezone.utc),
         # Trade finance tracking
         "total_sales_tzs": 0,
@@ -295,18 +309,26 @@ async def register(user_data: UserCreate, response: Response):
         "is_women_owned": user_data.is_women_owned,
         "business_type": user_data.business_type,
         "export_enabled": user_data.export_enabled,
-        "auth_type": "email",
+        "auth_type": auth_type,
         "created_at": user["created_at"].isoformat(),
         "session_token": session_token
     }
 
 @api_router.post("/auth/login")
 async def login(credentials: UserLogin, response: Response):
-    """Login with email/password"""
-    user = await db.users.find_one({"email": credentials.email}, {"_id": 0})
+    """Login with email/phone and password"""
+    # Require at least email or phone
+    if not credentials.email and not credentials.phone:
+        raise HTTPException(status_code=400, detail="Tafadhali weka barua pepe au nambari ya simu / Please provide email or phone number")
+    
+    # Find user by email or phone
+    if credentials.email:
+        user = await db.users.find_one({"email": credentials.email}, {"_id": 0})
+    else:
+        user = await db.users.find_one({"phone": credentials.phone}, {"_id": 0})
     
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise HTTPException(status_code=401, detail="Taarifa si sahihi / Invalid credentials")
     
     if user.get('auth_type') == 'google':
         raise HTTPException(status_code=400, detail="Please login with Google")

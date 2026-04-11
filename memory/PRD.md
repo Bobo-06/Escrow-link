@@ -76,11 +76,22 @@ SecureTrade TZ (Biz-Salama) is Tanzania's premier escrow-protected marketplace P
 - [x] Web App Manifest
 - [x] Push notifications support
 
-### Phase 11: Auth Bug Fixes (COMPLETED - April 2026)
-- [x] Fixed login function parameter format in authStore (was passing individual args, now passes object)
-- [x] Fixed expo-router web navigation issue (useRouter navigation before layout mount)
+### Phase 11: Auth Enhancements (COMPLETED - April 2026)
+- [x] Fixed login function parameter format in authStore
+- [x] Fixed expo-router web navigation issue
 - [x] Added window.location.href fallback for web navigation
 - [x] Fixed seller dashboard auth guard with proper loading states
+
+### Phase 12: Forgot Password Feature (COMPLETED - April 2026)
+- [x] Backend API: POST /api/auth/forgot-password (OTP generation)
+- [x] Backend API: POST /api/auth/reset-password (OTP verification)
+- [x] SMS template for password reset OTP
+- [x] Frontend forgot-password.tsx page with 3-step flow
+- [x] Phone/Email method toggle
+- [x] OTP verification screen with timer
+- [x] Password reset confirmation
+- [x] Demo OTP display for testing (to be removed in production)
+- [x] Session invalidation after password reset
 
 ---
 

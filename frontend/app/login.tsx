@@ -296,6 +296,21 @@ export default function Login() {
               </LinearGradient>
             </TouchableOpacity>
 
+            {/* Forgot Password Link */}
+            <TouchableOpacity 
+              style={styles.forgotPasswordContainer} 
+              onPress={() => {
+                if (Platform.OS === 'web') {
+                  window.location.href = '/forgot-password';
+                } else {
+                  router.push('/forgot-password');
+                }
+              }}
+              data-testid="forgot-password-btn"
+            >
+              <Text style={styles.forgotPasswordText}>Umesahau nenosiri? / Forgot password?</Text>
+            </TouchableOpacity>
+
             {/* Divider */}
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
@@ -522,6 +537,16 @@ const styles = StyleSheet.create({
   googleButtonText: {
     color: COLORS.dark,
     fontSize: 15,
+    fontWeight: '600',
+  },
+  forgotPasswordContainer: {
+    alignItems: 'center',
+    marginTop: 12,
+    paddingVertical: 8,
+  },
+  forgotPasswordText: {
+    color: COLORS.primary,
+    fontSize: 14,
     fontWeight: '600',
   },
   registerContainer: {

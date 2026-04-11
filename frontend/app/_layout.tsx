@@ -17,10 +17,11 @@ export default function RootLayout() {
         <Stack.Screen name="index" />
         <Stack.Screen name="login" />
         <Stack.Screen name="register" />
+        <Stack.Screen name="forgot-password" />
         <Stack.Screen name="auth-callback" />
         <Stack.Screen name="seller" />
         <Stack.Screen name="pay/[code]" />
-        <Stack.Screen name="checkout/[orderId]" />
+        <Stack.Screen name="checkout/[code]" />
         <Stack.Screen name="track/[orderId]" />
         <Stack.Screen name="confirm/[orderId]" />
       </Stack>

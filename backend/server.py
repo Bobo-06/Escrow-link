@@ -130,6 +130,10 @@ SMS_TEMPLATES = {
         "sw": f"SecureTrade: Uwasilishaji umethibitishwa! TX: {tx_id}. Pesa itatolewa kwa muuzaji.",
         "en": f"SecureTrade: Delivery confirmed! TX: {tx_id}. Funds will be released to seller."
     },
+    "password_reset_otp": lambda otp: {
+        "sw": f"SecureTrade: Nambari yako ya kubadilisha nenosiri ni: {otp}. Inaisha baada ya dakika 10. Usiionyeshe mtu yeyote.",
+        "en": f"SecureTrade: Your password reset code is: {otp}. Expires in 10 minutes. Do not share with anyone."
+    },
 }
 
 # Cached M-Pesa token
@@ -189,6 +193,16 @@ class UserLogin(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     password: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: Optional[str] = None
+    phone: Optional[str] = None
+
+class ResetPasswordRequest(BaseModel):
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    otp: str
+    new_password: str
 
 class ProductCreate(BaseModel):
     name: str
@@ -573,6 +587,123 @@ async def login(credentials: UserLogin, response: Response):
         "created_at": user['created_at'].isoformat() if isinstance(user['created_at'], datetime) else user['created_at'],
         "session_token": session_token
     }
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(data: ForgotPasswordRequest):
+    """Request password reset OTP (sent via SMS or simulated)"""
+    if not data.email and not data.phone:
+        raise HTTPException(status_code=400, detail="Tafadhali weka barua pepe au nambari ya simu / Please provide email or phone")
+    
+    # Find user
+    if data.email:
+        user = await db.users.find_one({"email": data.email}, {"_id": 0})
+    else:
+        user = await db.users.find_one({"phone": data.phone}, {"_id": 0})
+    
+    if not user:
+        # Don't reveal if user exists - return success either way
+        return {"ok": True, "message": "Ikiwa akaunti ipo, utapokea nambari ya kubadilisha nenosiri / If account exists, you will receive a reset code"}
+    
+    if user.get('auth_type') == 'google':
+        raise HTTPException(status_code=400, detail="Tafadhali ingia kwa kutumia Google / Please login with Google instead")
+    
+    # Generate 6-digit OTP
+    otp = ''.join(random.choices('0123456789', k=6))
+    
+    # Store OTP with expiry (10 minutes)
+    await db.password_resets.update_one(
+        {"user_id": user['user_id']},
+        {"$set": {
+            "user_id": user['user_id'],
+            "otp": otp,
+            "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
+            "created_at": datetime.now(timezone.utc)
+        }},
+        upsert=True
+    )
+    
+    # In production, send SMS via Africa's Talking
+    # For demo, we'll log it and return in response (remove in production!)
+    sms_content = SMS_TEMPLATES["password_reset_otp"](otp)
+    logger.info(f"Password reset OTP for {user['phone'] or user['email']}: {otp}")
+    
+    # Try to send SMS if phone provided and AT is configured
+    if user.get('phone') and AT_API_KEY:
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.post(
+                    "https://api.africastalking.com/version1/messaging",
+                    headers={
+                        "apiKey": AT_API_KEY,
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                    data={
+                        "username": AT_USERNAME,
+                        "to": user['phone'],
+                        "message": sms_content["en"]
+                    }
+                )
+        except Exception as e:
+            logger.warning(f"SMS send failed: {e}")
+    
+    return {
+        "ok": True, 
+        "message": "Nambari ya kubadilisha nenosiri imetumwa / Reset code has been sent",
+        # DEMO ONLY - remove in production!
+        "demo_otp": otp if not AT_API_KEY else None
+    }
+
+@api_router.post("/auth/reset-password")
+async def reset_password(data: ResetPasswordRequest):
+    """Reset password using OTP"""
+    if not data.email and not data.phone:
+        raise HTTPException(status_code=400, detail="Tafadhali weka barua pepe au nambari ya simu / Please provide email or phone")
+    
+    if len(data.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Nenosiri liwe na herufi 6 au zaidi / Password must be at least 6 characters")
+    
+    # Find user
+    if data.email:
+        user = await db.users.find_one({"email": data.email}, {"_id": 0})
+    else:
+        user = await db.users.find_one({"phone": data.phone}, {"_id": 0})
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="Akaunti haijapatikana / Account not found")
+    
+    # Find and validate OTP
+    reset_record = await db.password_resets.find_one({"user_id": user['user_id']}, {"_id": 0})
+    
+    if not reset_record:
+        raise HTTPException(status_code=400, detail="Nambari ya kubadilisha nenosiri haijapatikana. Omba mpya / Reset code not found. Please request a new one")
+    
+    # Check expiry
+    expires_at = reset_record['expires_at']
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    
+    if expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Nambari imekwisha muda. Omba mpya / Code expired. Please request a new one")
+    
+    if reset_record['otp'] != data.otp:
+        raise HTTPException(status_code=400, detail="Nambari si sahihi / Invalid code")
+    
+    # Update password
+    new_hash = bcrypt.hashpw(data.new_password.encode(), bcrypt.gensalt()).decode()
+    await db.users.update_one(
+        {"user_id": user['user_id']},
+        {"$set": {"password_hash": new_hash}}
+    )
+    
+    # Delete the reset record
+    await db.password_resets.delete_one({"user_id": user['user_id']})
+    
+    # Invalidate all existing sessions
+    await db.user_sessions.delete_many({"user_id": user['user_id']})
+    
+    return {"ok": True, "message": "Nenosiri limebadilishwa. Tafadhali ingia / Password changed. Please login"}
 
 @api_router.post("/auth/session")
 async def exchange_session(request: Request, response: Response):

@@ -20,14 +20,14 @@ import { MpesaPaymentScreen } from '../../src/components/MpesaPayment';
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 export default function CheckoutPage() {
-  const { code, orderId } = useLocalSearchParams<{ code?: string; orderId?: string }>();
+  const { code } = useLocalSearchParams<{ code: string }>();
   const router = useRouter();
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [step, setStep] = useState<'details' | 'payment' | 'mpesa'>('details');
   const [selectedPayment, setSelectedPayment] = useState('mpesa');
-  const [createdOrderId, setCreatedOrderId] = useState<string | null>(orderId as string || null);
+  const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
 
   // Form state
   const [buyerName, setBuyerName] = useState('');

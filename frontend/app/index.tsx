@@ -3,11 +3,15 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Dimensions
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../src/store/authStore';
 import LoadingScreen from '../src/components/LoadingScreen';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, RADIUS, SHADOWS, formatTZSShort } from '../src/constants/theme';
 import { OfflineIndicator } from '../src/components/OfflineIndicator';
+import { OnboardingFlow } from '../src/components/OnboardingFlow';
+import { ExchangeRateTicker } from '../src/components/ExchangeRateTicker';
+import { PushNotificationBanner } from '../src/components/PushNotificationBanner';
 
 const { width } = Dimensions.get('window');
 
@@ -25,8 +29,14 @@ const SAMPLE_PRODUCT = {
 export default function Index() {
   const router = useRouter();
   const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
+  const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
 
   useEffect(() => {
+    const checkOnboarding = async () => {
+      const onboarded = await AsyncStorage.getItem('st_onboarded');
+      setShowOnboarding(!onboarded);
+    };
+    checkOnboarding();
     checkAuth();
   }, []);
 
@@ -36,13 +46,20 @@ export default function Index() {
     }
   }, [isLoading, isAuthenticated]);
 
-  if (isLoading) {
+  if (isLoading || showOnboarding === null) {
     return <LoadingScreen message="Inapakia... / Loading..." />;
+  }
+
+  if (showOnboarding) {
+    return <OnboardingFlow onComplete={() => setShowOnboarding(false)} />;
   }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <OfflineIndicator />
+      
+      {/* Exchange Rate Ticker */}
+      <ExchangeRateTicker />
       
       {/* Status Bar */}
       <View style={styles.statusBar}>
@@ -191,6 +208,9 @@ export default function Index() {
           </Text>
         </View>
       </ScrollView>
+      
+      {/* Push Notification Banner */}
+      <PushNotificationBanner />
     </SafeAreaView>
   );
 }

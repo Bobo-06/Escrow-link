@@ -91,9 +91,14 @@ export default function Register() {
       
       const result = await register(registrationData);
       console.log('Registration successful:', result);
-      setTimeout(() => {
+      
+      // Navigate to seller dashboard
+      if (Platform.OS === 'web') {
+        console.log('Web: Using window.location.href for navigation');
+        window.location.href = '/seller';
+      } else {
         router.replace('/seller');
-      }, 100);
+      }
     } catch (error: any) {
       console.error('Registration error:', error);
       const message = error.response?.data?.detail || 'Imeshindikana kuunda akaunti / Could not create account';

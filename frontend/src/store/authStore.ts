@@ -1,9 +1,21 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
-const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL || process.env.EXPO_PUBLIC_BACKEND_URL || '';
+// Get backend URL - handle web and native differently
+const getBackendUrl = () => {
+  // For web, use process.env directly
+  if (Platform.OS === 'web') {
+    return process.env.EXPO_PUBLIC_BACKEND_URL || '';
+  }
+  // For native, also use process.env (Expo loads .env vars)
+  return process.env.EXPO_PUBLIC_BACKEND_URL || '';
+};
+
+const API_URL = getBackendUrl();
+
+console.log('Auth Store - API_URL:', API_URL);
 
 export interface User {
   user_id: string;
@@ -17,6 +29,20 @@ export interface User {
   created_at: string;
 }
 
+interface LoginData {
+  email?: string;
+  phone?: string;
+  password: string;
+}
+
+interface RegisterData {
+  email?: string;
+  phone?: string;
+  password: string;
+  name: string;
+  business_name?: string;
+}
+
 interface AuthState {
   user: User | null;
   isLoading: boolean;
@@ -26,8 +52,8 @@ interface AuthState {
   setSessionToken: (token: string | null) => Promise<void>;
   checkAuth: () => Promise<boolean>;
   logout: () => Promise<void>;
-  login: (email: string, password: string) => Promise<User>;
-  register: (data: { email: string; password: string; name: string; phone?: string; business_name?: string }) => Promise<User>;
+  login: (data: LoginData) => Promise<User>;
+  register: (data: RegisterData) => Promise<User>;
   exchangeSession: (sessionId: string) => Promise<User>;
   updateProfile: (data: { name?: string; phone?: string; business_name?: string }) => Promise<User>;
 }
@@ -101,13 +127,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  login: async (email, password) => {
-    const response = await axios.post(`${API_URL}/api/auth/login`, { email, password }, {
+  login: async (data: LoginData) => {
+    const response = await axios.post(`${API_URL}/api/auth/login`, data, {
       withCredentials: true,
     });
     
     const userData = response.data;
-    const sessionToken = userData.session_token; // Use token from response
+    const sessionToken = userData.session_token;
     
     await AsyncStorage.setItem('session_token', sessionToken);
     
@@ -115,7 +141,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return userData;
   },
 
-  register: async (data) => {
+  register: async (data: RegisterData) => {
     const response = await axios.post(`${API_URL}/api/auth/register`, data, {
       withCredentials: true,
     });

@@ -21,29 +21,64 @@ const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 const { width } = Dimensions.get('window');
 
 export default function SellerDashboard() {
-  const router = useRouter();
-  const { user, token, logout } = useAuthStore();
+  const { user, sessionToken, isAuthenticated, isLoading, logout, checkAuth } = useAuthStore();
   const [products, setProducts] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+  
+  // Only use router when component is mounted
+  const router = useRouter();
 
+  // Check auth on mount
   useEffect(() => {
-    if (!token) {
-      router.replace('/login');
-      return;
+    setIsMounted(true);
+    checkAuth().then(() => {
+      setIsReady(true);
+    });
+  }, []);
+
+  // Fetch data when authenticated
+  useEffect(() => {
+    if (isReady && sessionToken) {
+      fetchData();
     }
-    fetchData();
-  }, [token]);
+  }, [isReady, sessionToken]);
+
+  // Loading state
+  if (!isReady || isLoading) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ color: '#666' }}>Inapakia... / Loading...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  // Redirect if not authenticated (only after ready)
+  if (isReady && !sessionToken && !isAuthenticated) {
+    // Use setTimeout to ensure we don't navigate during render
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ color: '#666' }}>Redirecting to login...</Text>
+      </SafeAreaView>
+    );
+  }
 
   const fetchData = async () => {
+    if (!sessionToken) return;
+    
     try {
       const [productsRes, statsRes] = await Promise.all([
         fetch(`${API_URL}/api/products`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${sessionToken}` },
         }),
         fetch(`${API_URL}/api/seller/stats`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${sessionToken}` },
         }),
       ]);
 

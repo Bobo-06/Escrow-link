@@ -74,9 +74,21 @@ export default function Login() {
         ? { email, password }
         : { phone, password };
       
-      await login(loginData);
-      router.replace('/seller');
+      console.log('Login attempt with:', loginData);
+      const result = await login(loginData);
+      console.log('Login successful, result:', result);
+      
+      // Navigate to seller dashboard
+      if (Platform.OS === 'web') {
+        // For web, use window.location for reliable navigation
+        console.log('Web: Using window.location.href for navigation');
+        window.location.href = '/seller';
+      } else {
+        console.log('Native: Using expo-router for navigation');
+        router.replace('/seller');
+      }
     } catch (error: any) {
+      console.error('Login error:', error);
       Alert.alert('Imeshindikana Kuingia', error.response?.data?.detail || 'Taarifa si sahihi / Invalid credentials');
     } finally {
       setIsLoading(false);

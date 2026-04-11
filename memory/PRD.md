@@ -2,7 +2,7 @@
 ## Product Requirements Document
 
 ### Overview
-SecureTrade TZ is Tanzania's premier escrow-protected marketplace PWA. It enables secure social commerce transactions with escrow protection, mobile money integration (M-Pesa, Airtel, Tigo), and AI-powered support.
+SecureTrade TZ is Tanzania's premier escrow-protected marketplace PWA. It enables secure social commerce transactions with escrow protection, mobile money integration (M-Pesa, Airtel, Tigo), AI-powered support, and 2025 fintech standard features.
 
 ### Target Market
 - Women entrepreneurs in Tanzania
@@ -22,7 +22,7 @@ SecureTrade TZ is Tanzania's premier escrow-protected marketplace PWA. It enable
 - [x] Order management lifecycle
 - [x] 5% fee structure (3% buyer protection + 2% seller acquisition)
 
-### Phase 2: SecureTrade PWA Design (COMPLETED - April 2026)
+### Phase 2: SecureTrade PWA Design (COMPLETED)
 - [x] Premium fintech UI theme
   - Dark ink (#0a0a0f) header with gold (#c8a96e) accents
   - Emerald (#1a7a5a) for success/security states
@@ -68,6 +68,22 @@ SecureTrade TZ is Tanzania's premier escrow-protected marketplace PWA. It enable
 - [x] Product list with copy link action
 - [x] Create payment link flow
 
+### Phase 8: 2025 Fintech Upgrade Pack (COMPLETED - April 2026)
+- [x] **Biometric Authentication** - Face ID / Fingerprint (expo-local-authentication)
+- [x] **Dark Mode Support** - System-aware theme with persistence
+- [x] **Onboarding Flow** - 4-screen trust-building experience
+  - Screen 1: Biashara Salama / Trade Safely (Shield icon, gold accent)
+  - Screen 2: Njia 5 za Malipo / 5 Payment Methods (Phone icon, green accent)
+  - Screen 3: AI Inasuluhisha / AI Mediates Disputes (Scale icon, emerald accent)
+  - Screen 4: Imefanywa Tanzania / Made in Tanzania (Flag icon, green accent)
+- [x] **Transaction History** - Full history with filter & search
+- [x] **Push Notification Banner** - Request permission prompt
+- [x] **KYC Tier Gate** - Progressive KYC (NIDA verification, selfie)
+- [x] **Live Exchange Rate Ticker** - Real-time TSh/USD/GBP/EUR/KES rates
+- [x] **Transaction Receipt** - Shareable receipt with verification link
+- [x] **Rating Modal** - Post-transaction 5-star seller rating
+- [x] **Bottom Navigation** - Modern fintech nav (Home, History, Support, Profile)
+
 ---
 
 ## 🔄 In Progress / Upcoming
@@ -100,7 +116,7 @@ SecureTrade TZ is Tanzania's premier escrow-protected marketplace PWA. It enable
 ### P5: Enhanced Security
 - [ ] KYC integration (Smile Identity)
 - [ ] Two-factor authentication
-- [ ] Transaction signing
+- [ ] Transaction signing with biometrics
 
 ### P6: Logistics Integration
 - [ ] Sendy Africa integration
@@ -117,6 +133,7 @@ SecureTrade TZ is Tanzania's premier escrow-protected marketplace PWA. It enable
 - **State:** Zustand
 - **UI:** Custom components with SecureTrade theme
 - **Icons:** @expo/vector-icons (Ionicons)
+- **Auth:** expo-local-authentication (biometric)
 
 ### Backend Stack
 - **API:** FastAPI (Python)
@@ -124,30 +141,21 @@ SecureTrade TZ is Tanzania's premier escrow-protected marketplace PWA. It enable
 - **Auth:** JWT + bcrypt
 - **AI:** Emergent Integrations (Claude Sonnet 4)
 
-### File Structure
+### New Components (Phase 8)
 ```
-/app
-├── backend/
-│   ├── server.py           # All API endpoints
-│   ├── .env                 # MONGO_URL, EMERGENT_LLM_KEY
-│   └── requirements.txt
-├── frontend/
-│   ├── app/
-│   │   ├── index.tsx        # Landing page
-│   │   ├── login.tsx        # Auth screens
-│   │   ├── register.tsx
-│   │   ├── seller/index.tsx # Seller dashboard
-│   │   ├── create.tsx       # Create product
-│   │   ├── pay/[code].tsx   # Product page (buyer)
-│   │   ├── checkout/[orderId].tsx
-│   │   ├── confirm/[orderId].tsx
-│   │   └── track/[orderId].tsx
-│   └── src/
-│       ├── components/      # Reusable UI
-│       ├── constants/theme.ts
-│       └── store/authStore.ts
-└── memory/
-    └── PRD.md
+/app/frontend/src/
+├── hooks/
+│   ├── useBiometricAuth.ts    # Face ID / Fingerprint
+│   └── useDarkMode.ts         # Theme persistence
+├── components/
+│   ├── BiometricButton.tsx    # Verify identity button
+│   ├── OnboardingFlow.tsx     # 4-screen onboarding
+│   ├── TransactionHistory.tsx # Full history view
+│   ├── ExchangeRateTicker.tsx # Live rates bar
+│   ├── KYCGate.tsx            # Progressive verification
+│   ├── RatingModal.tsx        # Seller rating
+│   ├── BottomNav.tsx          # Modern navigation
+│   └── PushNotificationBanner.tsx
 ```
 
 ---
@@ -196,7 +204,10 @@ SecureTrade TZ is Tanzania's premier escrow-protected marketplace PWA. It enable
 2. **Escrow:** Fund holding is simulated in DB status
 3. **Voice:** Uses browser Web Speech API / expo-speech
 4. **Google OAuth:** Button present but flow incomplete
+5. **KYC:** NIDA verification is simulated
+6. **Exchange Rates:** Static rates (would need live API)
 
 ---
 
 *Last Updated: April 11, 2026*
+*Version: 2.5 (2025 Fintech Upgrade Pack)*

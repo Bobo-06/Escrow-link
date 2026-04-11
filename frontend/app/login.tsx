@@ -39,23 +39,42 @@ const COLORS = {
   error: '#DC2626',
 };
 
+type LoginMethod = 'email' | 'phone';
+
 export default function Login() {
   const router = useRouter();
   const { login, exchangeSession } = useAuthStore();
+  const [loginMethod, setLoginMethod] = useState<LoginMethod>('phone');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Taarifa Zinakosekana', 'Tafadhali jaza barua pepe na nenosiri / Please enter email and password');
+    const identifier = loginMethod === 'email' ? email : phone;
+    
+    if (!identifier) {
+      Alert.alert('Taarifa Zinakosekana', 
+        loginMethod === 'email' 
+          ? 'Tafadhali weka barua pepe / Please enter email'
+          : 'Tafadhali weka nambari ya simu / Please enter phone number'
+      );
+      return;
+    }
+    
+    if (!password) {
+      Alert.alert('Taarifa Zinakosekana', 'Tafadhali weka nenosiri / Please enter password');
       return;
     }
 
     setIsLoading(true);
     try {
-      await login(email, password);
+      const loginData = loginMethod === 'email' 
+        ? { email, password }
+        : { phone, password };
+      
+      await login(loginData);
       router.replace('/seller');
     } catch (error: any) {
       Alert.alert('Imeshindikana Kuingia', error.response?.data?.detail || 'Taarifa si sahihi / Invalid credentials');
@@ -66,7 +85,6 @@ export default function Login() {
 
   const handleGoogleLogin = async () => {
     try {
-      // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
       const redirectUrl = Platform.OS === 'web' 
         ? `${window.location.origin}/auth-callback`
         : Linking.createURL('/auth-callback');
@@ -142,22 +160,84 @@ export default function Login() {
 
           {/* Form */}
           <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Barua Pepe / Email</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="mail-outline" size={20} color={COLORS.gray} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="jina@mfano.com"
-                  placeholderTextColor={COLORS.lightGray}
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  data-testid="email-input"
+            {/* Login Method Toggle */}
+            <View style={styles.methodToggle}>
+              <TouchableOpacity
+                style={[
+                  styles.methodButton,
+                  loginMethod === 'phone' && styles.methodButtonActive
+                ]}
+                onPress={() => setLoginMethod('phone')}
+                data-testid="method-phone"
+              >
+                <Ionicons 
+                  name="call" 
+                  size={18} 
+                  color={loginMethod === 'phone' ? COLORS.white : COLORS.gray} 
                 />
-              </View>
+                <Text style={[
+                  styles.methodButtonText,
+                  loginMethod === 'phone' && styles.methodButtonTextActive
+                ]}>
+                  Simu / Phone
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.methodButton,
+                  loginMethod === 'email' && styles.methodButtonActive
+                ]}
+                onPress={() => setLoginMethod('email')}
+                data-testid="method-email"
+              >
+                <Ionicons 
+                  name="mail" 
+                  size={18} 
+                  color={loginMethod === 'email' ? COLORS.white : COLORS.gray} 
+                />
+                <Text style={[
+                  styles.methodButtonText,
+                  loginMethod === 'email' && styles.methodButtonTextActive
+                ]}>
+                  Barua Pepe / Email
+                </Text>
+              </TouchableOpacity>
             </View>
+
+            {loginMethod === 'phone' ? (
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Nambari ya Simu / Phone Number</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="call-outline" size={20} color={COLORS.gray} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="+255 xxx xxx xxx"
+                    placeholderTextColor={COLORS.lightGray}
+                    value={phone}
+                    onChangeText={setPhone}
+                    keyboardType="phone-pad"
+                    data-testid="phone-input"
+                  />
+                </View>
+              </View>
+            ) : (
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Barua Pepe / Email</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="mail-outline" size={20} color={COLORS.gray} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="jina@mfano.com"
+                    placeholderTextColor={COLORS.lightGray}
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    data-testid="email-input"
+                  />
+                </View>
+              </View>
+            )}
 
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Nenosiri / Password</Text>
@@ -319,6 +399,33 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
     marginTop: 8,
     textAlign: 'center',
+  },
+  methodToggle: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.paleGray,
+    borderRadius: 16,
+    padding: 4,
+    marginBottom: 16,
+  },
+  methodButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  methodButtonActive: {
+    backgroundColor: COLORS.primary,
+  },
+  methodButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.gray,
+  },
+  methodButtonTextActive: {
+    color: COLORS.white,
   },
   form: {
     gap: 18,

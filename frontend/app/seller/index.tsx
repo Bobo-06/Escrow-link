@@ -1,336 +1,245 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
+  TouchableOpacity,
+  Image,
   RefreshControl,
-  Animated,
+  Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore } from '../../src/store/authStore';
-import { statsApi, productsApi } from '../../src/api/api';
-import LoadingScreen from '../../src/components/LoadingScreen';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAuthStore } from '../../src/store/authStore';
+import { COLORS, RADIUS, SHADOWS, formatTZS, formatTZSShort } from '../../src/constants/theme';
+import { AIChatbot } from '../../src/components/AIChatbot';
 
-const COLORS = {
-  primary: '#047857',
-  primaryDark: '#065F46',
-  primaryLight: '#10B981',
-  emerald: '#059669',
-  gold: '#D97706',
-  goldLight: '#F59E0B',
-  goldPale: '#FEF3C7',
-  dark: '#0F172A',
-  darkGray: '#1E293B',
-  gray: '#475569',
-  lightGray: '#CBD5E1',
-  paleGray: '#F1F5F9',
-  background: '#F8FAFC',
-  white: '#FFFFFF',
-  success: '#059669',
-  successBg: '#ECFDF5',
-  blue: '#2563EB',
-  blueBg: '#EFF6FF',
-  purple: '#7C3AED',
-  purpleBg: '#F5F3FF',
-  pink: '#EC4899',
-  pinkBg: '#FDF2F8',
-  error: '#DC2626',
-};
+const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+const { width } = Dimensions.get('window');
 
 export default function SellerDashboard() {
   const router = useRouter();
-  const { user, isAuthenticated, isLoading, checkAuth, logout } = useAuthStore();
-  const [stats, setStats] = useState<any>(null);
+  const { user, token, logout } = useAuthStore();
   const [products, setProducts] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [showChat, setShowChat] = useState(false);
 
   useEffect(() => {
-    checkAuth();
-  }, []);
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (!token) {
       router.replace('/login');
-    } else if (isAuthenticated) {
-      loadData();
+      return;
     }
-  }, [isLoading, isAuthenticated]);
+    fetchData();
+  }, [token]);
 
-  const loadData = async () => {
+  const fetchData = async () => {
     try {
-      const [statsRes, productsRes] = await Promise.all([
-        statsApi.getSellerStats(),
-        productsApi.getAll()
+      const [productsRes, statsRes] = await Promise.all([
+        fetch(`${API_URL}/api/products`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${API_URL}/api/seller/stats`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
       ]);
-      setStats(statsRes.data);
-      setProducts(productsRes.data);
-    } catch (error) {
-      console.error('Load data error:', error);
+
+      if (productsRes.ok) {
+        const data = await productsRes.json();
+        setProducts(data);
+      }
+      if (statsRes.ok) {
+        const data = await statsRes.json();
+        setStats(data);
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
-  const onRefresh = async () => {
+  const handleRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    await fetchData();
     setRefreshing(false);
   };
 
-  const handleLogout = async () => {
-    await logout();
+  const handleLogout = () => {
+    logout();
     router.replace('/');
   };
 
-  if (isLoading) {
-    return <LoadingScreen message="Inapakia... / Loading..." />;
-  }
-
-  const formatTZS = (amount: number) => `TZS ${amount?.toLocaleString() || 0}`;
-  const formatUSD = (amount: number) => `$${(amount / 2500).toFixed(0)}`;
-
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>
+              {user?.username?.charAt(0).toUpperCase() || '👤'}
+            </Text>
+          </View>
+          <View style={styles.headerInfo}>
+            <Text style={styles.headerTitle}>Habari, {user?.username || 'Muuzaji'}</Text>
+            <Text style={styles.headerSub}>SecureTrade Dashboard</Text>
+          </View>
+        </View>
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+          <Ionicons name="log-out-outline" size={20} color={COLORS.white} />
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        style={styles.scrollView}
+        contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       >
-        {/* Header Card */}
-        <LinearGradient
-          colors={[COLORS.primaryDark, COLORS.primary, COLORS.emerald]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.headerCard}
-        >
-          <View style={styles.headerContent}>
-            <View>
-              <Text style={styles.greeting}>Karibu tena / Welcome back</Text>
-              <Text style={styles.name}>{user?.business_name || user?.name || 'Mjasiriamali'}</Text>
-              {(user?.is_women_owned || stats?.is_women_owned) && (
-                <View style={styles.womenOwnedBadge}>
-                  <Ionicons name="heart" size={12} color={COLORS.pink} />
-                  <Text style={styles.womenOwnedText}>Biashara ya Mwanamke</Text>
-                </View>
-              )}
-            </View>
-            <TouchableOpacity
-              style={styles.profileButton}
-              onPress={() => {}}
-              data-testid="profile-btn"
-            >
-              <Ionicons name="person-circle" size={44} color="rgba(255,255,255,0.9)" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Quick Stats in Header */}
-          <View style={styles.headerStats}>
-            <View style={styles.headerStatItem}>
-              <Text style={styles.headerStatValue}>{formatTZS(stats?.total_earnings || 0)}</Text>
-              <Text style={styles.headerStatLabel}>Mapato Yote / Total Earnings</Text>
-            </View>
-          </View>
-        </LinearGradient>
-
-        {/* Trade Finance Profile Card */}
-        {stats?.trade_metrics && (
-          <View style={styles.tradeCard}>
-            <View style={styles.tradeCardHeader}>
-              <View style={styles.tradeIconBg}>
-                <Ionicons name="trending-up" size={20} color={COLORS.success} />
-              </View>
-              <View style={styles.tradeHeaderText}>
-                <Text style={styles.tradeTitle}>Profaili ya Biashara</Text>
-                <Text style={styles.tradeTitleEn}>Trade Finance Profile</Text>
-              </View>
-              {stats.trade_metrics.credit_score_eligible && (
-                <View style={styles.creditBadge}>
-                  <Ionicons name="checkmark-circle" size={14} color={COLORS.success} />
-                  <Text style={styles.creditText}>Mkopo</Text>
-                </View>
-              )}
-            </View>
-            <View style={styles.tradeMetricsRow}>
-              <View style={styles.tradeMetricItem}>
-                <Text style={styles.tradeMetricValue}>{stats.trade_metrics.success_rate}%</Text>
-                <Text style={styles.tradeMetricLabel}>Mafanikio</Text>
-              </View>
-              <View style={styles.tradeMetricDivider} />
-              <View style={styles.tradeMetricItem}>
-                <Text style={styles.tradeMetricValue}>{stats.trade_metrics.successful_transactions}</Text>
-                <Text style={styles.tradeMetricLabel}>Imekamilika</Text>
-              </View>
-              <View style={styles.tradeMetricDivider} />
-              <View style={styles.tradeMetricItem}>
-                <Text style={styles.tradeMetricValue}>{stats.trade_metrics.repeat_buyers}</Text>
-                <Text style={styles.tradeMetricLabel}>Wateja Tena</Text>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* Stats Grid */}
+        {/* Stats Cards */}
         <View style={styles.statsGrid}>
-          <View style={[styles.statCard, styles.escrowCard]}>
-            <View style={styles.statIconBg}>
-              <Ionicons name="shield-checkmark" size={22} color={COLORS.gold} />
-            </View>
-            <Text style={styles.statValue}>{formatTZS(stats?.pending_earnings || 0)}</Text>
-            <Text style={styles.statLabel}>Escrow Salama</Text>
-            <View style={styles.statBadge}>
-              <Text style={styles.statBadgeText}>NMB Protected</Text>
-            </View>
-          </View>
-
-          <View style={[styles.statCard, styles.globalCard]}>
-            <View style={[styles.statIconBg, { backgroundColor: COLORS.blueBg }]}>
-              <Ionicons name="globe" size={22} color={COLORS.blue} />
-            </View>
-            <Text style={styles.statValue}>{stats?.international_orders || 0}</Text>
-            <Text style={styles.statLabel}>Oda za Kimataifa</Text>
-            <View style={[styles.statBadge, { backgroundColor: COLORS.blueBg }]}>
-              <Text style={[styles.statBadgeText, { color: COLORS.blue }]}>Diaspora</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Mini Stats */}
-        <View style={styles.miniStatsRow}>
-          <View style={styles.miniStatCard}>
-            <Ionicons name="cube" size={24} color={COLORS.purple} />
-            <Text style={styles.miniStatValue}>{stats?.products_count || 0}</Text>
-            <Text style={styles.miniStatLabel}>Bidhaa</Text>
-          </View>
-          <View style={styles.miniStatCard}>
-            <Ionicons name="cart" size={24} color={COLORS.gold} />
-            <Text style={styles.miniStatValue}>{stats?.total_orders || 0}</Text>
-            <Text style={styles.miniStatLabel}>Oda Zote</Text>
-          </View>
-          <View style={styles.miniStatCard}>
-            <Ionicons name="checkmark-done" size={24} color={COLORS.success} />
-            <Text style={styles.miniStatValue}>{stats?.completed_orders || 0}</Text>
-            <Text style={styles.miniStatLabel}>Imekamilika</Text>
-          </View>
-        </View>
-
-        {/* Quick Actions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Vitendo vya Haraka / Quick Actions</Text>
-          <View style={styles.actionsRow}>
-            <TouchableOpacity
-              style={styles.actionCard}
-              onPress={() => router.push('/seller/create')}
-              data-testid="create-link-btn"
-              activeOpacity={0.85}
-            >
-              <LinearGradient
-                colors={[COLORS.primaryLight, COLORS.primary]}
-                style={styles.actionIconGradient}
-              >
-                <Ionicons name="add" size={28} color={COLORS.white} />
-              </LinearGradient>
-              <Text style={styles.actionTitle}>Unda Linki</Text>
-              <Text style={styles.actionSubtitle}>Create Link</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionCard}
-              onPress={() => router.push('/seller/orders')}
-              data-testid="view-orders-btn"
-              activeOpacity={0.85}
-            >
-              <LinearGradient
-                colors={[COLORS.goldLight, COLORS.gold]}
-                style={styles.actionIconGradient}
-              >
-                <Ionicons name="list" size={28} color={COLORS.white} />
-              </LinearGradient>
-              <Text style={styles.actionTitle}>Oda Zangu</Text>
-              <Text style={styles.actionSubtitle}>View Orders</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* NALA Info Card */}
-        <View style={styles.nalaCard}>
           <LinearGradient
-            colors={['rgba(239, 246, 255, 0.95)', 'rgba(219, 234, 254, 0.8)']}
-            style={styles.nalaGradient}
+            colors={[COLORS.ink, COLORS.ink2]}
+            style={styles.statsCardMain}
           >
-            <View style={styles.nalaIconBg}>
-              <Ionicons name="globe" size={26} color={COLORS.blue} />
-            </View>
-            <View style={styles.nalaContent}>
-              <Text style={styles.nalaTitle}>Pokea Malipo ya Diaspora</Text>
-              <Text style={styles.nalaTitleEn}>Receive Diaspora Payments</Text>
-              <Text style={styles.nalaText}>Pokea malipo kutoka UK, US, EU kupitia NALA</Text>
-              <View style={styles.currencyRow}>
-                <View style={styles.currencyBadge}><Text style={styles.currencyText}>USD</Text></View>
-                <View style={styles.currencyBadge}><Text style={styles.currencyText}>GBP</Text></View>
-                <View style={styles.currencyBadge}><Text style={styles.currencyText}>EUR</Text></View>
-              </View>
+            <Text style={styles.statsIcon}>💰</Text>
+            <Text style={styles.statsValue}>
+              {formatTZSShort(stats?.total_revenue || 0)}
+            </Text>
+            <Text style={styles.statsLabel}>Mapato Jumla / Total Revenue</Text>
+            <View style={styles.statsGrowth}>
+              <Ionicons name="trending-up" size={14} color={COLORS.emeraldLight} />
+              <Text style={styles.statsGrowthText}>Escrow Active</Text>
             </View>
           </LinearGradient>
+
+          <View style={styles.statsRow}>
+            <View style={styles.statsCardSmall}>
+              <Text style={styles.statsSmallIcon}>📦</Text>
+              <Text style={styles.statsSmallValue}>{products.length}</Text>
+              <Text style={styles.statsSmallLabel}>Bidhaa</Text>
+            </View>
+            <View style={styles.statsCardSmall}>
+              <Text style={styles.statsSmallIcon}>✅</Text>
+              <Text style={styles.statsSmallValue}>{stats?.completed_orders || 0}</Text>
+              <Text style={styles.statsSmallLabel}>Mafanikio</Text>
+            </View>
+            <View style={styles.statsCardSmall}>
+              <Text style={styles.statsSmallIcon}>⭐</Text>
+              <Text style={styles.statsSmallValue}>
+                {stats?.trust_score || 87}
+              </Text>
+              <Text style={styles.statsSmallLabel}>Trust</Text>
+            </View>
+          </View>
         </View>
 
-        {/* Recent Products */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Bidhaa za Hivi Karibuni / Recent</Text>
-            {products.length > 0 && (
-              <TouchableOpacity>
-                <Text style={styles.seeAllText}>Ona Zote</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+        {/* Create Product Button */}
+        <TouchableOpacity
+          style={styles.createBtn}
+          onPress={() => router.push('/create')}
+          activeOpacity={0.85}
+          data-testid="create-product-btn"
+        >
+          <LinearGradient
+            colors={[COLORS.gold, COLORS.goldDark]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.createBtnGradient}
+          >
+            <Ionicons name="add-circle" size={22} color={COLORS.ink} />
+            <Text style={styles.createBtnText}>Unda Linki ya Malipo · Create Payment Link</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+
+        {/* Products List */}
+        <View style={styles.productsSection}>
+          <Text style={styles.sectionTitle}>BIDHAA ZAKO / YOUR PRODUCTS</Text>
 
           {products.length === 0 ? (
             <View style={styles.emptyState}>
-              <View style={styles.emptyIconBg}>
-                <Ionicons name="cube-outline" size={40} color={COLORS.lightGray} />
-              </View>
-              <Text style={styles.emptyTitle}>Hakuna bidhaa bado</Text>
-              <Text style={styles.emptySubtitle}>No products yet</Text>
-              <TouchableOpacity
-                style={styles.emptyButton}
-                onPress={() => router.push('/seller/create')}
-              >
-                <Text style={styles.emptyButtonText}>Unda linki ya kwanza ya malipo</Text>
-                <Ionicons name="arrow-forward" size={16} color={COLORS.primary} />
-              </TouchableOpacity>
+              <Text style={styles.emptyIcon}>📦</Text>
+              <Text style={styles.emptyText}>Bado huna bidhaa</Text>
+              <Text style={styles.emptyTextEn}>No products yet</Text>
             </View>
           ) : (
-            products.slice(0, 3).map((product) => (
+            products.map((product) => (
               <View key={product.product_id} style={styles.productCard}>
-                <View style={styles.productInfo}>
-                  <Text style={styles.productName}>{product.name}</Text>
-                  <Text style={styles.productPrice}>{formatTZS(product.price_tzs || product.price)}</Text>
-                  {product.international_shipping && (
-                    <View style={styles.exportBadge}>
-                      <Ionicons name="airplane" size={11} color={COLORS.blue} />
-                      <Text style={styles.exportText}>Export Ready</Text>
+                <View style={styles.productImageWrap}>
+                  {product.image ? (
+                    <Image source={{ uri: product.image }} style={styles.productImage} />
+                  ) : (
+                    <View style={[styles.productImage, styles.productImagePlaceholder]}>
+                      <Ionicons name="image" size={24} color={COLORS.surface3} />
                     </View>
                   )}
                 </View>
-                <View style={styles.productCode}>
-                  <Ionicons name="link" size={14} color={COLORS.primary} />
-                  <Text style={styles.codeText}>{product.payment_link_code}</Text>
+                <View style={styles.productInfo}>
+                  <Text style={styles.productName} numberOfLines={2}>
+                    {product.name}
+                  </Text>
+                  <Text style={styles.productPrice}>{formatTZS(product.price)}</Text>
                 </View>
+                <TouchableOpacity
+                  style={styles.copyBtn}
+                  onPress={() => {
+                    // Copy link
+                    const link = `${API_URL}/pay/${product.link_id}`;
+                    // Clipboard.setString(link);
+                  }}
+                >
+                  <Ionicons name="copy-outline" size={18} color={COLORS.gold} />
+                </TouchableOpacity>
               </View>
             ))
           )}
         </View>
 
-        {/* Logout */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} data-testid="logout-btn">
-          <Ionicons name="log-out-outline" size={20} color={COLORS.error} />
-          <Text style={styles.logoutText}>Toka / Sign Out</Text>
-        </TouchableOpacity>
+        {/* Quick Actions */}
+        <View style={styles.quickActions}>
+          <TouchableOpacity style={styles.quickAction}>
+            <View style={[styles.quickActionIcon, { backgroundColor: COLORS.emeraldPale }]}>
+              <Ionicons name="wallet" size={22} color={COLORS.emerald} />
+            </View>
+            <Text style={styles.quickActionText}>Ondoa Pesa</Text>
+            <Text style={styles.quickActionEn}>Withdraw</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.quickAction}>
+            <View style={[styles.quickActionIcon, { backgroundColor: COLORS.amberPale }]}>
+              <Ionicons name="analytics" size={22} color={COLORS.amber} />
+            </View>
+            <Text style={styles.quickActionText}>Ripoti</Text>
+            <Text style={styles.quickActionEn}>Analytics</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.quickAction}>
+            <View style={[styles.quickActionIcon, { backgroundColor: COLORS.bluePale }]}>
+              <Ionicons name="settings" size={22} color={COLORS.blue} />
+            </View>
+            <Text style={styles.quickActionText}>Mipangilio</Text>
+            <Text style={styles.quickActionEn}>Settings</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
+
+      {/* Floating Chat Button */}
+      {!showChat && (
+        <TouchableOpacity
+          style={styles.chatFab}
+          onPress={() => setShowChat(true)}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.chatFabText}>💬</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* AI Chatbot */}
+      {showChat && (
+        <AIChatbot mode="support" onClose={() => setShowChat(false)} />
+      )}
     </SafeAreaView>
   );
 }
@@ -338,457 +247,264 @@ export default function SellerDashboard() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.surface,
   },
-  scrollContent: {
+  header: {
+    backgroundColor: COLORS.ink,
     padding: 16,
-  },
-  headerCard: {
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 16,
-  },
-  headerContent: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
   },
-  greeting: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
-  },
-  name: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: COLORS.white,
-    letterSpacing: -0.5,
-    marginTop: 4,
-  },
-  womenOwnedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 10,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  womenOwnedText: {
-    fontSize: 12,
-    color: COLORS.white,
-    fontWeight: '600',
-  },
-  profileButton: {
-    width: 48,
-    height: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerStats: {
-    marginTop: 20,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.2)',
-  },
-  headerStatItem: {
-    alignItems: 'center',
-  },
-  headerStatValue: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: COLORS.white,
-  },
-  headerStatLabel: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 4,
-  },
-  tradeCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.success,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  tradeCardHeader: {
+  headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginBottom: 16,
   },
-  tradeIconBg: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: COLORS.successBg,
-    justifyContent: 'center',
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.gold,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  tradeHeaderText: {
+  avatarText: {
+    color: COLORS.ink,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  headerInfo: {
     flex: 1,
   },
-  tradeTitle: {
+  headerTitle: {
+    color: COLORS.white,
     fontSize: 16,
     fontWeight: '700',
-    color: COLORS.dark,
   },
-  tradeTitleEn: {
+  headerSub: {
+    color: 'rgba(255,255,255,0.5)',
     fontSize: 12,
-    color: COLORS.gray,
+    marginTop: 2,
   },
-  creditBadge: {
+  logoutBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  content: {
+    padding: 16,
+    gap: 16,
+  },
+  statsGrid: {
+    gap: 12,
+  },
+  statsCardMain: {
+    borderRadius: RADIUS.lg,
+    padding: 20,
+    alignItems: 'center',
+    ...SHADOWS.md,
+  },
+  statsIcon: {
+    fontSize: 28,
+    marginBottom: 8,
+  },
+  statsValue: {
+    color: COLORS.gold,
+    fontSize: 32,
+    fontWeight: '800',
+  },
+  statsLabel: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  statsGrowth: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: COLORS.successBg,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    marginTop: 12,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 20,
   },
-  creditText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.success,
-  },
-  tradeMetricsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  tradeMetricItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  tradeMetricDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: COLORS.paleGray,
-  },
-  tradeMetricValue: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: COLORS.dark,
-  },
-  tradeMetricLabel: {
-    fontSize: 11,
-    color: COLORS.gray,
-    marginTop: 4,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: COLORS.white,
-    borderRadius: 18,
-    padding: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  escrowCard: {
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  globalCard: {
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  statIconBg: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: COLORS.goldPale,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.dark,
-  },
-  statLabel: {
+  statsGrowthText: {
+    color: COLORS.emeraldLight,
     fontSize: 12,
-    color: COLORS.gray,
-    marginTop: 4,
-  },
-  statBadge: {
-    backgroundColor: COLORS.goldPale,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginTop: 10,
-  },
-  statBadgeText: {
-    fontSize: 10,
     fontWeight: '600',
-    color: COLORS.gold,
   },
-  miniStatsRow: {
+  statsRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 20,
   },
-  miniStatCard: {
+  statsCardSmall: {
     flex: 1,
     backgroundColor: COLORS.white,
+    borderRadius: RADIUS.md,
     padding: 14,
-    borderRadius: 16,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
+    ...SHADOWS.sm,
   },
-  miniStatValue: {
+  statsSmallIcon: {
     fontSize: 20,
+    marginBottom: 8,
+  },
+  statsSmallValue: {
+    fontSize: 22,
     fontWeight: '800',
-    color: COLORS.dark,
-    marginTop: 6,
+    color: COLORS.ink,
   },
-  miniStatLabel: {
+  statsSmallLabel: {
     fontSize: 11,
-    color: COLORS.gray,
-    marginTop: 2,
+    color: 'rgba(10,10,15,0.5)',
+    marginTop: 4,
   },
-  section: {
-    marginBottom: 20,
+  createBtn: {
+    borderRadius: RADIUS.md,
+    overflow: 'hidden',
+    ...SHADOWS.gold,
   },
-  sectionHeader: {
+  createBtnGradient: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+  },
+  createBtnText: {
+    color: COLORS.ink,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  productsSection: {
+    marginTop: 8,
   },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: 11,
     fontWeight: '700',
-    color: COLORS.dark,
-  },
-  seeAllText: {
-    fontSize: 14,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  actionCard: {
-    flex: 1,
-    backgroundColor: COLORS.white,
-    padding: 20,
-    borderRadius: 20,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  actionIconGradient: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
+    color: 'rgba(10,10,15,0.4)',
+    letterSpacing: 1,
     marginBottom: 12,
-  },
-  actionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.dark,
-  },
-  actionSubtitle: {
-    fontSize: 12,
-    color: COLORS.gray,
-    marginTop: 2,
-  },
-  nalaCard: {
-    marginBottom: 20,
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  nalaGradient: {
-    flexDirection: 'row',
-    padding: 18,
-    gap: 14,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    borderRadius: 20,
-  },
-  nalaIconBg: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: COLORS.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: COLORS.blue,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  nalaContent: {
-    flex: 1,
-  },
-  nalaTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1E40AF',
-  },
-  nalaTitleEn: {
-    fontSize: 12,
-    color: COLORS.blue,
-    marginTop: 1,
-  },
-  nalaText: {
-    fontSize: 12,
-    color: COLORS.gray,
-    marginTop: 6,
-    lineHeight: 18,
-  },
-  currencyRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-  },
-  currencyBadge: {
-    backgroundColor: '#DBEAFE',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  currencyText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1E40AF',
   },
   emptyState: {
     backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
     padding: 32,
-    borderRadius: 20,
     alignItems: 'center',
+    ...SHADOWS.sm,
   },
-  emptyIconBg: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
-    backgroundColor: COLORS.paleGray,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
+  emptyIcon: {
+    fontSize: 32,
+    marginBottom: 12,
   },
-  emptyTitle: {
-    fontSize: 16,
+  emptyText: {
+    fontSize: 15,
     fontWeight: '600',
-    color: COLORS.dark,
+    color: COLORS.ink,
   },
-  emptySubtitle: {
-    fontSize: 14,
-    color: COLORS.gray,
+  emptyTextEn: {
+    fontSize: 13,
+    color: 'rgba(10,10,15,0.5)',
     marginTop: 4,
   },
-  emptyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 16,
-  },
-  emptyButtonText: {
-    fontSize: 14,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
   productCard: {
-    backgroundColor: COLORS.white,
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 10,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.md,
+    padding: 12,
+    gap: 12,
+    marginBottom: 10,
+    ...SHADOWS.sm,
+  },
+  productImageWrap: {
+    borderRadius: RADIUS.sm,
+    overflow: 'hidden',
+  },
+  productImage: {
+    width: 56,
+    height: 56,
+    borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.surface2,
+  },
+  productImagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   productInfo: {
     flex: 1,
   },
   productName: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    color: COLORS.dark,
+    color: COLORS.ink,
   },
   productPrice: {
-    fontSize: 14,
-    color: COLORS.primary,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.goldDark,
     marginTop: 4,
   },
-  exportBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 8,
-    backgroundColor: COLORS.blueBg,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-  },
-  exportText: {
-    fontSize: 11,
-    color: COLORS.blue,
-    fontWeight: '600',
-  },
-  productCode: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-  codeText: {
-    fontSize: 12,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  logoutButton: {
-    flexDirection: 'row',
+  copyBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.goldLight + '30',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    marginTop: 8,
-    marginBottom: 20,
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
   },
-  logoutText: {
-    fontSize: 15,
-    color: COLORS.error,
+  quickActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  quickAction: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.md,
+    padding: 14,
+    alignItems: 'center',
+    ...SHADOWS.sm,
+  },
+  quickActionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  quickActionText: {
+    fontSize: 12,
     fontWeight: '600',
+    color: COLORS.ink,
+  },
+  quickActionEn: {
+    fontSize: 10,
+    color: 'rgba(10,10,15,0.5)',
+    marginTop: 2,
+  },
+  chatFab: {
+    position: 'absolute',
+    bottom: 30,
+    right: 20,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: COLORS.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOWS.lg,
+    zIndex: 500,
+  },
+  chatFabText: {
+    fontSize: 22,
   },
 });

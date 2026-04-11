@@ -1,263 +1,154 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  ScrollView,
   TouchableOpacity,
-  TextInput,
-  Alert,
-  Image,
+  ActivityIndicator,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { ordersApi } from '../../src/api/api';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, RADIUS, SHADOWS, formatTZS } from '../../src/constants/theme';
+import { VoiceConfirmation } from '../../src/components/VoiceConfirmation';
 
-const COLORS = {
-  primary: '#0D9488',
-  gold: '#F59E0B',
-  goldBg: '#FFFBEB',
-  dark: '#0F172A',
-  darkGray: '#1E293B',
-  gray: '#64748B',
-  lightGray: '#E2E8F0',
-  inputBg: '#F1F5F9',
-  background: '#F8FAFC',
-  white: '#FFFFFF',
-  success: '#10B981',
-  successBg: '#ECFDF5',
-  error: '#EF4444',
-  errorBg: '#FEF2F2',
-};
+const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
-const disputeReasons = [
-  { id: 'not_delivered', label: 'Item not delivered' },
-  { id: 'wrong_item', label: 'Wrong product received' },
-  { id: 'poor_quality', label: 'Poor quality / damaged' },
-];
-
-export default function ConfirmDelivery() {
-  const router = useRouter();
+export default function ConfirmationPage() {
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
+  const router = useRouter();
   const [order, setOrder] = useState<any>(null);
-  const [showDispute, setShowDispute] = useState(false);
-  const [selectedReason, setSelectedReason] = useState('');
-  const [comment, setComment] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadOrder();
+    fetchOrder();
   }, [orderId]);
 
-  const loadOrder = async () => {
+  const fetchOrder = async () => {
     try {
-      const response = await ordersApi.get(orderId || '');
-      setOrder(response.data);
-    } catch (error) {
-      console.error('Load order error:', error);
-    }
-  };
-
-  const handleConfirmDelivery = async () => {
-    setIsLoading(true);
-    try {
-      await ordersApi.confirmDelivery(orderId || '');
-      Alert.alert(
-        'Thank You!',
-        'Payment has been released to the seller.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.replace('/'),
-          },
-        ]
-      );
-    } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.detail || 'Could not confirm delivery');
+      const response = await fetch(`${API_URL}/api/orders/${orderId}`);
+      if (!response.ok) throw new Error('Order not found');
+      const data = await response.json();
+      setOrder(data);
+    } catch (err) {
+      console.error(err);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleSubmitDispute = async () => {
-    if (!selectedReason) {
-      Alert.alert('Required', 'Please select a reason');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      await ordersApi.createDispute(orderId || '', selectedReason);
-      Alert.alert(
-        'Case Submitted',
-        'We will review your case and contact you shortly.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.replace('/'),
-          },
-        ]
-      );
-    } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.detail || 'Could not submit case');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const formatPrice = (amount: number) => `TZS ${amount?.toLocaleString() || 0}`;
-
-  // Dispute Screen
-  if (showDispute) {
+  if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.headerLight}>
-          <TouchableOpacity style={styles.backButtonLight} onPress={() => setShowDispute(false)} data-testid="back-btn">
-            <Ionicons name="chevron-back" size={24} color={COLORS.dark} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitleDark}>Report Problem</Text>
-          <View style={{ width: 40 }} />
-        </View>
-
-        <View style={styles.content}>
-          {/* Header Text */}
-          <Text style={styles.disputeTitle}>What went wrong?</Text>
-          <Text style={styles.disputeSubtitle}>Select the issue you encountered</Text>
-
-          {/* Dispute Reasons */}
-          <View style={styles.reasonsContainer}>
-            {disputeReasons.map((reason) => (
-              <TouchableOpacity
-                key={reason.id}
-                style={[
-                  styles.reasonOption,
-                  selectedReason === reason.id && styles.reasonOptionSelected,
-                ]}
-                onPress={() => setSelectedReason(reason.id)}
-                data-testid={`reason-${reason.id}`}
-              >
-                <View style={[
-                  styles.radioOuter,
-                  selectedReason === reason.id && styles.radioOuterSelected
-                ]}>
-                  {selectedReason === reason.id && <View style={styles.radioInner} />}
-                </View>
-                <Text style={[
-                  styles.reasonText,
-                  selectedReason === reason.id && styles.reasonTextSelected
-                ]}>{reason.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Comment Field */}
-          <View style={styles.commentContainer}>
-            <Text style={styles.commentLabel}>Additional Details (Optional)</Text>
-            <TextInput
-              style={styles.commentInput}
-              placeholder="Describe the issue in more detail..."
-              placeholderTextColor={COLORS.gray}
-              value={comment}
-              onChangeText={setComment}
-              multiline
-              numberOfLines={4}
-              data-testid="comment-input"
-            />
-          </View>
-
-          {/* Protection Message */}
-          <View style={styles.protectionMessage}>
-            <Ionicons name="shield-checkmark" size={18} color={COLORS.gold} />
-            <Text style={styles.protectionText}>Your payment remains protected during review</Text>
-          </View>
-
-          {/* Submit Button */}
-          <TouchableOpacity
-            style={[styles.submitButton, isLoading && styles.buttonDisabled]}
-            onPress={handleSubmitDispute}
-            disabled={isLoading}
-            data-testid="submit-dispute-btn"
-          >
-            <Text style={styles.submitButtonText}>
-              {isLoading ? 'Submitting...' : 'Submit Case'}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Cancel */}
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={() => setShowDispute(false)}
-          >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.gold} />
+      </View>
     );
   }
 
-  // Main Delivery Confirmation Screen
-  return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.headerLight}>
-        <TouchableOpacity style={styles.backButtonLight} onPress={() => router.back()} data-testid="back-btn">
-          <Ionicons name="chevron-back" size={24} color={COLORS.dark} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitleDark}>Confirm Delivery</Text>
-        <View style={{ width: 40 }} />
-      </View>
+  const txId = orderId?.toUpperCase().slice(0, 16) || 'SCT-XXXXXXXX';
 
-      <View style={styles.content}>
-        {/* Success Icon */}
-        <View style={styles.mainIconOuter}>
-          <View style={styles.mainIconInner}>
-            <Ionicons name="cube" size={40} color={COLORS.primary} />
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Success Header */}
+      <LinearGradient
+        colors={[COLORS.ink, '#1a2a1a']}
+        style={styles.header}
+      >
+        <View style={styles.headerContent}>
+          <Text style={styles.headerSubtitle}>Pesa Imeshikwa · Funds Secured</Text>
+          <Text style={styles.headerTitle}>Ulinzi wa escrow umewashwa · Protection active</Text>
+        </View>
+      </LinearGradient>
+
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+        {/* Success Circle */}
+        <View style={styles.successSection}>
+          <View style={styles.successCircle}>
+            <Text style={styles.successIcon}>\u2713</Text>
           </View>
+          <Text style={styles.successTitle}>Malipo Yamehifadhiwa Salama!</Text>
+          <Text style={styles.successSubtitle}>Payment Secured · Muuzaji amearifiwa</Text>
         </View>
 
-        {/* Main Question */}
-        <Text style={styles.mainQuestion}>Order Delivered?</Text>
-        <Text style={styles.subQuestion}>Have you received your item?</Text>
+        {/* Receipt Card */}
+        <View style={styles.receiptCard}>
+          <Text style={styles.receiptTitle}>RISITI / RECEIPT</Text>
+          
+          {[
+            ['Nambari ya Muamala / TX ID', txId],
+            ['Kiasi cha Escrow / In Escrow', formatTZS(order?.product_price_tzs || order?.total_paid || 0)],
+            ['Jumla Iliyolipwa / Paid', formatTZS(order?.total_paid || 0)],
+            ['Muuzaji / Seller', order?.seller_name || 'Seller'],
+            ['Njia / Method', order?.payment_method === 'mpesa' ? 'M-Pesa \ud83d\udfe2' : order?.payment_method?.toUpperCase()],
+            ['Hali / Status', '\u2705 Imeshikwa Salama'],
+          ].map(([label, value], i) => (
+            <View key={i} style={styles.receiptRow}>
+              <Text style={styles.receiptLabel}>{label}</Text>
+              <Text style={styles.receiptValue}>{value}</Text>
+            </View>
+          ))}
+        </View>
 
-        {/* Product Info */}
+        {/* Voice Confirmation */}
         {order && (
-          <View style={styles.orderInfo}>
-            <Text style={styles.orderProductName}>{order.product_name}</Text>
-            <Text style={styles.orderPrice}>{formatPrice(order.total_paid)}</Text>
-          </View>
+          <VoiceConfirmation
+            transaction={{
+              item: order.product_name || 'Product',
+              amount: order.total_paid || 0,
+              seller: order.seller_name || 'Seller',
+            }}
+          />
         )}
 
-        {/* Yes, Release Payment Button */}
-        <TouchableOpacity
-          style={[styles.confirmButton, isLoading && styles.buttonDisabled]}
-          onPress={handleConfirmDelivery}
-          disabled={isLoading}
-          data-testid="release-payment-btn"
-        >
-          <Ionicons name="checkmark-circle" size={22} color={COLORS.white} />
-          <Text style={styles.confirmButtonText}>
-            {isLoading ? 'Processing...' : 'Yes, Release Payment'}
+        {/* SMS Info */}
+        <View style={styles.smsCard}>
+          <View style={styles.smsIcon}>
+            <Text style={styles.smsIconText}>\ud83d\udcf1</Text>
+          </View>
+          <View style={styles.smsContent}>
+            <Text style={styles.smsTitle}>SMS Umetumwa · SMS Sent</Text>
+            <Text style={styles.smsText}>
+              Utapokea SMS kutoka Africa's Talking na maelezo ya muamala wako.
+            </Text>
+            <Text style={styles.smsTextEn}>
+              You'll receive an SMS via Africa's Talking with transaction details.
+            </Text>
+          </View>
+        </View>
+
+        {/* What's Next */}
+        <View style={styles.nextCard}>
+          <Text style={styles.nextIcon}>\u23f3</Text>
+          <Text style={styles.nextTitle}>Hatua Inayofuata / What's Next</Text>
+          <Text style={styles.nextText}>
+            Muuzaji ataandaa bidhaa na kutuma. Utapokea arifa ya ufuatiliaji.
           </Text>
-        </TouchableOpacity>
-
-        {/* Report a Problem Button */}
-        <TouchableOpacity
-          style={styles.problemButton}
-          onPress={() => setShowDispute(true)}
-          data-testid="report-problem-btn"
-        >
-          <Ionicons name="alert-circle" size={20} color={COLORS.error} />
-          <Text style={styles.problemButtonText}>Report a Problem</Text>
-        </TouchableOpacity>
-
-        {/* Protection Badge */}
-        <View style={styles.protectionBadge}>
-          <Ionicons name="shield-checkmark" size={18} color={COLORS.gold} />
-          <Text style={styles.protectionBadgeText}>
-            Your payment is still protected until you confirm
+          <Text style={styles.nextTextEn}>
+            Seller will prepare and ship. You'll receive tracking notification.
           </Text>
         </View>
+      </ScrollView>
+
+      {/* Bottom Bar */}
+      <View style={styles.bottomBar}>
+        <TouchableOpacity
+          style={styles.trackBtn}
+          onPress={() => router.push(`/track/${orderId}`)}
+          activeOpacity={0.85}
+          data-testid="track-order-btn"
+        >
+          <LinearGradient
+            colors={[COLORS.gold, COLORS.goldDark]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.trackBtnGradient}
+          >
+            <Text style={styles.trackBtnText}>Fuatilia Agizo · Track Order</Text>
+            <Ionicons name="arrow-forward" size={18} color={COLORS.ink} />
+          </LinearGradient>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -266,264 +157,190 @@ export default function ConfirmDelivery() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
   },
-  headerLight: {
-    flexDirection: 'row',
+  loadingContainer: {
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.lightGray,
-  },
-  backButtonLight: {
-    width: 40,
-    height: 40,
     justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 12,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.surface,
   },
-  headerTitleDark: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.dark,
+  header: {
+    padding: 20,
+    paddingTop: 16,
+    alignItems: 'center',
+  },
+  headerContent: {
+    alignItems: 'center',
+  },
+  headerSubtitle: {
+    color: COLORS.emeraldLight,
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  headerTitle: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 13,
+  },
+  scrollView: {
+    flex: 1,
   },
   content: {
-    flex: 1,
-    padding: 24,
-    alignItems: 'center',
+    padding: 16,
+    gap: 16,
   },
-  mainIconOuter: {
-    width: 100,
-    height: 100,
-    borderRadius: 28,
-    backgroundColor: COLORS.background,
-    justifyContent: 'center',
+  successSection: {
     alignItems: 'center',
-    marginBottom: 24,
-    marginTop: 20,
+    paddingVertical: 20,
   },
-  mainIconInner: {
+  successCircle: {
     width: 72,
     height: 72,
-    borderRadius: 20,
-    backgroundColor: '#CCFBF1',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  mainQuestion: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: COLORS.dark,
-    textAlign: 'center',
-    marginBottom: 8,
-    letterSpacing: -0.5,
-  },
-  subQuestion: {
-    fontSize: 16,
-    color: COLORS.gray,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  orderInfo: {
-    alignItems: 'center',
-    marginBottom: 32,
-    backgroundColor: COLORS.background,
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderRadius: 14,
-    width: '100%',
-  },
-  orderProductName: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: COLORS.dark,
-  },
-  orderPrice: {
-    fontSize: 16,
-    color: COLORS.primary,
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  confirmButton: {
-    backgroundColor: COLORS.success,
-    paddingVertical: 18,
-    borderRadius: 14,
-    width: '100%',
-    flexDirection: 'row',
+    borderRadius: 36,
+    backgroundColor: COLORS.emerald,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    marginBottom: 12,
-    shadowColor: COLORS.success,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 8,
+    marginBottom: 16,
+    ...SHADOWS.md,
   },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  confirmButtonText: {
+  successIcon: {
     color: COLORS.white,
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 32,
   },
-  problemButton: {
-    backgroundColor: COLORS.white,
-    paddingVertical: 18,
-    borderRadius: 14,
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    borderWidth: 1,
-    borderColor: COLORS.lightGray,
-    marginBottom: 24,
+  successTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.ink,
+    marginBottom: 4,
   },
-  problemButtonText: {
-    color: COLORS.error,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  protectionBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: COLORS.goldBg,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  protectionBadgeText: {
-    fontSize: 13,
-    color: '#92400E',
-    flex: 1,
-  },
-  // Dispute Screen Styles
-  disputeTitle: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: COLORS.dark,
-    textAlign: 'center',
-    marginTop: 20,
-    marginBottom: 8,
-    letterSpacing: -0.5,
-  },
-  disputeSubtitle: {
-    fontSize: 16,
-    color: COLORS.gray,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  reasonsContainer: {
-    width: '100%',
-    gap: 12,
-    marginBottom: 20,
-  },
-  reasonOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderWidth: 1,
-    borderColor: COLORS.lightGray,
-    borderRadius: 14,
-    gap: 14,
-    backgroundColor: COLORS.white,
-  },
-  reasonOptionSelected: {
-    borderColor: COLORS.error,
-    backgroundColor: COLORS.errorBg,
-  },
-  radioOuter: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: COLORS.lightGray,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  radioOuterSelected: {
-    borderColor: COLORS.error,
-  },
-  radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: COLORS.error,
-  },
-  reasonText: {
-    fontSize: 16,
-    color: COLORS.dark,
-    flex: 1,
-  },
-  reasonTextSelected: {
-    fontWeight: '600',
-    color: COLORS.error,
-  },
-  commentContainer: {
-    width: '100%',
-    marginBottom: 20,
-  },
-  commentLabel: {
+  successSubtitle: {
     fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.darkGray,
-    marginBottom: 8,
+    color: 'rgba(10,10,15,0.5)',
   },
-  commentInput: {
-    backgroundColor: COLORS.inputBg,
-    borderWidth: 1,
-    borderColor: COLORS.lightGray,
-    borderRadius: 14,
+  receiptCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
     padding: 16,
-    fontSize: 16,
-    color: COLORS.dark,
-    height: 100,
-    textAlignVertical: 'top',
+    ...SHADOWS.sm,
   },
-  protectionMessage: {
+  receiptTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(10,10,15,0.4)',
+    letterSpacing: 1,
+    marginBottom: 14,
+  },
+  receiptRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 24,
-    backgroundColor: COLORS.goldBg,
-    padding: 14,
-    borderRadius: 12,
-    width: '100%',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.surface2,
   },
-  protectionText: {
-    fontSize: 13,
-    color: '#92400E',
+  receiptLabel: {
+    fontSize: 12,
+    color: 'rgba(10,10,15,0.5)',
     flex: 1,
   },
-  submitButton: {
-    backgroundColor: COLORS.error,
-    paddingVertical: 18,
-    borderRadius: 14,
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  submitButtonText: {
-    color: COLORS.white,
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  cancelButton: {
-    paddingVertical: 16,
-    width: '100%',
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    color: COLORS.gray,
-    fontSize: 16,
+  receiptValue: {
+    fontSize: 13,
     fontWeight: '600',
+    color: COLORS.ink,
+    textAlign: 'right',
+  },
+  smsCard: {
+    backgroundColor: COLORS.bluePale,
+    borderRadius: RADIUS.lg,
+    padding: 16,
+    flexDirection: 'row',
+    gap: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(26,74,138,0.15)',
+  },
+  smsIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  smsIconText: {
+    fontSize: 22,
+  },
+  smsContent: {
+    flex: 1,
+  },
+  smsTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.blue,
+    marginBottom: 4,
+  },
+  smsText: {
+    fontSize: 12,
+    color: COLORS.ink,
+    lineHeight: 18,
+  },
+  smsTextEn: {
+    fontSize: 11,
+    color: 'rgba(10,10,15,0.5)',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  nextCard: {
+    backgroundColor: COLORS.amberPale,
+    borderRadius: RADIUS.lg,
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(212,133,10,0.15)',
+  },
+  nextIcon: {
+    fontSize: 28,
+    marginBottom: 10,
+  },
+  nextTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.amber,
+    marginBottom: 8,
+  },
+  nextText: {
+    fontSize: 13,
+    color: COLORS.ink,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  nextTextEn: {
+    fontSize: 12,
+    color: 'rgba(10,10,15,0.5)',
+    textAlign: 'center',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  bottomBar: {
+    backgroundColor: COLORS.ink,
+    padding: 12,
+    paddingHorizontal: 20,
+    paddingBottom: 28,
+  },
+  trackBtn: {
+    borderRadius: RADIUS.md,
+    overflow: 'hidden',
+    ...SHADOWS.gold,
+  },
+  trackBtnGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+  },
+  trackBtnText: {
+    color: COLORS.ink,
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

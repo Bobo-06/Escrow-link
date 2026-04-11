@@ -1,415 +1,358 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
-  Alert,
+  TouchableOpacity,
+  TextInput,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { ordersApi, paymentsApi } from '../../src/api/api';
-import axios from 'axios';
-import Constants from 'expo-constants';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, RADIUS, SHADOWS, formatTZS, formatTZSShort, PAYMENT_METHODS } from '../../src/constants/theme';
+import { StepIndicator } from '../../src/components/StepIndicator';
+import { MpesaPaymentScreen } from '../../src/components/MpesaPayment';
 
-const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL || process.env.EXPO_PUBLIC_BACKEND_URL || '';
+const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
-const COLORS = {
-  primary: '#0D9488',
-  primaryLight: '#14B8A6',
-  gold: '#F59E0B',
-  goldBg: '#FFFBEB',
-  dark: '#0F172A',
-  darkGray: '#1E293B',
-  gray: '#64748B',
-  lightGray: '#E2E8F0',
-  inputBg: '#F1F5F9',
-  background: '#F8FAFC',
-  white: '#FFFFFF',
-  success: '#10B981',
-  successBg: '#ECFDF5',
-};
-
-type Step = 'delivery' | 'payment' | 'processing' | 'success';
-
-const paymentMethods = [
-  { id: 'mpesa', name: 'M-Pesa', icon: 'phone-portrait' },
-  { id: 'airtel', name: 'Airtel Money', icon: 'phone-portrait' },
-  { id: 'tigo', name: 'Tigo Pesa', icon: 'phone-portrait' },
-  { id: 'nala', name: 'NALA (Diaspora)', icon: 'globe' },
-];
-
-export default function Checkout() {
+export default function CheckoutPage() {
+  const { code, orderId } = useLocalSearchParams<{ code?: string; orderId?: string }>();
   const router = useRouter();
-  const { productId, currency } = useLocalSearchParams<{ orderId: string; productId: string; currency: string }>();
-  const [step, setStep] = useState<Step>('delivery');
-  const [order, setOrder] = useState<any>(null);
   const [product, setProduct] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const [deliveryData, setDeliveryData] = useState({
-    buyer_name: '',
-    buyer_phone: '',
-    buyer_location: '',
-    buyer_country: 'TZ',
-  });
-
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [step, setStep] = useState<'details' | 'payment' | 'mpesa'>('details');
   const [selectedPayment, setSelectedPayment] = useState('mpesa');
-  const selectedCurrency = currency || 'TZS';
+  const [createdOrderId, setCreatedOrderId] = useState<string | null>(orderId as string || null);
+
+  // Form state
+  const [buyerName, setBuyerName] = useState('');
+  const [buyerPhone, setBuyerPhone] = useState('');
+  const [buyerLocation, setBuyerLocation] = useState('');
 
   useEffect(() => {
-    if (productId) loadProduct();
-  }, [productId]);
+    if (code) fetchProduct();
+  }, [code]);
 
-  const loadProduct = async () => {
+  const fetchProduct = async () => {
     try {
-      const products = await axios.get(`${API_URL}/api/products`);
-      const prod = products.data.find((p: any) => p.product_id === productId);
-      if (prod) setProduct(prod);
-    } catch (error) {
-      console.log('Could not load product');
+      const response = await fetch(`${API_URL}/api/pay/${code}`);
+      if (!response.ok) throw new Error('Product not found');
+      const data = await response.json();
+      setProduct(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDeliverySubmit = () => {
-    if (!deliveryData.buyer_name.trim()) {
-      Alert.alert('Required', 'Please enter your name');
-      return;
-    }
-    if (!deliveryData.buyer_phone.trim()) {
-      Alert.alert('Required', 'Please enter your phone number');
-      return;
-    }
-    if (!deliveryData.buyer_location.trim()) {
-      Alert.alert('Required', 'Please enter your delivery location');
-      return;
-    }
-    setStep('payment');
-  };
+  const handleContinueToPayment = async () => {
+    if (!buyerName || !buyerPhone || !buyerLocation) return;
 
-  const handlePayment = async () => {
-    setIsLoading(true);
-    setStep('processing');
-
+    setSubmitting(true);
     try {
-      const orderResponse = await ordersApi.create({
-        product_id: productId || '',
-        buyer_name: deliveryData.buyer_name,
-        buyer_phone: deliveryData.buyer_phone,
-        buyer_location: deliveryData.buyer_location,
-        buyer_country: deliveryData.buyer_country,
-        payment_method: selectedPayment,
-        buyer_currency: selectedCurrency,
+      const response = await fetch(`${API_URL}/api/orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_id: product.product_id,
+          buyer_name: buyerName,
+          buyer_phone: buyerPhone,
+          buyer_location: buyerLocation,
+          buyer_country: 'TZ',
+          payment_method: selectedPayment,
+          buyer_currency: 'TZS',
+        }),
       });
 
-      const newOrder = orderResponse.data;
-      await paymentsApi.simulate(newOrder.order_id, selectedPayment);
-
-      setOrder(newOrder);
-      setStep('success');
-    } catch (error: any) {
-      Alert.alert('Payment Failed', error.response?.data?.detail || 'Could not process payment');
+      if (!response.ok) throw new Error('Failed to create order');
+      const order = await response.json();
+      setCreatedOrderId(order.order_id);
       setStep('payment');
+    } catch (err) {
+      console.error(err);
     } finally {
-      setIsLoading(false);
+      setSubmitting(false);
     }
   };
 
-  const formatPrice = (amount: number) => `TZS ${amount?.toLocaleString() || 0}`;
+  const handleSelectPayment = (method: string) => {
+    setSelectedPayment(method);
+    if (method === 'mpesa') {
+      setStep('mpesa');
+    }
+  };
 
-  // STEP 1: Delivery Details
-  if (step === 'delivery') {
+  const handlePaymentSuccess = async (data: { phone: string; method: string }) => {
+    // Simulate payment
+    try {
+      await fetch(`${API_URL}/api/payments/simulate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order_id: createdOrderId,
+          payment_method: data.method,
+        }),
+      });
+
+      router.replace(`/confirm/${createdOrderId}`);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} data-testid="back-btn">
-            <Ionicons name="chevron-back" size={24} color={COLORS.white} />
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Ionicons name="shield-checkmark" size={18} color={COLORS.white} />
-            <Text style={styles.headerTitle}>Secure Checkout</Text>
-          </View>
-          <View style={{ width: 40 }} />
-        </View>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.gold} />
+      </View>
+    );
+  }
 
-        {/* Progress Indicator */}
-        <View style={styles.progressContainer}>
-          <View style={styles.progressStep}>
-            <View style={[styles.progressDot, styles.progressDotActive]} />
-            <Text style={[styles.progressText, styles.progressTextActive]}>Delivery</Text>
-          </View>
-          <View style={styles.progressLine} />
-          <View style={styles.progressStep}>
-            <View style={styles.progressDot} />
-            <Text style={styles.progressText}>Payment</Text>
-          </View>
-        </View>
+  if (!product) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>Product not found</Text>
+      </View>
+    );
+  }
 
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-          <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-            <Text style={styles.stepTitle}>Where should we deliver?</Text>
-            <Text style={styles.stepSubtitle}>Enter your delivery details</Text>
-
-            <View style={styles.form}>
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Full Name</Text>
-                <View style={styles.inputWrapper}>
-                  <Ionicons name="person-outline" size={20} color={COLORS.gray} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter your full name"
-                    placeholderTextColor={COLORS.gray}
-                    value={deliveryData.buyer_name}
-                    onChangeText={(text) => setDeliveryData({ ...deliveryData, buyer_name: text })}
-                    data-testid="buyer-name-input"
-                  />
-                </View>
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Phone Number</Text>
-                <View style={styles.inputWrapper}>
-                  <Ionicons name="call-outline" size={20} color={COLORS.gray} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="+255 xxx xxx xxx"
-                    placeholderTextColor={COLORS.gray}
-                    value={deliveryData.buyer_phone}
-                    onChangeText={(text) => setDeliveryData({ ...deliveryData, buyer_phone: text })}
-                    keyboardType="phone-pad"
-                    data-testid="buyer-phone-input"
-                  />
-                </View>
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Delivery Address</Text>
-                <View style={[styles.inputWrapper, styles.inputWrapperLarge]}>
-                  <Ionicons name="location-outline" size={20} color={COLORS.gray} style={[styles.inputIcon, { alignSelf: 'flex-start', marginTop: 16 }]} />
-                  <TextInput
-                    style={[styles.input, styles.textArea]}
-                    placeholder="Full address for delivery"
-                    placeholderTextColor={COLORS.gray}
-                    value={deliveryData.buyer_location}
-                    onChangeText={(text) => setDeliveryData({ ...deliveryData, buyer_location: text })}
-                    multiline
-                    numberOfLines={3}
-                    data-testid="buyer-location-input"
-                  />
-                </View>
-              </View>
-            </View>
-
-            {/* Trust Badge */}
-            <View style={styles.trustBadge}>
-              <Ionicons name="shield-checkmark" size={18} color={COLORS.primary} />
-              <Text style={styles.trustText}>Your payment will be protected by escrow</Text>
-            </View>
-          </ScrollView>
-
-          <View style={styles.footer}>
-            <TouchableOpacity style={styles.primaryButton} onPress={handleDeliverySubmit} data-testid="continue-payment-btn">
-              <Text style={styles.primaryButtonText}>Continue to Payment</Text>
-              <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
+  // M-Pesa Payment Screen
+  if (step === 'mpesa') {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <MpesaPaymentScreen
+          amount={product.total_buyer_pays || product.price_tzs || product.price}
+          onSuccess={handlePaymentSuccess}
+          onBack={() => setStep('payment')}
+        />
       </SafeAreaView>
     );
   }
 
-  // STEP 2: Payment
-  if (step === 'payment') {
-    const price = product?.price_tzs || product?.price || 0;
-    const protectionFee = Math.round(price * 0.03);
-    const total = price + protectionFee;
-
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => setStep('delivery')} data-testid="back-btn">
-            <Ionicons name="chevron-back" size={24} color={COLORS.white} />
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Ionicons name="lock-closed" size={16} color={COLORS.gold} />
-            <Text style={styles.headerTitle}>Payment Secured</Text>
-          </View>
-          <View style={{ width: 40 }} />
-        </View>
-
-        {/* Progress Indicator */}
-        <View style={styles.progressContainer}>
-          <View style={styles.progressStep}>
-            <View style={[styles.progressDot, styles.progressDotComplete]}>
-              <Ionicons name="checkmark" size={12} color={COLORS.white} />
-            </View>
-            <Text style={[styles.progressText, styles.progressTextComplete]}>Delivery</Text>
-          </View>
-          <View style={[styles.progressLine, styles.progressLineActive]} />
-          <View style={styles.progressStep}>
-            <View style={[styles.progressDot, styles.progressDotActive]} />
-            <Text style={[styles.progressText, styles.progressTextActive]}>Payment</Text>
-          </View>
-        </View>
-
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* Order Summary */}
-          <View style={styles.orderSummary}>
-            <Text style={styles.summaryTitle}>Order Summary</Text>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>{product?.name}</Text>
-              <Text style={styles.summaryValue}>{formatPrice(price)}</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <View style={styles.summaryLabelRow}>
-                <Ionicons name="shield-checkmark" size={14} color={COLORS.gold} />
-                <Text style={styles.summaryLabel}>Protection Fee (3%)</Text>
-              </View>
-              <Text style={styles.summaryValue}>{formatPrice(protectionFee)}</Text>
-            </View>
-            <View style={[styles.summaryRow, styles.summaryRowTotal]}>
-              <Text style={styles.summaryTotalLabel}>Total</Text>
-              <Text style={styles.summaryTotalValue}>{formatPrice(total)}</Text>
-            </View>
-          </View>
-
-          {/* Escrow Message */}
-          <View style={styles.escrowBox}>
-            <View style={styles.escrowIconBg}>
-              <Ionicons name="shield-checkmark" size={20} color={COLORS.gold} />
-            </View>
-            <View style={styles.escrowTextBox}>
-              <Text style={styles.escrowTitle}>Payment held securely in escrow</Text>
-              <Text style={styles.escrowSubtitle}>Seller receives payment only after you confirm delivery</Text>
-            </View>
-          </View>
-
-          {/* Payment Methods */}
-          <Text style={styles.paymentSectionTitle}>Select Payment Method</Text>
-          <View style={styles.paymentSection}>
-            {paymentMethods.map((method) => (
-              <TouchableOpacity
-                key={method.id}
-                style={[
-                  styles.paymentOption,
-                  selectedPayment === method.id && styles.paymentOptionActive
-                ]}
-                onPress={() => setSelectedPayment(method.id)}
-                data-testid={`payment-${method.id}`}
-              >
-                <View style={[
-                  styles.radioOuter,
-                  selectedPayment === method.id && styles.radioOuterActive
-                ]}>
-                  {selectedPayment === method.id && <View style={styles.radioInner} />}
-                </View>
-                <Ionicons name={method.icon as any} size={20} color={selectedPayment === method.id ? COLORS.primary : COLORS.gray} />
-                <Text style={[
-                  styles.paymentOptionText,
-                  selectedPayment === method.id && styles.paymentOptionTextActive
-                ]}>{method.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
-
-        <View style={styles.footer}>
-          <TouchableOpacity
-            style={[styles.primaryButton, isLoading && styles.buttonDisabled]}
-            onPress={handlePayment}
-            disabled={isLoading}
-            data-testid="pay-btn"
-          >
-            <Ionicons name="lock-closed" size={18} color={COLORS.white} />
-            <Text style={styles.primaryButtonText}>Pay {formatPrice(total)}</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // STEP 3: Processing
-  if (step === 'processing') {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <View style={{ width: 40 }} />
-          <Text style={styles.headerTitle}>Processing</Text>
-          <View style={{ width: 40 }} />
-        </View>
-        <View style={styles.centerContainer}>
-          <View style={styles.processingIconOuter}>
-            <View style={styles.processingIcon}>
-              <Ionicons name="hourglass" size={40} color={COLORS.primary} />
-            </View>
-          </View>
-          <Text style={styles.processingTitle}>Processing Payment</Text>
-          <Text style={styles.processingSubtitle}>Please wait while we secure your payment...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // STEP 4: Success
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={[styles.header, { backgroundColor: COLORS.success }]}>
-        <View style={{ width: 40 }} />
-        <View style={styles.headerCenter}>
-          <Ionicons name="checkmark-circle" size={20} color={COLORS.white} />
-          <Text style={styles.headerTitle}>Payment Complete</Text>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => {
+            if (step === 'payment') setStep('details');
+            else router.back();
+          }}
+        >
+          <Text style={styles.backBtnText}>←</Text>
+        </TouchableOpacity>
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>
+            {step === 'details' ? 'Malipo ya Haraka' : 'Chagua Njia ya Malipo'}
+          </Text>
+          <Text style={styles.headerSub}>
+            {step === 'details' ? 'Quick Checkout · Hatua 2 ya 6' : 'Select Payment · Hatua 3 ya 6'}
+          </Text>
         </View>
-        <View style={{ width: 40 }} />
       </View>
 
-      <View style={styles.successContainer}>
-        <View style={styles.successIconOuter}>
-          <View style={styles.successIcon}>
-            <Ionicons name="shield-checkmark" size={48} color={COLORS.success} />
-          </View>
-        </View>
+      {/* Step Indicator */}
+      <StepIndicator current={step === 'details' ? 1 : 2} />
 
-        <Text style={styles.successTitle}>Payment Secured!</Text>
-        <Text style={styles.successMessage}>Your money is safely held in escrow until delivery.</Text>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+        {step === 'details' && (
+          <>
+            {/* Order Summary */}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>MUHTASARI WA AGIZO / ORDER SUMMARY</Text>
+              <View style={styles.orderSummaryRow}>
+                {product.image ? (
+                  <Image source={{ uri: product.image }} style={styles.orderImage} />
+                ) : (
+                  <View style={[styles.orderImage, styles.orderImagePlaceholder]}>
+                    <Ionicons name="image" size={20} color={COLORS.surface3} />
+                  </View>
+                )}
+                <View style={styles.orderInfo}>
+                  <Text style={styles.orderName} numberOfLines={2}>{product.name}</Text>
+                  <Text style={styles.orderSeller}>{product.seller_name}</Text>
+                </View>
+                <Text style={styles.orderPrice}>{formatTZSShort(product.price_tzs || product.price)}</Text>
+              </View>
 
-        {/* What happens next */}
-        <View style={styles.nextSteps}>
-          <View style={styles.stepItem}>
-            <View style={[styles.stepItemIcon, { backgroundColor: COLORS.successBg }]}>
-              <Ionicons name="checkmark" size={16} color={COLORS.success} />
-            </View>
-            <Text style={styles.stepItemText}>Seller notified</Text>
-          </View>
-          <View style={styles.stepItem}>
-            <View style={[styles.stepItemIcon, { backgroundColor: COLORS.successBg }]}>
-              <Ionicons name="checkmark" size={16} color={COLORS.success} />
-            </View>
-            <Text style={styles.stepItemText}>Order being prepared</Text>
-          </View>
-          <View style={styles.stepItem}>
-            <View style={[styles.stepItemIcon, { backgroundColor: COLORS.successBg }]}>
-              <Ionicons name="checkmark" size={16} color={COLORS.success} />
-            </View>
-            <Text style={styles.stepItemText}>Track delivery progress</Text>
-          </View>
-        </View>
+              <View style={styles.divider} />
 
-        <TouchableOpacity
-          style={styles.primaryButton}
-          onPress={() => router.replace({
-            pathname: '/track/[orderId]',
-            params: { orderId: order?.order_id }
-          })}
-          data-testid="track-order-btn"
-        >
-          <Text style={styles.primaryButtonText}>Track Your Order</Text>
-          <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
-        </TouchableOpacity>
+              <View style={styles.feeRow}>
+                <Text style={styles.feeLabel}>Bei ya bidhaa / Item</Text>
+                <Text style={styles.feeValue}>{formatTZS(product.price_tzs || product.price)}</Text>
+              </View>
+              <View style={styles.feeRow}>
+                <Text style={styles.feeLabel}>Ulinzi wa Mnunuzi / Protection</Text>
+                <Text style={styles.feeValue}>{formatTZS(product.buyer_protection_fee || 0)}</Text>
+              </View>
+              <View style={[styles.feeRow, styles.feeRowTotal]}>
+                <Text style={styles.feeTotalLabel}>Jumla / Total</Text>
+                <Text style={styles.feeTotalValue}>
+                  {formatTZS(product.total_buyer_pays || product.price_tzs || product.price)}
+                </Text>
+              </View>
+            </View>
+
+            {/* Delivery Details */}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>ANWANI YA UWASILISHAJI / DELIVERY</Text>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Jina Kamili / Full Name</Text>
+                <TextInput
+                  style={styles.input}
+                  value={buyerName}
+                  onChangeText={setBuyerName}
+                  placeholder="Jina lako"
+                  placeholderTextColor="rgba(10,10,15,0.4)"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Nambari ya Simu / Phone</Text>
+                <View style={styles.phoneInputWrap}>
+                  <View style={styles.phonePrefix}>
+                    <Text style={styles.phonePrefixText}>🇹🇿 +255</Text>
+                  </View>
+                  <TextInput
+                    style={styles.phoneInput}
+                    value={buyerPhone}
+                    onChangeText={setBuyerPhone}
+                    placeholder="7XX XXX XXX"
+                    placeholderTextColor="rgba(10,10,15,0.4)"
+                    keyboardType="phone-pad"
+                    maxLength={9}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Anwani / Address (Mtaa, Jiji)</Text>
+                <TextInput
+                  style={[styles.input, styles.inputMultiline]}
+                  value={buyerLocation}
+                  onChangeText={setBuyerLocation}
+                  placeholder="Kariakoo, Dar es Salaam"
+                  placeholderTextColor="rgba(10,10,15,0.4)"
+                  multiline
+                  numberOfLines={2}
+                />
+              </View>
+            </View>
+          </>
+        )}
+
+        {step === 'payment' && (
+          <>
+            {/* Escrow Vault Visual */}
+            <LinearGradient
+              colors={[COLORS.ink, COLORS.ink2]}
+              style={styles.escrowVault}
+            >
+              <Text style={styles.vaultIcon}>🏦</Text>
+              <Text style={styles.vaultAmount}>
+                {formatTZS(product.total_buyer_pays || product.price_tzs || product.price)}
+              </Text>
+              <Text style={styles.vaultLabel}>Held in SecureTrade Escrow</Text>
+              <View style={styles.vaultBadges}>
+                <View style={styles.vaultBadge}>
+                  <Ionicons name="lock-closed" size={12} color={COLORS.emerald} />
+                  <Text style={styles.vaultBadgeText}>SSL Encrypted</Text>
+                </View>
+                <View style={styles.vaultBadge}>
+                  <Ionicons name="shield-checkmark" size={12} color={COLORS.emerald} />
+                  <Text style={styles.vaultBadgeText}>Dispute Protected</Text>
+                </View>
+              </View>
+            </LinearGradient>
+
+            {/* Payment Methods */}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>NJIA YA MALIPO / PAYMENT METHOD</Text>
+
+              {PAYMENT_METHODS.map((method) => (
+                <TouchableOpacity
+                  key={method.id}
+                  style={[
+                    styles.paymentMethod,
+                    selectedPayment === method.id && styles.paymentMethodSelected,
+                  ]}
+                  onPress={() => handleSelectPayment(method.id)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.paymentIcon, { backgroundColor: method.color + '15' }]}>
+                    <Text style={styles.paymentIconText}>{method.icon}</Text>
+                  </View>
+                  <View style={styles.paymentInfo}>
+                    <Text style={styles.paymentName}>{method.name}</Text>
+                    <Text style={styles.paymentDetail}>{method.detail}</Text>
+                  </View>
+                  <View style={[styles.radio, selectedPayment === method.id && styles.radioSelected]}>
+                    {selectedPayment === method.id && <View style={styles.radioInner} />}
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
+      </ScrollView>
+
+      {/* Bottom Bar */}
+      <View style={styles.bottomBar}>
+        {step === 'details' && (
+          <TouchableOpacity
+            style={[styles.continueBtn, (!buyerName || !buyerPhone || !buyerLocation) && styles.continueBtnDisabled]}
+            onPress={handleContinueToPayment}
+            disabled={!buyerName || !buyerPhone || !buyerLocation || submitting}
+            activeOpacity={0.85}
+          >
+            <LinearGradient
+              colors={[COLORS.gold, COLORS.goldDark]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.continueBtnGradient}
+            >
+              {submitting ? (
+                <ActivityIndicator color={COLORS.ink} />
+              ) : (
+                <>
+                  <Text style={styles.continueBtnText}>Endelea · Continue</Text>
+                  <Ionicons name="arrow-forward" size={18} color={COLORS.ink} />
+                </>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
+
+        {step === 'payment' && selectedPayment !== 'mpesa' && (
+          <TouchableOpacity
+            style={styles.continueBtn}
+            onPress={() => {
+              if (selectedPayment === 'mpesa') {
+                setStep('mpesa');
+              }
+            }}
+            activeOpacity={0.85}
+          >
+            <LinearGradient
+              colors={[COLORS.gold, COLORS.goldDark]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.continueBtnGradient}
+            >
+              <Text style={styles.continueBtnText}>
+                Lipa {formatTZS(product.total_buyer_pays || product.price_tzs || product.price)}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -418,398 +361,307 @@ export default function Checkout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.surface,
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.surface,
+  },
+  errorText: {
+    color: COLORS.ink,
+    fontSize: 16,
   },
   header: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.ink,
+    padding: 12,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 14,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
-  headerCenter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.white,
-  },
-  progressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    backgroundColor: COLORS.background,
-  },
-  progressStep: {
-    alignItems: 'center',
-    gap: 6,
-  },
-  progressDot: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: COLORS.lightGray,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  progressDotActive: {
-    backgroundColor: COLORS.primary,
-  },
-  progressDotComplete: {
-    backgroundColor: COLORS.success,
-  },
-  progressLine: {
-    width: 60,
-    height: 3,
-    backgroundColor: COLORS.lightGray,
-    marginHorizontal: 12,
-  },
-  progressLineActive: {
-    backgroundColor: COLORS.success,
-  },
-  progressText: {
-    fontSize: 12,
-    color: COLORS.gray,
-  },
-  progressTextActive: {
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  progressTextComplete: {
-    color: COLORS.success,
-    fontWeight: '600',
-  },
-  scrollContent: {
-    padding: 20,
-    flexGrow: 1,
-  },
-  stepTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: COLORS.dark,
-    marginBottom: 6,
-    letterSpacing: -0.5,
-  },
-  stepSubtitle: {
-    fontSize: 14,
-    color: COLORS.gray,
-    marginBottom: 24,
-  },
-  form: {
-    gap: 18,
-  },
-  inputContainer: {
-    gap: 8,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.darkGray,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.inputBg,
-    borderWidth: 1,
-    borderColor: COLORS.lightGray,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-  },
-  inputWrapperLarge: {
-    alignItems: 'flex-start',
-  },
-  inputIcon: {
-    marginRight: 10,
-  },
-  input: {
-    flex: 1,
-    paddingVertical: 16,
-    fontSize: 16,
-    color: COLORS.dark,
-  },
-  textArea: {
-    height: 80,
-    textAlignVertical: 'top',
-  },
-  trustBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 32,
-    padding: 16,
-    backgroundColor: '#F0FDFA',
-    borderRadius: 14,
-  },
-  trustText: {
-    fontSize: 14,
-    color: COLORS.primary,
-    fontWeight: '500',
-  },
-  footer: {
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.lightGray,
-  },
-  primaryButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 18,
-    borderRadius: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  primaryButtonText: {
-    color: COLORS.white,
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  // Payment Step Styles
-  orderSummary: {
-    backgroundColor: COLORS.background,
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 20,
     gap: 12,
   },
-  summaryTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.dark,
-    marginBottom: 4,
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  summaryRow: {
+  backBtnText: {
+    color: COLORS.white,
+    fontSize: 18,
+  },
+  headerContent: {
+    flex: 1,
+  },
+  headerTitle: {
+    color: COLORS.white,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  headerSub: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  content: {
+    padding: 16,
+    gap: 16,
+  },
+  card: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    padding: 16,
+    ...SHADOWS.sm,
+  },
+  cardTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(10,10,15,0.4)',
+    letterSpacing: 1,
+    marginBottom: 16,
+  },
+  orderSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  orderImage: {
+    width: 56,
+    height: 56,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surface2,
+  },
+  orderImagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  orderInfo: {
+    flex: 1,
+  },
+  orderName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.ink,
+  },
+  orderSeller: {
+    fontSize: 12,
+    color: 'rgba(10,10,15,0.5)',
+    marginTop: 2,
+  },
+  orderPrice: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.goldDark,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.surface3,
+    marginVertical: 12,
+  },
+  feeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    paddingVertical: 6,
   },
-  summaryRowTotal: {
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.lightGray,
-    marginTop: 8,
-  },
-  summaryLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  summaryLabel: {
-    fontSize: 14,
-    color: COLORS.gray,
-  },
-  summaryValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.dark,
-  },
-  summaryTotalLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.dark,
-  },
-  summaryTotalValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  escrowBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 14,
-    backgroundColor: COLORS.goldBg,
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  escrowIconBg: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: COLORS.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  escrowTextBox: {
-    flex: 1,
-  },
-  escrowTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.dark,
-  },
-  escrowSubtitle: {
+  feeLabel: {
     fontSize: 13,
-    color: '#92400E',
-    marginTop: 4,
-    lineHeight: 18,
+    color: 'rgba(10,10,15,0.5)',
   },
-  paymentSectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.dark,
-    marginBottom: 12,
-  },
-  paymentSection: {
-    gap: 10,
-  },
-  paymentOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderWidth: 1,
-    borderColor: COLORS.lightGray,
-    borderRadius: 14,
-    gap: 14,
-    backgroundColor: COLORS.white,
-  },
-  paymentOptionActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: '#F0FDFA',
-  },
-  radioOuter: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: COLORS.lightGray,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  radioOuterActive: {
-    borderColor: COLORS.primary,
-  },
-  radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: COLORS.primary,
-  },
-  paymentOptionText: {
-    fontSize: 16,
-    color: COLORS.dark,
-    flex: 1,
-  },
-  paymentOptionTextActive: {
+  feeValue: {
+    fontSize: 13,
     fontWeight: '600',
-    color: COLORS.primary,
+    color: COLORS.ink,
   },
-  // Processing & Success
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
+  feeRowTotal: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.surface3,
+    marginTop: 6,
+    paddingTop: 12,
   },
-  processingIconOuter: {
-    width: 100,
-    height: 100,
-    borderRadius: 28,
-    backgroundColor: COLORS.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  processingIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    backgroundColor: '#CCFBF1',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  processingTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: COLORS.dark,
-    letterSpacing: -0.5,
-  },
-  processingSubtitle: {
+  feeTotalLabel: {
     fontSize: 15,
-    color: COLORS.gray,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  successContainer: {
-    flex: 1,
-    padding: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  successIconOuter: {
-    width: 100,
-    height: 100,
-    borderRadius: 28,
-    backgroundColor: COLORS.successBg,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  successIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    backgroundColor: '#D1FAE5',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  successTitle: {
-    fontSize: 26,
     fontWeight: '700',
-    color: COLORS.dark,
-    letterSpacing: -0.5,
+    color: COLORS.ink,
+  },
+  feeTotalValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.goldDark,
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(10,10,15,0.5)',
     marginBottom: 8,
   },
-  successMessage: {
-    fontSize: 16,
-    color: COLORS.gray,
-    textAlign: 'center',
-    marginBottom: 32,
+  input: {
+    backgroundColor: COLORS.white,
+    borderWidth: 1.5,
+    borderColor: COLORS.surface3,
+    borderRadius: RADIUS.md,
+    padding: 14,
+    fontSize: 14,
+    color: COLORS.ink,
   },
-  nextSteps: {
-    width: '100%',
-    gap: 16,
-    marginBottom: 32,
+  inputMultiline: {
+    minHeight: 60,
+    textAlignVertical: 'top',
   },
-  stepItem: {
+  phoneInputWrap: {
+    flexDirection: 'row',
+    borderWidth: 1.5,
+    borderColor: COLORS.surface3,
+    borderRadius: RADIUS.md,
+    overflow: 'hidden',
+  },
+  phonePrefix: {
+    backgroundColor: COLORS.surface,
+    padding: 14,
+    borderRightWidth: 1,
+    borderRightColor: COLORS.surface3,
+  },
+  phonePrefixText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  phoneInput: {
+    flex: 1,
+    padding: 14,
+    fontSize: 14,
+    color: COLORS.ink,
+  },
+  escrowVault: {
+    borderRadius: RADIUS.lg,
+    padding: 24,
+    alignItems: 'center',
+  },
+  vaultIcon: {
+    fontSize: 36,
+    marginBottom: 12,
+  },
+  vaultAmount: {
+    color: COLORS.gold,
+    fontSize: 28,
+    fontWeight: '800',
+  },
+  vaultLabel: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  vaultBadges: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  vaultBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
   },
-  stepItemIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    justifyContent: 'center',
+  vaultBadgeText: {
+    color: COLORS.emeraldLight,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  paymentMethod: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: RADIUS.md,
+    borderWidth: 2,
+    borderColor: COLORS.surface3,
+    marginBottom: 10,
   },
-  stepItemText: {
-    fontSize: 16,
-    color: COLORS.dark,
+  paymentMethodSelected: {
+    borderColor: COLORS.mpesa,
+    backgroundColor: COLORS.mpesa + '08',
+  },
+  paymentIcon: {
+    width: 44,
+    height: 30,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paymentIconText: {
+    fontSize: 18,
+  },
+  paymentInfo: {
+    flex: 1,
+  },
+  paymentName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.ink,
+  },
+  paymentDetail: {
+    fontSize: 12,
+    color: 'rgba(10,10,15,0.5)',
+    marginTop: 2,
+  },
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: COLORS.surface3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioSelected: {
+    borderColor: COLORS.mpesa,
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.mpesa,
+  },
+  bottomBar: {
+    backgroundColor: COLORS.ink,
+    padding: 12,
+    paddingHorizontal: 20,
+    paddingBottom: 28,
+  },
+  continueBtn: {
+    borderRadius: RADIUS.md,
+    overflow: 'hidden',
+    ...SHADOWS.gold,
+  },
+  continueBtnDisabled: {
+    opacity: 0.5,
+  },
+  continueBtnGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+  },
+  continueBtnText: {
+    color: COLORS.ink,
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

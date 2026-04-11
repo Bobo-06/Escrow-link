@@ -1,40 +1,25 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../src/store/authStore';
 import LoadingScreen from '../src/components/LoadingScreen';
 import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, RADIUS, SHADOWS, formatTZSShort } from '../src/constants/theme';
+import { OfflineIndicator } from '../src/components/OfflineIndicator';
 
 const { width } = Dimensions.get('window');
 
-// Premium Color Palette - Deep Teal/Emerald with Gold Accents
-const COLORS = {
-  // Primary Teal/Emerald
-  primary: '#047857',
-  primaryDark: '#065F46',
-  primaryLight: '#10B981',
-  emerald: '#059669',
-  
-  // Gold Accents for Trust
-  gold: '#D97706',
-  goldLight: '#F59E0B',
-  goldPale: '#FEF3C7',
-  
-  // Neutrals
-  dark: '#0F172A',
-  darkGray: '#1E293B',
-  gray: '#475569',
-  lightGray: '#CBD5E1',
-  paleGray: '#F1F5F9',
-  background: '#F8FAFC',
-  white: '#FFFFFF',
-  
-  // Accent Colors
-  coral: '#F97316',
-  purple: '#7C3AED',
-  pink: '#EC4899',
+// Sample product for showcase
+const SAMPLE_PRODUCT = {
+  name: 'Samsung Galaxy S24 Ultra',
+  price: 1850000,
+  image: 'https://images.unsplash.com/photo-1610945264803-c22b62d2a7b3?w=400&q=80',
+  seller: {
+    name: 'Amani Tech',
+    trustScore: 91,
+  },
 };
 
 export default function Index() {
@@ -56,150 +41,153 @@ export default function Index() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Gradient Header with Glassmorphism */}
-      <LinearGradient
-        colors={[COLORS.primaryDark, COLORS.primary, COLORS.emerald]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
-      >
-        <View style={styles.headerContent}>
-          <View style={styles.logoContainer}>
-            <View style={styles.logoIconWrapper}>
-              <Ionicons name="shield-checkmark" size={24} color={COLORS.white} />
-            </View>
-            <View>
-              <Text style={styles.logoText}>CraftHer</Text>
-              <Text style={styles.logoTagline}>Biashara Salama</Text>
-            </View>
-          </View>
-          <View style={styles.secureTag}>
-            <Ionicons name="lock-closed" size={12} color={COLORS.goldLight} />
-            <Text style={styles.secureText}>Salama</Text>
-          </View>
-        </View>
-      </LinearGradient>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <OfflineIndicator />
+      
+      {/* Status Bar */}
+      <View style={styles.statusBar}>
+        <Text style={styles.statusTime}>9:41</Text>
+        <Text style={styles.statusTitle}>SecureTrade TZ</Text>
+        <Text style={styles.statusBattery}>84%</Text>
+      </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         {/* Hero Section */}
-        <View style={styles.heroSection}>
-          <View style={styles.heroIconContainer}>
-            <LinearGradient
-              colors={[COLORS.goldLight, COLORS.gold]}
-              style={styles.heroIconGradient}
-            >
-              <Ionicons name="storefront" size={36} color={COLORS.white} />
-            </LinearGradient>
+        <LinearGradient
+          colors={[COLORS.ink, COLORS.ink2]}
+          style={styles.heroSection}
+        >
+          <View style={styles.heroContent}>
+            <View style={styles.escrowBadge}>
+              <Ionicons name="shield-checkmark" size={14} color={COLORS.gold} />
+              <Text style={styles.escrowBadgeText}>ESCROW PROTECTED</Text>
+            </View>
+            
+            <Text style={styles.heroTitle}>
+              Masoko Salama{'\n'}
+              <Text style={styles.heroTitleGold}>Protected Marketplace</Text>
+            </Text>
+            
+            <Text style={styles.heroSubtitle}>
+              Tanzania's #1 escrow platform for social commerce
+            </Text>
+
+            {/* Trust Stats */}
+            <View style={styles.trustStats}>
+              {[
+                ['1,000+', 'Wajasiriamali'],
+                ['TZS 500M+', 'Biashara'],
+                ['98%', 'Mafanikio'],
+              ].map(([value, label], i) => (
+                <View key={i} style={styles.trustStatItem}>
+                  <Text style={styles.trustStatValue}>{value}</Text>
+                  <Text style={styles.trustStatLabel}>{label}</Text>
+                </View>
+              ))}
+            </View>
           </View>
-          
-          <Text style={styles.heroTitle}>
-            Fedha za Biashara{"\n"}
-            <Text style={styles.heroTitleAccent}>kwa Wanawake Wajasiriamali</Text>
-          </Text>
-          <Text style={styles.heroSubtitle}>
-            Trade Finance for Women Entrepreneurs
-          </Text>
-          <Text style={styles.heroDescription}>
-            Linganisha wasanii wa Afrika na wanunuzi wa diaspora{"\n"}
-            kupitia malipo salama ya escrow
-          </Text>
+        </LinearGradient>
+
+        {/* Trust Strip */}
+        <View style={styles.trustStrip}>
+          {[
+            { icon: 'shield-checkmark', label: 'Escrow' },
+            { icon: 'phone-portrait', label: 'M-Pesa' },
+            { icon: 'checkmark-circle', label: 'KYC' },
+            { icon: 'swap-horizontal', label: 'Dispute' },
+          ].map((item, i) => (
+            <View key={i} style={styles.trustStripItem}>
+              <Ionicons name={item.icon as any} size={14} color={COLORS.emerald} />
+              <Text style={styles.trustStripLabel}>{item.label}</Text>
+            </View>
+          ))}
         </View>
 
-        {/* Premium Feature Cards with Glassmorphism */}
+        {/* Product Card Preview */}
+        <View style={styles.productSection}>
+          <Text style={styles.sectionTitle}>BIDHAA ZINAZOUZA / TRENDING</Text>
+          
+          <View style={styles.productCard}>
+            <View style={styles.productImageWrap}>
+              <Image source={{ uri: SAMPLE_PRODUCT.image }} style={styles.productImage} />
+              <View style={styles.productBadge}>
+                <Text style={styles.productBadgeText}>Instagram</Text>
+              </View>
+            </View>
+            <View style={styles.productInfo}>
+              <View style={styles.productHeader}>
+                <Text style={styles.productName}>{SAMPLE_PRODUCT.name}</Text>
+                <View style={styles.trustScoreBadge}>
+                  <Text style={styles.trustScoreText}>{SAMPLE_PRODUCT.seller.trustScore}</Text>
+                  <Text style={styles.trustScoreLabel}>TRUST</Text>
+                </View>
+              </View>
+              <Text style={styles.productSeller}>{SAMPLE_PRODUCT.seller.name}</Text>
+              <View style={styles.productPriceRow}>
+                <Text style={styles.productPrice}>{formatTZSShort(SAMPLE_PRODUCT.price)}</Text>
+                <View style={styles.escrowTag}>
+                  <Ionicons name="shield-checkmark" size={12} color={COLORS.emerald} />
+                  <Text style={styles.escrowTagText}>Escrow</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Features Grid */}
         <View style={styles.featuresGrid}>
-          <View style={[styles.featureCard, styles.featureCardPrimary]}>
-            <View style={styles.featureIconBg}>
-              <Ionicons name="shield-checkmark" size={24} color={COLORS.primary} />
+          {[
+            { icon: 'shield-checkmark', title: 'NMB Escrow', subtitle: 'Ulinzi wa Malipo', color: COLORS.emerald },
+            { icon: 'globe', title: 'NALA Diaspora', subtitle: 'USD/GBP/EUR', color: COLORS.gold },
+            { icon: 'chatbubbles', title: 'AI Support', subtitle: 'Swahili & English', color: COLORS.blue },
+            { icon: 'flash', title: 'M-Pesa', subtitle: 'Haraka Sana', color: '#4bb543' },
+          ].map((feat, i) => (
+            <View key={i} style={styles.featureCard}>
+              <View style={[styles.featureIcon, { backgroundColor: `${feat.color}15` }]}>
+                <Ionicons name={feat.icon as any} size={22} color={feat.color} />
+              </View>
+              <Text style={styles.featureTitle}>{feat.title}</Text>
+              <Text style={styles.featureSubtitle}>{feat.subtitle}</Text>
             </View>
-            <Text style={styles.featureTitle}>Escrow</Text>
-            <Text style={styles.featureSubtitle}>Ulinzi wa Malipo</Text>
-          </View>
-          
-          <View style={[styles.featureCard, styles.featureCardGold]}>
-            <View style={[styles.featureIconBg, { backgroundColor: COLORS.goldPale }]}>
-              <Ionicons name="globe" size={24} color={COLORS.gold} />
-            </View>
-            <Text style={styles.featureTitle}>Diaspora</Text>
-            <Text style={styles.featureSubtitle}>Malipo ya Kimataifa</Text>
-          </View>
-          
-          <View style={[styles.featureCard, styles.featureCardAccent]}>
-            <View style={[styles.featureIconBg, { backgroundColor: '#EDE9FE' }]}>
-              <Ionicons name="flash" size={24} color={COLORS.purple} />
-            </View>
-            <Text style={styles.featureTitle}>Haraka</Text>
-            <Text style={styles.featureSubtitle}>Linki za Papo Hapo</Text>
-          </View>
+          ))}
         </View>
 
-        {/* Trust Badges - Premium Design */}
-        <View style={styles.trustContainer}>
-          <LinearGradient
-            colors={['rgba(254, 243, 199, 0.8)', 'rgba(254, 243, 199, 0.4)']}
-            style={styles.trustBadge}
-          >
-            <View style={styles.trustIconWrapper}>
-              <Ionicons name="shield-checkmark" size={18} color={COLORS.gold} />
-            </View>
-            <View style={styles.trustTextContainer}>
-              <Text style={styles.trustTitle}>NMB Escrow Protected</Text>
-              <Text style={styles.trustSubtext}>Fedha zako zinalindwa • Your money is safe</Text>
-            </View>
-          </LinearGradient>
-          
-          <View style={styles.trustStats}>
-            <View style={styles.trustStatItem}>
-              <Text style={styles.trustStatNumber}>1,000+</Text>
-              <Text style={styles.trustStatLabel}>Wajasiriamali</Text>
-            </View>
-            <View style={styles.trustStatDivider} />
-            <View style={styles.trustStatItem}>
-              <Text style={styles.trustStatNumber}>98%</Text>
-              <Text style={styles.trustStatLabel}>Mafanikio</Text>
-            </View>
-            <View style={styles.trustStatDivider} />
-            <View style={styles.trustStatItem}>
-              <Text style={styles.trustStatNumber}>TZS 500M+</Text>
-              <Text style={styles.trustStatLabel}>Biashara</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* CTA Buttons - Premium Style */}
-        <View style={styles.buttonContainer}>
+        {/* CTA Buttons */}
+        <View style={styles.ctaContainer}>
           <TouchableOpacity
-            style={styles.primaryButton}
+            style={styles.primaryBtn}
             onPress={() => router.push('/login')}
-            data-testid="start-selling-btn"
             activeOpacity={0.85}
+            data-testid="start-selling-btn"
           >
             <LinearGradient
-              colors={[COLORS.primary, COLORS.primaryDark]}
+              colors={[COLORS.gold, COLORS.goldDark]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={styles.buttonGradient}
+              style={styles.primaryBtnGradient}
             >
-              <Text style={styles.primaryButtonText}>Anza Kuuza • Start Selling</Text>
-              <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
+              <Text style={styles.primaryBtnText}>Anza Kuuza · Start Selling</Text>
+              <Ionicons name="arrow-forward" size={18} color={COLORS.ink} />
             </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.secondaryButton}
+            style={styles.secondaryBtn}
             onPress={() => router.push('/register')}
-            data-testid="create-account-btn"
             activeOpacity={0.85}
+            data-testid="create-account-btn"
           >
-            <Text style={styles.secondaryButtonText}>Fungua Akaunti Bure • Create Free Account</Text>
+            <Text style={styles.secondaryBtnText}>Fungua Akaunti Bure · Create Free Account</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Footer Trust Message */}
-        <View style={styles.footerTrust}>
-          <Ionicons name="heart" size={14} color={COLORS.pink} />
+        {/* Footer */}
+        <View style={styles.footer}>
           <Text style={styles.footerText}>
             Tunawasaidia wanawake kufikia soko la kimataifa
+          </Text>
+          <Text style={styles.footerSubtext}>
+            Trade-Finance Infrastructure for Women Entrepreneurs
           </Text>
         </View>
       </ScrollView>
@@ -210,276 +198,291 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
+  },
+  statusBar: {
+    backgroundColor: COLORS.ink,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  statusTime: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  statusTitle: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  statusBattery: {
+    color: COLORS.white,
+    fontSize: 12,
   },
   scrollView: {
     flex: 1,
   },
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
     paddingBottom: 40,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingVertical: 18,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+  heroSection: {
+    padding: 20,
+    paddingTop: 24,
+    paddingBottom: 28,
   },
-  headerContent: {
-    flexDirection: 'row',
+  heroContent: {
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
-  logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  logoIconWrapper: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  logoText: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: COLORS.white,
-    letterSpacing: -0.5,
-  },
-  logoTagline: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.8)',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  secureTag: {
+  escrowBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    paddingHorizontal: 12,
+    backgroundColor: 'rgba(200,169,110,0.15)',
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  secureText: {
-    fontSize: 12,
-    color: COLORS.white,
-    fontWeight: '600',
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 24,
-  },
-  heroSection: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  heroIconContainer: {
-    marginBottom: 20,
-  },
-  heroIconGradient: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: COLORS.gold,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 12,
-  },
-  heroTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: COLORS.dark,
-    textAlign: 'center',
-    lineHeight: 30,
-    letterSpacing: -0.5,
-  },
-  heroTitleAccent: {
-    color: COLORS.primary,
-  },
-  heroSubtitle: {
-    fontSize: 14,
-    color: COLORS.gray,
-    marginTop: 6,
-    fontStyle: 'italic',
-  },
-  heroDescription: {
-    fontSize: 13,
-    color: COLORS.gray,
-    textAlign: 'center',
-    marginTop: 12,
-    lineHeight: 20,
-  },
-  featuresGrid: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
-  },
-  featureCard: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  featureCardPrimary: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#A7F3D0',
-  },
-  featureCardGold: {
-    backgroundColor: '#FFFBEB',
-    borderColor: '#FDE68A',
-  },
-  featureCardAccent: {
-    backgroundColor: '#F5F3FF',
-    borderColor: '#DDD6FE',
-  },
-  featureIconBg: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: '#D1FAE5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  featureTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.dark,
-  },
-  featureSubtitle: {
-    fontSize: 10,
-    color: COLORS.gray,
-    marginTop: 2,
-  },
-  trustContainer: {
-    marginBottom: 24,
-  },
-  trustBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
-    gap: 14,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
     marginBottom: 16,
   },
-  trustIconWrapper: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: COLORS.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: COLORS.gold,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  trustTextContainer: {
-    flex: 1,
-  },
-  trustTitle: {
-    fontSize: 15,
+  escrowBadgeText: {
+    color: COLORS.gold,
+    fontSize: 11,
     fontWeight: '700',
-    color: COLORS.dark,
+    letterSpacing: 1,
   },
-  trustSubtext: {
-    fontSize: 12,
-    color: '#92400E',
-    marginTop: 2,
+  heroTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: COLORS.white,
+    textAlign: 'center',
+    lineHeight: 32,
+  },
+  heroTitleGold: {
+    color: COLORS.gold,
+  },
+  heroSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.6)',
+    marginTop: 10,
+    textAlign: 'center',
   },
   trustStats: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    backgroundColor: COLORS.paleGray,
-    paddingVertical: 14,
-    borderRadius: 14,
+    marginTop: 24,
+    gap: 24,
   },
   trustStatItem: {
     alignItems: 'center',
   },
-  trustStatNumber: {
+  trustStatValue: {
+    color: COLORS.gold,
     fontSize: 16,
     fontWeight: '800',
-    color: COLORS.primary,
   },
   trustStatLabel: {
-    fontSize: 11,
-    color: COLORS.gray,
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 10,
     marginTop: 2,
   },
-  trustStatDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: COLORS.lightGray,
+  trustStrip: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.emeraldPale,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(26,122,90,0.1)',
   },
-  buttonContainer: {
+  trustStripItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  trustStripLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.emerald,
+  },
+  productSection: {
+    padding: 20,
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(10,10,15,0.4)',
+    letterSpacing: 1.2,
+    marginBottom: 12,
+  },
+  productCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
+    ...SHADOWS.md,
+  },
+  productImageWrap: {
+    height: 160,
+    backgroundColor: COLORS.surface2,
+  },
+  productImage: {
+    width: '100%',
+    height: '100%',
+  },
+  productBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    backgroundColor: 'rgba(10,10,15,0.8)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  productBadgeText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  productInfo: {
+    padding: 14,
+  },
+  productHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  productName: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.ink,
+    marginRight: 10,
+  },
+  trustScoreBadge: {
+    alignItems: 'center',
+  },
+  trustScoreText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.emerald,
+  },
+  trustScoreLabel: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: 'rgba(10,10,15,0.4)',
+    letterSpacing: 0.5,
+  },
+  productSeller: {
+    fontSize: 12,
+    color: 'rgba(10,10,15,0.5)',
+    marginTop: 4,
+  },
+  productPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  productPrice: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.goldDark,
+  },
+  escrowTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.emeraldPale,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  escrowTagText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.emerald,
+  },
+  featuresGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  featureCard: {
+    width: (width - 42) / 2,
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.md,
+    padding: 14,
+    alignItems: 'center',
+    ...SHADOWS.sm,
+  },
+  featureIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  featureTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.ink,
+  },
+  featureSubtitle: {
+    fontSize: 11,
+    color: 'rgba(10,10,15,0.5)',
+    marginTop: 2,
+  },
+  ctaContainer: {
+    padding: 20,
     gap: 12,
   },
-  primaryButton: {
-    borderRadius: 16,
+  primaryBtn: {
+    borderRadius: RADIUS.md,
     overflow: 'hidden',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 10,
+    ...SHADOWS.gold,
   },
-  buttonGradient: {
+  primaryBtnGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    paddingVertical: 18,
+    paddingVertical: 16,
     paddingHorizontal: 24,
   },
-  primaryButtonText: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    backgroundColor: COLORS.white,
-    paddingVertical: 18,
-    borderRadius: 16,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-  },
-  secondaryButtonText: {
-    color: COLORS.primary,
+  primaryBtnText: {
+    color: COLORS.ink,
     fontSize: 15,
     fontWeight: '700',
   },
-  footerTrust: {
-    flexDirection: 'row',
+  secondaryBtn: {
+    backgroundColor: COLORS.white,
+    paddingVertical: 16,
+    borderRadius: RADIUS.md,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 24,
-    paddingBottom: 16,
+    borderWidth: 1.5,
+    borderColor: COLORS.surface3,
+  },
+  secondaryBtnText: {
+    color: COLORS.ink,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  footer: {
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
   footerText: {
-    fontSize: 12,
-    color: COLORS.gray,
-    fontStyle: 'italic',
+    fontSize: 13,
+    color: COLORS.ink,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  footerSubtext: {
+    fontSize: 11,
+    color: 'rgba(10,10,15,0.5)',
+    marginTop: 4,
   },
 });

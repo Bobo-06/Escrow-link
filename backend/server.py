@@ -16,6 +16,7 @@ import jwt
 import base64
 import random
 import string
+from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -28,6 +29,35 @@ db = client[os.environ['DB_NAME']]
 # JWT Secret
 JWT_SECRET = os.environ.get('JWT_SECRET', 'crafther-secret-key-change-in-production')
 JWT_ALGORITHM = 'HS256'
+
+# Emergent LLM Key for Claude AI
+EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+
+# AI System Prompts
+AI_SUPPORT_SYSTEM = """You are SecureTrade's customer support assistant for Tanzania.
+You help buyers and sellers with: how escrow works, payment methods (M-Pesa, Airtel, card),
+tracking orders, understanding fees, and account issues.
+You ALWAYS:
+- Reply in Swahili first, then English
+- Be warm and reassuring — many users are new to escrow
+- Keep answers under 3 sentences on mobile
+- For payment issues, always say "Pesa yako ipo salama / Your money is safe" first
+- Escalate to human if: fraud allegation, amount > 2M TZS, or user distress"""
+
+AI_DISPUTE_SYSTEM = """You are SecureTrade's dispute mediator AI for the Tanzanian market.
+You analyze disputes between buyers and sellers in social commerce transactions.
+You ALWAYS:
+- Respond in both Swahili and English (Swahili first)
+- Ask for evidence: photos, screenshots, delivery receipts
+- Recommend one of three outcomes: RELEASE (to seller), REFUND (to buyer), ESCALATE (human review)
+- Explain your reasoning clearly and fairly
+- Never take sides until evidence is reviewed
+- Keep responses concise — many users are on mobile data
+Context: This is an escrow platform. Funds are frozen during dispute."""
+
+AI_FRAUD_SYSTEM = """You analyze social commerce transactions for fraud risk in Tanzania.
+Given transaction details, you output a risk assessment.
+Respond ONLY in JSON: { "risk_level": "low|medium|high", "reasons": ["reason1", "reason2"], "recommended_action": "action" }"""
 
 # Create the main app
 app = FastAPI(
@@ -109,6 +139,18 @@ class DisputeCreate(BaseModel):
 class PaymentSimulate(BaseModel):
     order_id: str
     payment_method: str
+
+class ChatMessage(BaseModel):
+    message: str
+    session_id: Optional[str] = None
+    context: Optional[Dict] = None
+
+class FraudCheckRequest(BaseModel):
+    item: str
+    amount: float
+    seller_age_days: int
+    buyer_age_days: int
+    price_vs_market: int  # percentage of market price
 
 # ============== HELPER FUNCTIONS ==============
 
@@ -1138,6 +1180,185 @@ async def get_export_categories():
             "other": "Other Export-Ready Products"
         }
     }
+
+# ============== AI CHAT ENDPOINTS ==============
+
+@api_router.post("/ai/support")
+async def ai_support_chat(chat_data: ChatMessage):
+    """AI-powered customer support chatbot (Swahili/English)"""
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(status_code=500, detail="AI service not configured")
+    
+    try:
+        session_id = chat_data.session_id or f"support_{uuid.uuid4().hex[:12]}"
+        
+        # Get or create chat history
+        chat_history = await db.chat_sessions.find_one({"session_id": session_id})
+        messages = chat_history.get("messages", []) if chat_history else []
+        
+        # Add user message to history
+        messages.append({"role": "user", "content": chat_data.message})
+        
+        # Create LLM chat instance
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=session_id,
+            system_message=AI_SUPPORT_SYSTEM
+        ).with_model("anthropic", "claude-4-sonnet-20250514")
+        
+        # Build context from history
+        for msg in messages[:-1]:  # Exclude the latest message we just added
+            if msg["role"] == "user":
+                await chat.send_message(UserMessage(text=msg["content"]))
+        
+        # Send current message
+        response = await chat.send_message(UserMessage(text=chat_data.message))
+        
+        # Add assistant response to history
+        messages.append({"role": "assistant", "content": response})
+        
+        # Save chat history
+        await db.chat_sessions.update_one(
+            {"session_id": session_id},
+            {"$set": {"messages": messages, "updated_at": datetime.now(timezone.utc)}},
+            upsert=True
+        )
+        
+        return {
+            "response": response,
+            "session_id": session_id
+        }
+    except Exception as e:
+        logger.error(f"AI Support error: {e}")
+        return {
+            "response": "Samahani, kuna tatizo la muunganisho. Tafadhali jaribu tena.\n\nSorry, there's a connection issue. Please try again.",
+            "session_id": chat_data.session_id or "error"
+        }
+
+@api_router.post("/ai/dispute")
+async def ai_dispute_mediator(chat_data: ChatMessage):
+    """AI-powered dispute mediation (Swahili/English)"""
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(status_code=500, detail="AI service not configured")
+    
+    try:
+        session_id = chat_data.session_id or f"dispute_{uuid.uuid4().hex[:12]}"
+        
+        # Get or create chat history
+        chat_history = await db.chat_sessions.find_one({"session_id": session_id})
+        messages = chat_history.get("messages", []) if chat_history else []
+        
+        # Build context message if transaction info provided
+        context_msg = ""
+        if chat_data.context:
+            tx = chat_data.context
+            context_msg = f"Transaction: {tx.get('item', 'Unknown')} - TZS {tx.get('amount', 0):,} - Order ID: {tx.get('order_id', 'N/A')}\n\n"
+        
+        # Add user message to history
+        full_message = context_msg + chat_data.message if context_msg and len(messages) == 0 else chat_data.message
+        messages.append({"role": "user", "content": full_message})
+        
+        # Create LLM chat instance
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=session_id,
+            system_message=AI_DISPUTE_SYSTEM
+        ).with_model("anthropic", "claude-4-sonnet-20250514")
+        
+        # Build context from history
+        for msg in messages[:-1]:
+            if msg["role"] == "user":
+                await chat.send_message(UserMessage(text=msg["content"]))
+        
+        # Send current message
+        response = await chat.send_message(UserMessage(text=full_message))
+        
+        # Add assistant response to history
+        messages.append({"role": "assistant", "content": response})
+        
+        # Check for recommendation
+        recommendation = None
+        if "RELEASE" in response.upper() or "TOA PESA" in response.upper():
+            recommendation = "release"
+        elif "REFUND" in response.upper() or "RUDISHA" in response.upper():
+            recommendation = "refund"
+        elif "ESCALATE" in response.upper() or "BINADAMU" in response.upper():
+            recommendation = "escalate"
+        
+        # Save chat history
+        await db.chat_sessions.update_one(
+            {"session_id": session_id},
+            {
+                "$set": {
+                    "messages": messages,
+                    "recommendation": recommendation,
+                    "updated_at": datetime.now(timezone.utc)
+                }
+            },
+            upsert=True
+        )
+        
+        return {
+            "response": response,
+            "session_id": session_id,
+            "recommendation": recommendation
+        }
+    except Exception as e:
+        logger.error(f"AI Dispute error: {e}")
+        return {
+            "response": "Samahani, kuna tatizo la muunganisho. Tafadhali jaribu tena.\n\nSorry, there's a connection issue. Please try again.",
+            "session_id": chat_data.session_id or "error",
+            "recommendation": None
+        }
+
+@api_router.post("/ai/fraud-check")
+async def ai_fraud_check(fraud_data: FraudCheckRequest):
+    """AI-powered fraud detection for transactions"""
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(status_code=500, detail="AI service not configured")
+    
+    try:
+        prompt = f"""Analyze this transaction for fraud risk:
+Item: {fraud_data.item}
+Amount (TZS): {fraud_data.amount:,.0f}
+Seller account age: {fraud_data.seller_age_days} days
+Buyer account age: {fraud_data.buyer_age_days} days
+Price vs market average: {fraud_data.price_vs_market}% of market price
+Tanzania social commerce context."""
+        
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"fraud_{uuid.uuid4().hex[:8]}",
+            system_message=AI_FRAUD_SYSTEM
+        ).with_model("anthropic", "claude-4-sonnet-20250514")
+        
+        response = await chat.send_message(UserMessage(text=prompt))
+        
+        # Try to parse JSON response
+        import json
+        try:
+            # Clean response and parse
+            clean_response = response.strip()
+            if clean_response.startswith("```"):
+                clean_response = clean_response.split("```")[1]
+                if clean_response.startswith("json"):
+                    clean_response = clean_response[4:]
+            result = json.loads(clean_response)
+        except:
+            result = {
+                "risk_level": "medium",
+                "reasons": ["Analysis unavailable"],
+                "recommended_action": "Proceed with caution"
+            }
+        
+        return result
+    except Exception as e:
+        logger.error(f"AI Fraud check error: {e}")
+        return {
+            "risk_level": "medium",
+            "reasons": ["Analysis service temporarily unavailable"],
+            "recommended_action": "Proceed with standard verification"
+        }
 
 # ============== HEALTH CHECK ==============
 

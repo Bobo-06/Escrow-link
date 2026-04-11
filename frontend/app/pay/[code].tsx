@@ -1,269 +1,227 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   Image,
+  TouchableOpacity,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { paymentLinkApi } from '../../src/api/api';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, RADIUS, SHADOWS, formatTZS, formatTZSShort } from '../../src/constants/theme';
+import { TrustStrip } from '../../src/components/TrustStrip';
+import { SellerTrustCard } from '../../src/components/SellerTrustCard';
+import { AIChatbot } from '../../src/components/AIChatbot';
 
-const COLORS = {
-  primary: '#0D9488',
-  primaryLight: '#14B8A6',
-  gold: '#F59E0B',
-  goldBg: '#FFFBEB',
-  dark: '#0F172A',
-  darkGray: '#1E293B',
-  gray: '#64748B',
-  lightGray: '#E2E8F0',
-  background: '#F8FAFC',
-  white: '#FFFFFF',
-  success: '#10B981',
-  blue: '#3B82F6',
-  blueBg: '#EFF6FF',
-};
+const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+const { width } = Dimensions.get('window');
 
 export default function ProductPage() {
-  const router = useRouter();
   const { code } = useLocalSearchParams<{ code: string }>();
+  const router = useRouter();
   const [product, setProduct] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedCurrency, setSelectedCurrency] = useState('TZS');
+  const [showChat, setShowChat] = useState(false);
 
   useEffect(() => {
-    loadProduct();
-  }, [code, selectedCurrency]);
+    fetchProduct();
+  }, [code]);
 
-  const loadProduct = async () => {
+  const fetchProduct = async () => {
     try {
-      setIsLoading(true);
-      const response = await paymentLinkApi.getByCode(code || '', selectedCurrency);
-      setProduct(response.data);
-    } catch (error: any) {
-      setError(error.response?.data?.detail || 'Product not found');
+      const response = await fetch(`${API_URL}/api/pay/${code}`);
+      if (!response.ok) throw new Error('Product not found');
+      const data = await response.json();
+      setProduct(data);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load product');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   const handleBuy = () => {
-    router.push({
-      pathname: '/checkout/[orderId]',
-      params: { 
-        orderId: 'new', 
-        productId: product.product_id,
-        currency: selectedCurrency 
-      },
-    });
+    router.push(`/checkout/${code}`);
   };
 
-  const formatPrice = (amount: number, currency: string = 'TZS') => {
-    if (currency === 'TZS') return `TZS ${amount?.toLocaleString() || 0}`;
-    if (currency === 'USD') return `$${amount?.toFixed(2) || 0}`;
-    if (currency === 'GBP') return `\u00a3${amount?.toFixed(2) || 0}`;
-    if (currency === 'EUR') return `\u20ac${amount?.toFixed(2) || 0}`;
-    return `${currency} ${amount?.toLocaleString() || 0}`;
-  };
-
-  if (isLoading) {
+  if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <View style={styles.headerLeft} />
-          <View style={styles.headerCenter}>
-            <Ionicons name="shield-checkmark" size={18} color={COLORS.white} />
-            <Text style={styles.headerTitle}>CraftHer</Text>
-          </View>
-          <View style={styles.headerRight}>
-            <Ionicons name="lock-closed" size={14} color={COLORS.gold} />
-          </View>
-        </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading product...</Text>
-        </View>
-      </SafeAreaView>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.gold} />
+        <Text style={styles.loadingText}>Inapakia... / Loading...</Text>
+      </View>
     );
   }
 
   if (error || !product) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={24} color={COLORS.white} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>CraftHer</Text>
-          <View style={{ width: 40 }} />
-        </View>
-        <View style={styles.errorContainer}>
-          <View style={styles.errorIcon}>
-            <Ionicons name="alert-circle" size={48} color="#EF4444" />
-          </View>
-          <Text style={styles.errorTitle}>Product Not Found</Text>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      </SafeAreaView>
+      <View style={styles.errorContainer}>
+        <Ionicons name="alert-circle" size={48} color={COLORS.ruby} />
+        <Text style={styles.errorText}>{error || 'Product not found'}</Text>
+        <TouchableOpacity style={styles.retryBtn} onPress={fetchProduct}>
+          <Text style={styles.retryBtnText}>Jaribu tena / Try Again</Text>
+        </TouchableOpacity>
+      </View>
     );
   }
 
-  const displayPrice = selectedCurrency === 'TZS' 
-    ? product.price_tzs || product.price 
-    : product.display_price || product.price;
+  const seller = {
+    name: product.seller_name || 'Seller',
+    handle: `@${product.seller_name?.toLowerCase().replace(/\s/g, '_') || 'seller'}`,
+    trustScore: product.seller_trade_metrics?.success_rate || 87,
+    trades: product.seller_trade_metrics?.successful_transactions || 0,
+    rating: 4.8,
+    memberDays: 180,
+    avatar: '👤',
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()} data-testid="back-btn">
-          <Ionicons name="chevron-back" size={24} color={COLORS.white} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Ionicons name="shield-checkmark" size={18} color={COLORS.white} />
-          <Text style={styles.headerTitle}>CraftHer</Text>
-        </View>
-        <View style={styles.headerRight}>
-          <View style={styles.secureTag}>
-            <Ionicons name="lock-closed" size={11} color={COLORS.gold} />
-            <Text style={styles.secureText}>Secure</Text>
-          </View>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Status Bar */}
+      <View style={styles.statusBar}>
+        <Text style={styles.statusTime}>9:41</Text>
+        <Text style={styles.statusTitle}>SecureTrade TZ</Text>
+        <View style={styles.escrowTag}>
+          <Ionicons name="shield-checkmark" size={10} color={COLORS.gold} />
+          <Text style={styles.escrowTagText}>ESCROW</Text>
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Secure Checkout Label */}
-        <View style={styles.secureLabel}>
-          <Ionicons name="shield-checkmark" size={16} color={COLORS.gold} />
-          <Text style={styles.secureLabelText}>Secure Checkout</Text>
-        </View>
-
+      <ScrollView style={styles.scrollView}>
         {/* Product Image */}
         <View style={styles.imageContainer}>
           {product.image ? (
             <Image source={{ uri: product.image }} style={styles.productImage} />
           ) : (
-            <View style={styles.imagePlaceholder}>
-              <Ionicons name="image-outline" size={64} color={COLORS.lightGray} />
+            <View style={styles.placeholderImage}>
+              <Ionicons name="image" size={48} color={COLORS.surface3} />
             </View>
           )}
+          <LinearGradient
+            colors={['transparent', 'rgba(10,10,15,0.7)']}
+            style={styles.imageOverlay}
+          />
+          <View style={styles.sourceBadge}>
+            <View style={styles.igDot} />
+            <Text style={styles.sourceBadgeText}>Instagram</Text>
+          </View>
         </View>
+
+        {/* Trust Strip */}
+        <TrustStrip />
 
         {/* Product Info */}
-        <Text style={styles.productName}>{product.name}</Text>
-        <View style={styles.priceRow}>
-          <View style={styles.priceTag}>
-            <Ionicons name="pricetag" size={16} color={COLORS.primary} />
-            <Text style={styles.productPrice}>{formatPrice(displayPrice, selectedCurrency)}</Text>
-          </View>
-        </View>
-
-        {/* Seller Info */}
-        <View style={styles.sellerSection}>
-          <View style={styles.sellerAvatar}>
-            <Ionicons name="person" size={22} color={COLORS.primary} />
-          </View>
-          <View style={styles.sellerInfo}>
-            <Text style={styles.sellerLabel}>Seller</Text>
-            <Text style={styles.sellerName}>{product.seller_business || product.seller_name}</Text>
-          </View>
-          {product.seller_is_women_owned && (
-            <View style={styles.verifiedBadge}>
-              <Ionicons name="shield-checkmark" size={14} color={COLORS.gold} />
-              <Text style={styles.verifiedText}>Verified</Text>
+        <View style={styles.productInfo}>
+          {/* Condition & Tags */}
+          <View style={styles.tagsRow}>
+            <View style={[styles.tag, styles.tagCondition]}>
+              <Text style={styles.tagText}>✦ Mint</Text>
             </View>
+            <View style={[styles.tag, styles.tagEscrow]}>
+              <Ionicons name="shield-checkmark" size={10} color={COLORS.emerald} />
+              <Text style={[styles.tagText, { color: COLORS.emerald }]}>Escrow</Text>
+            </View>
+            <View style={[styles.tag, styles.tagMpesa]}>
+              <Text style={styles.tagText}>📲 M-Pesa</Text>
+            </View>
+          </View>
+
+          {/* Price */}
+          <View style={styles.priceSection}>
+            <Text style={styles.priceMain}>{formatTZSShort(product.price_tzs || product.price)}</Text>
+            <Text style={styles.priceSub}>≈ ${((product.price_tzs || product.price) / 2580).toFixed(0)} USD</Text>
+          </View>
+
+          {/* Title */}
+          <Text style={styles.productName}>{product.name}</Text>
+
+          {/* Description */}
+          {product.description && (
+            <Text style={styles.productDescription}>{product.description}</Text>
           )}
         </View>
 
-        {/* Trade Metrics */}
-        {product.seller_trade_metrics && product.seller_trade_metrics.successful_transactions > 0 && (
-          <View style={styles.ratingRow}>
-            <Ionicons name="star" size={16} color={COLORS.gold} />
-            <Text style={styles.ratingText}>
-              {product.seller_trade_metrics.success_rate}% success rate
-            </Text>
-            <View style={styles.ratingDot} />
-            <Text style={styles.ratingText}>
-              {product.seller_trade_metrics.successful_transactions} orders completed
-            </Text>
-          </View>
-        )}
+        {/* Seller Trust Card */}
+        <View style={styles.sellerSection}>
+          <SellerTrustCard seller={seller} />
+        </View>
 
-        {/* Buyer Protection Section */}
-        <View style={styles.protectionSection}>
-          <View style={styles.protectionHeader}>
-            <View style={styles.protectionIconBg}>
-              <Ionicons name="shield-checkmark" size={20} color={COLORS.gold} />
-            </View>
-            <Text style={styles.protectionTitle}>Buyer Protection</Text>
+        {/* Buyer Protection Card */}
+        <View style={styles.protectionCard}>
+          <View style={styles.protectionIcon}>
+            <Ionicons name="shield-checkmark" size={24} color={COLORS.emerald} />
           </View>
-          
-          <View style={styles.protectionItem}>
-            <Ionicons name="checkmark-circle" size={18} color={COLORS.success} />
-            <Text style={styles.protectionText}>Payment held safely in escrow</Text>
-          </View>
-          <View style={styles.protectionItem}>
-            <Ionicons name="checkmark-circle" size={18} color={COLORS.success} />
-            <Text style={styles.protectionText}>Seller paid ONLY after delivery</Text>
-          </View>
-          <View style={styles.protectionItem}>
-            <Ionicons name="checkmark-circle" size={18} color={COLORS.success} />
-            <Text style={styles.protectionText}>Full refund if not delivered</Text>
+          <View style={styles.protectionContent}>
+            <Text style={styles.protectionTitle}>Ulinzi wa Mnunuzi / Buyer Protection</Text>
+            <Text style={styles.protectionText}>
+              Pesa yako inashikwa salama katika escrow. Itatolewa tu ukithibitisha kupokea bidhaa.
+            </Text>
+            <Text style={styles.protectionTextEn}>
+              Funds held in escrow, released only when you confirm receipt.
+            </Text>
           </View>
         </View>
 
-        {/* Delivery Info */}
-        <View style={styles.deliveryRow}>
-          <Ionicons name="car" size={18} color={COLORS.gray} />
-          <Text style={styles.deliveryText}>Delivery: 2-4 days (Dar es Salaam)</Text>
+        {/* Fee Breakdown */}
+        <View style={styles.feeCard}>
+          <Text style={styles.feeTitle}>MUHTASARI WA MALIPO / PAYMENT SUMMARY</Text>
+          <View style={styles.feeRow}>
+            <Text style={styles.feeLabel}>Bei ya bidhaa / Item price</Text>
+            <Text style={styles.feeValue}>{formatTZS(product.price_tzs || product.price)}</Text>
+          </View>
+          <View style={styles.feeRow}>
+            <Text style={styles.feeLabel}>Ulinzi wa Mnunuzi ({product.fee_rate || '3%'})</Text>
+            <Text style={styles.feeValue}>{formatTZS(product.buyer_protection_fee || 0)}</Text>
+          </View>
+          <View style={[styles.feeRow, styles.feeRowTotal]}>
+            <Text style={styles.feeTotalLabel}>Jumla / Total</Text>
+            <Text style={styles.feeTotalValue}>{formatTZS(product.total_buyer_pays || product.price_tzs || product.price)}</Text>
+          </View>
         </View>
 
-        {/* Diaspora Currency Selector */}
-        {product.international_shipping && (
-          <View style={styles.currencySection}>
-            <View style={styles.currencyHeader}>
-              <Ionicons name="globe" size={18} color={COLORS.blue} />
-              <Text style={styles.currencyLabel}>Pay in your currency:</Text>
-            </View>
-            <View style={styles.currencyOptions}>
-              {['TZS', 'USD', 'GBP', 'EUR'].map((curr) => (
-                <TouchableOpacity
-                  key={curr}
-                  style={[
-                    styles.currencyOption,
-                    selectedCurrency === curr && styles.currencyOptionActive,
-                  ]}
-                  onPress={() => setSelectedCurrency(curr)}
-                  data-testid={`currency-${curr.toLowerCase()}`}
-                >
-                  <Text
-                    style={[
-                      styles.currencyOptionText,
-                      selectedCurrency === curr && styles.currencyOptionTextActive,
-                    ]}
-                  >
-                    {curr}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
+        <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Buy Button */}
-      <View style={styles.footer}>
-        <TouchableOpacity style={styles.buyButton} onPress={handleBuy} data-testid="buy-safely-btn">
-          <Ionicons name="shield-checkmark" size={20} color={COLORS.white} />
-          <Text style={styles.buyButtonText}>Buy Safely</Text>
+      {/* Bottom Bar */}
+      <View style={styles.bottomBar}>
+        <TouchableOpacity
+          style={styles.buyButton}
+          onPress={handleBuy}
+          activeOpacity={0.85}
+          data-testid="buy-securely-btn"
+        >
+          <LinearGradient
+            colors={[COLORS.gold, COLORS.goldDark]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.buyButtonGradient}
+          >
+            <Text style={styles.buyButtonText}>Nunua Salama · Buy Securely</Text>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
+
+      {/* Floating Chat Button */}
+      {!showChat && (
+        <TouchableOpacity
+          style={styles.chatFab}
+          onPress={() => setShowChat(true)}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.chatFabText}>💬</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* AI Chatbot */}
+      {showChat && (
+        <AIChatbot mode="support" onClose={() => setShowChat(false)} />
+      )}
     </SafeAreaView>
   );
 }
@@ -271,325 +229,308 @@ export default function ProductPage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
   },
-  header: {
-    backgroundColor: COLORS.primary,
-    flexDirection: 'row',
+  loadingContainer: {
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 14,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
     justifyContent: 'center',
+    backgroundColor: COLORS.surface,
+  },
+  loadingText: {
+    marginTop: 12,
+    color: COLORS.ink,
+    fontSize: 14,
+  },
+  errorContainer: {
+    flex: 1,
     alignItems: 'center',
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    padding: 20,
+    backgroundColor: COLORS.surface,
   },
-  headerLeft: {
-    width: 40,
+  errorText: {
+    marginTop: 12,
+    color: COLORS.ink,
+    fontSize: 16,
+    textAlign: 'center',
   },
-  headerCenter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  retryBtn: {
+    marginTop: 20,
+    backgroundColor: COLORS.ink,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: RADIUS.md,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+  retryBtnText: {
     color: COLORS.white,
+    fontWeight: '600',
   },
-  headerRight: {
+  statusBar: {
+    backgroundColor: COLORS.ink,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  secureTag: {
+  statusTime: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  statusTitle: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  escrowTag: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.15)',
+    backgroundColor: 'rgba(200,169,110,0.15)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
   },
-  secureText: {
-    fontSize: 11,
-    color: COLORS.white,
-    fontWeight: '600',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: COLORS.gray,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  errorIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
-    backgroundColor: '#FEE2E2',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  errorTitle: {
-    fontSize: 22,
+  escrowTagText: {
+    color: COLORS.gold,
+    fontSize: 9,
     fontWeight: '700',
-    color: COLORS.dark,
-    marginTop: 8,
+    letterSpacing: 0.5,
   },
-  errorText: {
-    fontSize: 15,
-    color: COLORS.gray,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  scrollContent: {
-    padding: 20,
-  },
-  secureLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
-  },
-  secureLabelText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.dark,
+  scrollView: {
+    flex: 1,
   },
   imageContainer: {
-    aspectRatio: 1,
-    backgroundColor: COLORS.background,
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: COLORS.lightGray,
+    height: 260,
+    backgroundColor: COLORS.surface2,
+    position: 'relative',
   },
   productImage: {
     width: '100%',
     height: '100%',
   },
-  imagePlaceholder: {
+  placeholderImage: {
     flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
   },
-  productName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: COLORS.dark,
-    marginBottom: 8,
-    letterSpacing: -0.5,
+  imageOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 100,
   },
-  priceRow: {
+  sourceBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
-  },
-  priceTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#F0FDFA',
+    gap: 5,
+    backgroundColor: 'rgba(10,10,15,0.8)',
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
-  productPrice: {
-    fontSize: 22,
+  igDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#E1306C',
+  },
+  sourceBadgeText: {
+    color: COLORS.white,
+    fontSize: 11,
     fontWeight: '700',
-    color: COLORS.primary,
   },
-  sellerSection: {
+  productInfo: {
+    padding: 16,
+    backgroundColor: COLORS.white,
+  },
+  tagsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    gap: 8,
     marginBottom: 12,
-    padding: 14,
-    backgroundColor: COLORS.background,
-    borderRadius: 14,
   },
-  sellerAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: '#CCFBF1',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sellerInfo: {
-    flex: 1,
-  },
-  sellerLabel: {
-    fontSize: 12,
-    color: COLORS.gray,
-  },
-  sellerName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.dark,
-    marginTop: 2,
-  },
-  verifiedBadge: {
+  tag: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: COLORS.goldBg,
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
-  verifiedText: {
-    fontSize: 12,
-    color: '#92400E',
+  tagCondition: {
+    backgroundColor: COLORS.goldLight + '30',
+  },
+  tagEscrow: {
+    backgroundColor: COLORS.emeraldPale,
+  },
+  tagMpesa: {
+    backgroundColor: '#4bb54320',
+  },
+  tagText: {
+    fontSize: 11,
     fontWeight: '600',
+    color: COLORS.ink,
   },
-  ratingRow: {
+  priceSection: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 20,
-    paddingHorizontal: 4,
-  },
-  ratingText: {
-    fontSize: 14,
-    color: COLORS.gray,
-  },
-  ratingDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: COLORS.gray,
-  },
-  protectionSection: {
-    backgroundColor: COLORS.goldBg,
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  protectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 14,
-  },
-  protectionIconBg: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: COLORS.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  protectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: COLORS.dark,
-  },
-  protectionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 10,
-  },
-  protectionText: {
-    fontSize: 14,
-    color: COLORS.darkGray,
-  },
-  deliveryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 14,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.lightGray,
-    marginBottom: 16,
-  },
-  deliveryText: {
-    fontSize: 14,
-    color: COLORS.gray,
-  },
-  currencySection: {
-    backgroundColor: COLORS.blueBg,
-    padding: 14,
-    borderRadius: 14,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  currencyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 8,
   },
-  currencyLabel: {
-    fontSize: 14,
-    color: '#1E40AF',
-    fontWeight: '600',
+  priceMain: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: COLORS.goldDark,
   },
-  currencyOptions: {
-    flexDirection: 'row',
-    gap: 10,
+  priceSub: {
+    fontSize: 13,
+    color: 'rgba(10,10,15,0.4)',
   },
-  currencyOption: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: '#DBEAFE',
-  },
-  currencyOptionActive: {
-    backgroundColor: COLORS.blue,
-  },
-  currencyOptionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1E40AF',
-  },
-  currencyOptionTextActive: {
-    color: COLORS.white,
-  },
-  footer: {
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.lightGray,
-    backgroundColor: COLORS.white,
-  },
-  buyButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 18,
-    borderRadius: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  buyButtonText: {
-    color: COLORS.white,
+  productName: {
     fontSize: 18,
     fontWeight: '700',
+    color: COLORS.ink,
+    marginBottom: 8,
+  },
+  productDescription: {
+    fontSize: 14,
+    color: 'rgba(10,10,15,0.6)',
+    lineHeight: 22,
+  },
+  sellerSection: {
+    padding: 16,
+    paddingTop: 0,
+  },
+  protectionCard: {
+    margin: 16,
+    marginTop: 0,
+    backgroundColor: COLORS.emeraldPale,
+    borderRadius: RADIUS.lg,
+    padding: 16,
+    flexDirection: 'row',
+    gap: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(26,122,90,0.15)',
+  },
+  protectionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOWS.sm,
+  },
+  protectionContent: {
+    flex: 1,
+  },
+  protectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.emerald,
+    marginBottom: 6,
+  },
+  protectionText: {
+    fontSize: 12,
+    color: COLORS.ink,
+    lineHeight: 18,
+  },
+  protectionTextEn: {
+    fontSize: 11,
+    color: 'rgba(10,10,15,0.5)',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  feeCard: {
+    margin: 16,
+    marginTop: 0,
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    padding: 16,
+    ...SHADOWS.sm,
+  },
+  feeTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(10,10,15,0.4)',
+    letterSpacing: 1,
+    marginBottom: 12,
+  },
+  feeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  feeLabel: {
+    fontSize: 13,
+    color: 'rgba(10,10,15,0.6)',
+  },
+  feeValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.ink,
+  },
+  feeRowTotal: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.surface3,
+    marginTop: 4,
+    paddingTop: 12,
+  },
+  feeTotalLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.ink,
+  },
+  feeTotalValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.goldDark,
+  },
+  bottomBar: {
+    backgroundColor: COLORS.ink,
+    padding: 12,
+    paddingHorizontal: 20,
+    paddingBottom: 28,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+  },
+  buyButton: {
+    borderRadius: RADIUS.md,
+    overflow: 'hidden',
+    ...SHADOWS.gold,
+  },
+  buyButtonGradient: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+  },
+  buyButtonText: {
+    color: COLORS.ink,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  chatFab: {
+    position: 'absolute',
+    bottom: 100,
+    right: 20,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: COLORS.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOWS.lg,
+    zIndex: 500,
+  },
+  chatFabText: {
+    fontSize: 22,
   },
 });

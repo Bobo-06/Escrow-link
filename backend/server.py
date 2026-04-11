@@ -7,7 +7,7 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone, timedelta
 import httpx
@@ -16,6 +16,9 @@ import jwt
 import base64
 import random
 import string
+import hashlib
+import hmac
+import asyncio
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 ROOT_DIR = Path(__file__).parent
@@ -32,6 +35,46 @@ JWT_ALGORITHM = 'HS256'
 
 # Emergent LLM Key for Claude AI
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PAYMENT GATEWAY CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Africa's Talking (SMS)
+AT_API_KEY = os.environ.get('AFRICASTALKING_API_KEY', '')
+AT_USERNAME = os.environ.get('AFRICASTALKING_USERNAME', 'sandbox')
+
+# Selcom Pesalink
+SELCOM_API_KEY = os.environ.get('SELCOM_API_KEY', '')
+SELCOM_SECRET = os.environ.get('SELCOM_SECRET', '')
+SELCOM_VENDOR = os.environ.get('SELCOM_VENDOR', '')
+SELCOM_BASE_URL = "https://apigw.selcommobile.com/v1"
+
+# M-Pesa Daraja (Vodacom TZ)
+MPESA_CONSUMER_KEY = os.environ.get('MPESA_CONSUMER_KEY', '')
+MPESA_CONSUMER_SECRET = os.environ.get('MPESA_CONSUMER_SECRET', '')
+MPESA_SHORTCODE = os.environ.get('MPESA_SHORTCODE', '')
+MPESA_PASSKEY = os.environ.get('MPESA_PASSKEY', '')
+MPESA_BASE_URL = "https://openapi.m-pesa.com/sandbox/ipg/v2/vodacomTZN"
+
+# Stripe
+STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '')
+STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '')
+
+# NALA Business API
+NALA_API_KEY = os.environ.get('NALA_API_KEY', '')
+NALA_BUSINESS_ID = os.environ.get('NALA_BUSINESS_ID', '')
+
+# Smile Identity KYC
+SMILE_PARTNER_ID = os.environ.get('SMILE_IDENTITY_PARTNER_ID', '')
+SMILE_API_KEY = os.environ.get('SMILE_IDENTITY_API_KEY', '')
+
+# VAPID Keys for Push Notifications
+VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
+VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
+
+# Base URL
+BASE_URL = os.environ.get('BASE_URL', 'https://escrow-link.preview.emergentagent.com')
 
 # AI System Prompts
 AI_SUPPORT_SYSTEM = """You are SecureTrade's customer support assistant for Tanzania.
@@ -58,6 +101,39 @@ Context: This is an escrow platform. Funds are frozen during dispute."""
 AI_FRAUD_SYSTEM = """You analyze social commerce transactions for fraud risk in Tanzania.
 Given transaction details, you output a risk assessment.
 Respond ONLY in JSON: { "risk_level": "low|medium|high", "reasons": ["reason1", "reason2"], "recommended_action": "action" }"""
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SMS TEMPLATES (Bilingual: Swahili/English)
+# ═══════════════════════════════════════════════════════════════════════════
+SMS_TEMPLATES = {
+    "escrow_created": lambda amount, tx_id: {
+        "sw": f"SecureTrade: Malipo ya TSh {amount:,.0f} yameshikwa salama. TX: {tx_id}. Utapata taarifa wakati bidhaa inasafirishwa.",
+        "en": f"SecureTrade: TSh {amount:,.0f} secured in escrow. TX: {tx_id}. You'll be notified when item ships."
+    },
+    "item_shipped": lambda tx_id, tracking_no: {
+        "sw": f"SecureTrade: Bidhaa yako imepelekwa! Nambari ya ufuatiliaji: {tracking_no}. TX: {tx_id}.",
+        "en": f"SecureTrade: Your item has shipped! Tracking: {tracking_no}. TX: {tx_id}."
+    },
+    "funds_released": lambda amount, seller_name: {
+        "sw": f"SecureTrade: TSh {amount:,.0f} imetolewa kwa {seller_name}. Asante kwa kutumia SecureTrade!",
+        "en": f"SecureTrade: TSh {amount:,.0f} released to {seller_name}. Thank you for using SecureTrade!"
+    },
+    "dispute_opened": lambda tx_id, case_no: {
+        "sw": f"SecureTrade: Tatizo limefunguliwa ({case_no}). Pesa imegandwa. Wakala atawasiliana nawe ndani ya masaa 4. TX: {tx_id}.",
+        "en": f"SecureTrade: Dispute opened ({case_no}). Funds frozen. An agent will contact you within 4 hours. TX: {tx_id}."
+    },
+    "payment_received": lambda amount, tx_id: {
+        "sw": f"SecureTrade: Malipo ya TSh {amount:,.0f} yamepokelewa. TX: {tx_id}. Bidhaa itasafirishwa hivi karibuni.",
+        "en": f"SecureTrade: Payment of TSh {amount:,.0f} received. TX: {tx_id}. Item will ship soon."
+    },
+    "delivery_confirmed": lambda tx_id: {
+        "sw": f"SecureTrade: Uwasilishaji umethibitishwa! TX: {tx_id}. Pesa itatolewa kwa muuzaji.",
+        "en": f"SecureTrade: Delivery confirmed! TX: {tx_id}. Funds will be released to seller."
+    },
+}
+
+# Cached M-Pesa token
+mpesa_token_cache = {"token": None, "expiry": 0}
 
 # Create the main app
 app = FastAPI(
@@ -151,6 +227,91 @@ class FraudCheckRequest(BaseModel):
     seller_age_days: int
     buyer_age_days: int
     price_vs_market: int  # percentage of market price
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PAYMENT GATEWAY MODELS
+# ═══════════════════════════════════════════════════════════════════════════
+
+class SMSRequest(BaseModel):
+    phone: str
+    type: str  # escrow_created, item_shipped, funds_released, dispute_opened
+    data: Dict[str, Any]
+
+class SelcomCheckoutRequest(BaseModel):
+    amount: float
+    phone: str
+    order_id: str
+    buyer_name: str
+    buyer_email: str
+
+class SelcomSTKRequest(BaseModel):
+    amount: float
+    phone: str
+    transaction_ref: str
+
+class MpesaSTKRequest(BaseModel):
+    phone: str
+    amount: float
+    tx_ref: str
+
+class StripeIntentRequest(BaseModel):
+    amount_usd: float
+    tx_ref: str
+    buyer_email: str
+
+class StripeCaptureRequest(BaseModel):
+    intent_id: str
+
+class StripeCancelRequest(BaseModel):
+    intent_id: str
+    reason: Optional[str] = "requested_by_customer"
+
+class NalaTransferRequest(BaseModel):
+    sender_phone: str
+    receiver_phone: str
+    amount_tzs: float
+    currency: str  # USD, GBP, EUR
+    tx_ref: str
+
+class KYCVerifyNINRequest(BaseModel):
+    national_id: str
+    first_name: str
+    last_name: str
+    dob: str  # YYYY-MM-DD
+    phone: str
+
+class KYCSelfieRequest(BaseModel):
+    selfie_base64: str
+    national_id: str
+    user_id: str
+
+class PushSubscribeRequest(BaseModel):
+    subscription: Dict[str, Any]
+    user_id: str
+
+class EscrowCreateRequest(BaseModel):
+    item: str
+    amount: float
+    currency: str = "TZS"
+    buyer_id: str
+    seller_id: str
+    payment_method: str
+
+class EscrowReleaseRequest(BaseModel):
+    tx_id: str
+    buyer_id: str
+
+class EscrowDisputeRequest(BaseModel):
+    tx_id: str
+    reason: str
+    evidence: Optional[str] = None
+    buyer_id: str
+
+class AuditLogRequest(BaseModel):
+    tx_id: str
+    event: str  # ESCROW_CREATED, PAYMENT_RECEIVED, FUNDS_RELEASED, etc.
+    actor: str
+    metadata: Optional[Dict[str, Any]] = None
 
 # ============== HELPER FUNCTIONS ==============
 
@@ -1359,6 +1520,750 @@ Tanzania social commerce context."""
             "reasons": ["Analysis service temporarily unavailable"],
             "recommended_action": "Proceed with standard verification"
         }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SMS NOTIFICATIONS — AFRICA'S TALKING
+# ═══════════════════════════════════════════════════════════════════════════
+
+async def send_sms(phone: str, message_en: str, message_sw: str) -> Dict:
+    """Send bilingual SMS via Africa's Talking"""
+    body = f"{message_sw}\n---\n{message_en}"
+    
+    if not AT_API_KEY:
+        logger.warning("Africa's Talking not configured - SMS simulated")
+        return {"status": "simulated", "message": body}
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.africastalking.com/version1/messaging",
+                headers={
+                    "apiKey": AT_API_KEY,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Accept": "application/json"
+                },
+                data={
+                    "username": AT_USERNAME,
+                    "to": phone if phone.startswith("+") else f"+{phone}",
+                    "message": body,
+                    "from": "SecureTrad"
+                }
+            )
+            return response.json()
+    except Exception as e:
+        logger.error(f"SMS error: {e}")
+        return {"status": "error", "error": str(e)}
+
+@api_router.post("/notifications/sms")
+async def send_sms_notification(request: SMSRequest):
+    """Send SMS notification to user"""
+    template_fn = SMS_TEMPLATES.get(request.type)
+    if not template_fn:
+        raise HTTPException(status_code=400, detail=f"Unknown SMS type: {request.type}")
+    
+    try:
+        data = request.data
+        if request.type == "escrow_created":
+            template = template_fn(data.get("amount", 0), data.get("tx_id", ""))
+        elif request.type == "item_shipped":
+            template = template_fn(data.get("tx_id", ""), data.get("tracking_no", ""))
+        elif request.type == "funds_released":
+            template = template_fn(data.get("amount", 0), data.get("seller_name", ""))
+        elif request.type == "dispute_opened":
+            template = template_fn(data.get("tx_id", ""), data.get("case_no", ""))
+        else:
+            template = template_fn(**data)
+        
+        result = await send_sms(request.phone, template["en"], template["sw"])
+        return {"ok": True, "result": result}
+    except Exception as e:
+        logger.error(f"SMS notification error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SELCOM PESALINK INTEGRATION
+# ═══════════════════════════════════════════════════════════════════════════
+
+def selcom_headers() -> Dict[str, str]:
+    """Generate Selcom API headers with signature"""
+    import time
+    nonce = uuid.uuid4().hex
+    timestamp = str(int(time.time()))
+    params = f"{SELCOM_VENDOR}{nonce}{timestamp}"
+    signature = base64.b64encode(
+        hmac.new(SELCOM_SECRET.encode(), params.encode(), hashlib.sha256).digest()
+    ).decode()
+    
+    return {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Authorization": f"SELCOM {SELCOM_API_KEY}",
+        "Digest-Method": "HS256",
+        "Digest": signature,
+        "Timestamp": timestamp,
+        "Nonce": nonce,
+    }
+
+@api_router.post("/payments/selcom/checkout")
+async def selcom_checkout(request: SelcomCheckoutRequest):
+    """Create Selcom checkout order"""
+    if not SELCOM_API_KEY:
+        # Simulate for development
+        return {
+            "ok": True,
+            "simulated": True,
+            "checkout_url": f"{BASE_URL}/payment/selcom/demo",
+            "order_id": request.order_id
+        }
+    
+    try:
+        payload = {
+            "vendor": SELCOM_VENDOR,
+            "order_id": request.order_id,
+            "buyer_email": request.buyer_email,
+            "buyer_name": request.buyer_name,
+            "buyer_phone": request.phone,
+            "amount": request.amount,
+            "currency": "TZS",
+            "redirect_url": f"{BASE_URL}/payment/selcom/callback",
+            "cancel_url": f"{BASE_URL}/payment/selcom/cancel",
+            "webhook": f"{BASE_URL}/api/payments/selcom/webhook",
+            "payment_methods": ["SELCOM-WALLET", "MASTERPASS", "TIGOPESA", "AIRTEL", "HALOPESA"]
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{SELCOM_BASE_URL}/checkout/create-order",
+                json=payload,
+                headers=selcom_headers()
+            )
+            data = response.json()
+            
+        return {
+            "ok": True,
+            "checkout_url": data.get("data", {}).get("payment_gateway_url"),
+            "order_id": request.order_id
+        }
+    except Exception as e:
+        logger.error(f"Selcom checkout error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/payments/selcom/stk")
+async def selcom_stk_push(request: SelcomSTKRequest):
+    """Direct STK push via Selcom wallet"""
+    if not SELCOM_API_KEY:
+        return {"ok": True, "simulated": True, "status": "pending"}
+    
+    try:
+        payload = {
+            "vendor": SELCOM_VENDOR,
+            "msisdn": request.phone,
+            "amount": request.amount,
+            "currency": "TZS",
+            "remarks": "SecureTrade Escrow",
+            "transref": request.transaction_ref,
+            "callback": f"{BASE_URL}/api/payments/selcom/callback"
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{SELCOM_BASE_URL}/checkout/wallet-to-wallet",
+                json=payload,
+                headers=selcom_headers()
+            )
+            
+        return {"ok": True, **response.json()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/payments/selcom/webhook")
+async def selcom_webhook(request: Request):
+    """Handle Selcom payment webhook"""
+    body = await request.json()
+    order_id = body.get("order_id")
+    result = body.get("result")
+    
+    if result == "SUCCESS":
+        await db.orders.update_one(
+            {"order_id": order_id},
+            {"$set": {
+                "status": "paid",
+                "payment_status": "completed",
+                "selcom_tx_id": body.get("selcom_transaction_id"),
+                "paid_at": datetime.now(timezone.utc)
+            }}
+        )
+        # Create audit log
+        await create_audit_log(order_id, "PAYMENT_RECEIVED", "system", {"gateway": "selcom"})
+    else:
+        await db.orders.update_one(
+            {"order_id": order_id},
+            {"$set": {"status": "payment_failed", "failure_reason": body.get("result_desc")}}
+        )
+    
+    return {"ok": True}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# M-PESA DARAJA (Vodacom Tanzania)
+# ═══════════════════════════════════════════════════════════════════════════
+
+async def get_mpesa_token() -> str:
+    """Get or refresh M-Pesa access token"""
+    import time
+    
+    if mpesa_token_cache["token"] and time.time() < mpesa_token_cache["expiry"]:
+        return mpesa_token_cache["token"]
+    
+    if not MPESA_CONSUMER_KEY:
+        return "simulated_token"
+    
+    creds = base64.b64encode(f"{MPESA_CONSUMER_KEY}:{MPESA_CONSUMER_SECRET}".encode()).decode()
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{MPESA_BASE_URL}/getSession/",
+            headers={"Authorization": f"Basic {creds}", "Origin": BASE_URL}
+        )
+        data = response.json()
+    
+    mpesa_token_cache["token"] = data.get("output_SessionID")
+    mpesa_token_cache["expiry"] = time.time() + 55 * 60  # 55 minutes
+    
+    return mpesa_token_cache["token"]
+
+@api_router.post("/payments/mpesa/stk")
+async def mpesa_stk_push(request: MpesaSTKRequest):
+    """Initiate M-Pesa STK Push (Lipa na M-Pesa)"""
+    if not MPESA_CONSUMER_KEY:
+        # Simulate for development
+        await db.orders.update_one(
+            {"order_id": request.tx_ref},
+            {"$set": {"mpesa_status": "pending_simulation"}}
+        )
+        return {
+            "ok": True,
+            "simulated": True,
+            "conversation_id": f"SIM-{uuid.uuid4().hex[:12]}",
+            "message": "STK Push simulated - check phone for prompt"
+        }
+    
+    try:
+        token = await get_mpesa_token()
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        password = base64.b64encode(
+            f"{MPESA_SHORTCODE}{MPESA_PASSKEY}{timestamp}".encode()
+        ).decode()
+        
+        # Normalize phone number (255XXXXXXXXX)
+        phone = request.phone.replace("+", "")
+        if phone.startswith("0"):
+            phone = "255" + phone[1:]
+        elif not phone.startswith("255"):
+            phone = "255" + phone
+        
+        payload = {
+            "input_Amount": request.amount,
+            "input_Country": "TZN",
+            "input_Currency": "TZS",
+            "input_CustomerMSISDN": phone,
+            "input_ServiceProviderCode": MPESA_SHORTCODE,
+            "input_ThirdPartyConversationID": request.tx_ref,
+            "input_TransactionReference": request.tx_ref,
+            "input_PurchasedItemsDesc": "SecureTrade Escrow"
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{MPESA_BASE_URL}/c2bPayment/singleStage/",
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Origin": BASE_URL,
+                    "Content-Type": "application/json"
+                }
+            )
+            data = response.json()
+        
+        return {
+            "ok": True,
+            "conversation_id": data.get("output_ConversationID"),
+            **data
+        }
+    except Exception as e:
+        logger.error(f"M-Pesa STK error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/payments/mpesa/callback")
+async def mpesa_callback(request: Request):
+    """Handle M-Pesa payment callback"""
+    body = await request.json()
+    tx_ref = body.get("input_ThirdPartyConversationID")
+    response_code = body.get("output_ResponseCode")
+    
+    if response_code == "INS-0":
+        await db.orders.update_one(
+            {"order_id": tx_ref},
+            {"$set": {
+                "status": "paid",
+                "payment_status": "completed",
+                "mpesa_tx_id": body.get("output_TransactionID"),
+                "paid_at": datetime.now(timezone.utc)
+            }}
+        )
+        await create_audit_log(tx_ref, "PAYMENT_RECEIVED", "system", {"gateway": "mpesa"})
+    else:
+        await db.orders.update_one(
+            {"order_id": tx_ref},
+            {"$set": {"status": "payment_failed", "mpesa_code": response_code}}
+        )
+    
+    return {"ok": True}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# STRIPE ESCROW (Hold + Release)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@api_router.post("/payments/stripe/create-intent")
+async def stripe_create_intent(request: StripeIntentRequest):
+    """Create Stripe PaymentIntent with manual capture (escrow hold)"""
+    if not STRIPE_SECRET_KEY:
+        return {
+            "ok": True,
+            "simulated": True,
+            "client_secret": f"sim_secret_{uuid.uuid4().hex}",
+            "intent_id": f"sim_pi_{uuid.uuid4().hex}"
+        }
+    
+    try:
+        import stripe
+        stripe.api_key = STRIPE_SECRET_KEY
+        
+        amount_cents = int(request.amount_usd * 100)
+        
+        intent = stripe.PaymentIntent.create(
+            amount=amount_cents,
+            currency="usd",
+            capture_method="manual",  # HOLD - don't charge yet
+            description=f"SecureTrade Escrow: {request.tx_ref}",
+            receipt_email=request.buyer_email,
+            metadata={"tx_ref": request.tx_ref, "platform": "securetrade_tz"}
+        )
+        
+        return {
+            "ok": True,
+            "client_secret": intent.client_secret,
+            "intent_id": intent.id
+        }
+    except Exception as e:
+        logger.error(f"Stripe create intent error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/payments/stripe/capture")
+async def stripe_capture(request: StripeCaptureRequest):
+    """Capture held Stripe payment (release from escrow to seller)"""
+    if not STRIPE_SECRET_KEY:
+        return {"ok": True, "simulated": True, "status": "captured"}
+    
+    try:
+        import stripe
+        stripe.api_key = STRIPE_SECRET_KEY
+        
+        captured = stripe.PaymentIntent.capture(request.intent_id)
+        
+        return {"ok": True, "status": captured.status}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/payments/stripe/cancel")
+async def stripe_cancel(request: StripeCancelRequest):
+    """Cancel Stripe payment hold (refund on dispute)"""
+    if not STRIPE_SECRET_KEY:
+        return {"ok": True, "simulated": True, "status": "canceled"}
+    
+    try:
+        import stripe
+        stripe.api_key = STRIPE_SECRET_KEY
+        
+        canceled = stripe.PaymentIntent.cancel(
+            request.intent_id,
+            cancellation_reason="fraudulent"
+        )
+        
+        return {"ok": True, "status": canceled.status}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ═══════════════════════════════════════════════════════════════════════════
+# NALA BUSINESS API (Diaspora Payments)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@api_router.post("/payments/nala/initiate")
+async def nala_initiate_transfer(request: NalaTransferRequest):
+    """Initiate NALA diaspora payment"""
+    if not NALA_API_KEY:
+        return {
+            "ok": True,
+            "simulated": True,
+            "transfer_id": f"SIM-NALA-{uuid.uuid4().hex[:8]}",
+            "status": "pending",
+            "pay_link": f"{BASE_URL}/pay/nala/demo"
+        }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://business.nala.com/api/v1/transfers",
+                json={
+                    "sender_phone": request.sender_phone,
+                    "receiver_phone": request.receiver_phone,
+                    "amount_tzs": request.amount_tzs,
+                    "sender_currency": request.currency,
+                    "reference": request.tx_ref,
+                    "description": "SecureTrade Escrow",
+                    "callback_url": f"{BASE_URL}/api/payments/nala/callback"
+                },
+                headers={
+                    "Authorization": f"Bearer {NALA_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+            )
+            data = response.json()
+        
+        return {
+            "ok": True,
+            "transfer_id": data.get("id"),
+            "status": data.get("status"),
+            "pay_link": data.get("payment_link")
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/payments/nala/callback")
+async def nala_callback(request: Request):
+    """Handle NALA payment callback"""
+    body = await request.json()
+    tx_ref = body.get("reference")
+    status = body.get("status")
+    
+    if status == "COMPLETED":
+        await db.orders.update_one(
+            {"order_id": tx_ref},
+            {"$set": {
+                "status": "paid",
+                "payment_status": "completed",
+                "nala_tx_id": body.get("transaction_id"),
+                "paid_at": datetime.now(timezone.utc)
+            }}
+        )
+        await create_audit_log(tx_ref, "PAYMENT_RECEIVED", "system", {"gateway": "nala"})
+    
+    return {"ok": True}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SMILE IDENTITY KYC (NIDA Verification)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@api_router.post("/kyc/verify-nin")
+async def kyc_verify_nin(request: KYCVerifyNINRequest):
+    """Verify Tanzania National ID (NIDA) via Smile Identity"""
+    if not SMILE_PARTNER_ID:
+        # Simulate verification
+        await asyncio.sleep(1)  # Simulate API delay
+        return {
+            "ok": True,
+            "simulated": True,
+            "verified": True,
+            "actions": {"Verify_ID_Number": "Verified"},
+            "confidence": 99.5
+        }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.smileidentity.com/v1/id_verification",
+                json={
+                    "partner_id": SMILE_PARTNER_ID,
+                    "country": "TZ",
+                    "id_type": "NATIONAL_ID",
+                    "id_number": request.national_id,
+                    "first_name": request.first_name,
+                    "last_name": request.last_name,
+                    "dob": request.dob,
+                    "phone_number": request.phone
+                },
+                headers={
+                    "Authorization": f"Bearer {SMILE_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+            )
+            data = response.json()
+        
+        verified = data.get("Actions", {}).get("Verify_ID_Number") == "Verified"
+        
+        if verified:
+            # Update user KYC level in database
+            await db.users.update_one(
+                {"phone": request.phone},
+                {"$set": {"kyc_level": 2, "nida_verified": True, "kyc_verified_at": datetime.now(timezone.utc)}}
+            )
+        
+        return {
+            "ok": verified,
+            "actions": data.get("Actions"),
+            "confidence": data.get("ConfidenceValue")
+        }
+    except Exception as e:
+        logger.error(f"Smile KYC error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/kyc/selfie")
+async def kyc_verify_selfie(request: KYCSelfieRequest):
+    """Verify selfie against NIDA photo via Smile Identity"""
+    if not SMILE_PARTNER_ID:
+        await asyncio.sleep(1.5)
+        return {
+            "ok": True,
+            "simulated": True,
+            "verified": True,
+            "confidence": 95.2
+        }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.smileidentity.com/v1/biometric_kyc",
+                json={
+                    "partner_id": SMILE_PARTNER_ID,
+                    "job_type": 1,
+                    "country": "TZ",
+                    "id_type": "NATIONAL_ID",
+                    "id_number": request.national_id,
+                    "images": [{"image_type_id": 0, "image": request.selfie_base64}]
+                },
+                headers={
+                    "Authorization": f"Bearer {SMILE_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+            )
+            data = response.json()
+        
+        verified = data.get("Actions", {}).get("Selfie_To_ID_Authority_Compare") == "Passed"
+        
+        if verified:
+            await db.users.update_one(
+                {"_id": request.user_id},
+                {"$set": {"kyc_level": 3, "selfie_verified": True}}
+            )
+        
+        return {
+            "ok": verified,
+            "confidence": data.get("result", {}).get("ConfidenceValue")
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PUSH NOTIFICATIONS
+# ═══════════════════════════════════════════════════════════════════════════
+
+@api_router.post("/push/subscribe")
+async def push_subscribe(request: PushSubscribeRequest):
+    """Subscribe user to push notifications"""
+    await db.users.update_one(
+        {"_id": request.user_id},
+        {"$set": {"push_subscription": request.subscription}}
+    )
+    return {"ok": True}
+
+async def send_push_to_user(user_id: str, notification: Dict):
+    """Send push notification to user"""
+    user = await db.users.find_one({"_id": user_id})
+    if not user or not user.get("push_subscription"):
+        return
+    
+    # In production, use pywebpush library
+    logger.info(f"Push to {user_id}: {notification}")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ESCROW STATE MACHINE
+# States: created → paid → shipped → delivered → released | disputed | refunded
+# ═══════════════════════════════════════════════════════════════════════════
+
+@api_router.post("/escrow/create")
+async def escrow_create(request: EscrowCreateRequest):
+    """Create new escrow transaction"""
+    tx_id = "SCT-" + uuid.uuid4().hex[:8].upper()
+    
+    escrow = {
+        "tx_id": tx_id,
+        "item": request.item,
+        "amount": request.amount,
+        "currency": request.currency,
+        "buyer_id": request.buyer_id,
+        "seller_id": request.seller_id,
+        "payment_method": request.payment_method,
+        "status": "created",
+        "escrow_status": "pending",
+        "created_at": datetime.now(timezone.utc)
+    }
+    
+    await db.escrow_transactions.insert_one(escrow)
+    await create_audit_log(tx_id, "ESCROW_CREATED", request.buyer_id, {"amount": request.amount})
+    
+    return {"ok": True, "tx_id": tx_id, "status": "created"}
+
+@api_router.post("/escrow/release")
+async def escrow_release(request: EscrowReleaseRequest):
+    """Release escrow funds to seller (buyer confirms delivery)"""
+    escrow = await db.escrow_transactions.find_one({"tx_id": request.tx_id})
+    
+    if not escrow:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    if escrow.get("buyer_id") != request.buyer_id:
+        raise HTTPException(status_code=403, detail="Only buyer can release funds")
+    
+    if escrow.get("status") not in ["paid", "shipped", "delivered"]:
+        raise HTTPException(status_code=400, detail=f"Cannot release from status: {escrow.get('status')}")
+    
+    # Update status
+    await db.escrow_transactions.update_one(
+        {"tx_id": request.tx_id},
+        {"$set": {
+            "status": "released",
+            "escrow_status": "released",
+            "released_at": datetime.now(timezone.utc)
+        }}
+    )
+    
+    # Create audit log
+    await create_audit_log(request.tx_id, "FUNDS_RELEASED", request.buyer_id, {
+        "amount": escrow.get("amount"),
+        "seller_id": escrow.get("seller_id")
+    })
+    
+    # Send notifications
+    seller = await db.users.find_one({"_id": escrow.get("seller_id")})
+    if seller and seller.get("phone"):
+        template = SMS_TEMPLATES["funds_released"](escrow.get("amount"), seller.get("name", "Seller"))
+        await send_sms(seller["phone"], template["en"], template["sw"])
+    
+    return {"ok": True, "tx_id": request.tx_id, "status": "released"}
+
+@api_router.post("/escrow/dispute")
+async def escrow_dispute(request: EscrowDisputeRequest):
+    """Open dispute on escrow transaction"""
+    escrow = await db.escrow_transactions.find_one({"tx_id": request.tx_id})
+    
+    if not escrow:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    case_no = "DIS-" + uuid.uuid4().hex[:6].upper()
+    
+    # Create dispute record
+    dispute = {
+        "case_no": case_no,
+        "tx_id": request.tx_id,
+        "reason": request.reason,
+        "evidence": request.evidence,
+        "raised_by": request.buyer_id,
+        "status": "open",
+        "created_at": datetime.now(timezone.utc)
+    }
+    
+    await db.disputes.insert_one(dispute)
+    
+    # Update escrow status
+    await db.escrow_transactions.update_one(
+        {"tx_id": request.tx_id},
+        {"$set": {"status": "disputed", "escrow_status": "frozen", "dispute_case": case_no}}
+    )
+    
+    # Create audit log
+    await create_audit_log(request.tx_id, "DISPUTE_OPENED", request.buyer_id, {
+        "case_no": case_no,
+        "reason": request.reason
+    })
+    
+    # Notify parties
+    template = SMS_TEMPLATES["dispute_opened"](request.tx_id, case_no)
+    buyer = await db.users.find_one({"_id": request.buyer_id})
+    if buyer and buyer.get("phone"):
+        await send_sms(buyer["phone"], template["en"], template["sw"])
+    
+    return {"ok": True, "case_no": case_no, "status": "opened"}
+
+@api_router.get("/escrow/verify/{tx_id}")
+async def escrow_verify(tx_id: str):
+    """Public verification endpoint for escrow transactions"""
+    escrow = await db.escrow_transactions.find_one(
+        {"tx_id": tx_id},
+        {"_id": 0, "tx_id": 1, "status": 1, "escrow_status": 1, "amount": 1, "currency": 1, "created_at": 1}
+    )
+    
+    if not escrow:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    return {
+        **escrow,
+        "verified": True,
+        "platform": "SecureTrade TZ",
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# BOT AUDIT TRAIL (Bank of Tanzania Compliance)
+# ═══════════════════════════════════════════════════════════════════════════
+
+async def create_audit_log(tx_id: str, event: str, actor: str, metadata: Dict = None):
+    """Create immutable audit log entry for BOT compliance"""
+    entry = {
+        "audit_id": str(uuid.uuid4()),
+        "tx_id": tx_id,
+        "event": event,
+        "actor": actor,
+        "metadata": metadata or {},
+        "timestamp": datetime.now(timezone.utc),
+        "hash": hashlib.sha256(f"{tx_id}{event}{datetime.now().timestamp()}".encode()).hexdigest()
+    }
+    
+    await db.audit_log.insert_one(entry)
+    return entry["audit_id"]
+
+@api_router.post("/audit/log")
+async def audit_log_endpoint(request: AuditLogRequest):
+    """Create audit log entry"""
+    audit_id = await create_audit_log(
+        request.tx_id,
+        request.event,
+        request.actor,
+        request.metadata
+    )
+    return {"ok": True, "audit_id": audit_id}
+
+@api_router.get("/audit/{tx_id}")
+async def get_audit_trail(tx_id: str):
+    """Get full audit trail for a transaction"""
+    entries = await db.audit_log.find(
+        {"tx_id": tx_id},
+        {"_id": 0}
+    ).sort("timestamp", 1).to_list(100)
+    
+    return {"tx_id": tx_id, "entries": entries}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LIVE EXCHANGE RATES
+# ═══════════════════════════════════════════════════════════════════════════
+
+@api_router.get("/rates")
+async def get_exchange_rates():
+    """Get current exchange rates"""
+    # In production, fetch from API like Open Exchange Rates
+    return {
+        "base": "TZS",
+        "rates": EXCHANGE_RATES,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
 
 # ============== HEALTH CHECK ==============
 

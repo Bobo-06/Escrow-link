@@ -62,10 +62,88 @@ export const ordersApi = {
     api.post(`/orders/${orderId}/dispute`, { reason }),
 };
 
-// Payments API (Mock)
+// Payments API
 export const paymentsApi = {
+  // Simulated payment (for testing)
   simulate: (orderId: string, paymentMethod: string) => 
     api.post('/payments/simulate', { order_id: orderId, payment_method: paymentMethod }),
+  
+  // M-Pesa STK Push (Vodacom Tanzania)
+  mpesaSTK: (data: { phone: string; amount: number; tx_ref: string }) => 
+    api.post('/payments/mpesa/stk', data),
+  
+  // Selcom Pesalink checkout
+  selcomCheckout: (data: { 
+    amount: number; 
+    phone: string; 
+    order_id: string; 
+    buyer_name: string; 
+    buyer_email: string 
+  }) => api.post('/payments/selcom/checkout', data),
+  
+  // Selcom STK Push
+  selcomSTK: (data: { amount: number; phone: string; transaction_ref: string }) => 
+    api.post('/payments/selcom/stk', data),
+  
+  // Stripe payment intent (for card/diaspora)
+  stripeCreateIntent: (data: { amount_usd: number; tx_ref: string; buyer_email: string }) => 
+    api.post('/payments/stripe/create-intent', data),
+  
+  stripeCapture: (intentId: string) => 
+    api.post('/payments/stripe/capture', { intent_id: intentId }),
+  
+  stripeCancel: (intentId: string, reason?: string) => 
+    api.post('/payments/stripe/cancel', { intent_id: intentId, reason }),
+  
+  // NALA (Diaspora payments)
+  nalaTransfer: (data: { 
+    sender_phone: string; 
+    receiver_phone: string; 
+    amount_tzs: number;
+    currency: string;
+    tx_ref: string 
+  }) => api.post('/payments/nala/transfer', data),
+};
+
+// Escrow API
+export const escrowApi = {
+  create: (data: {
+    item: string;
+    amount: number;
+    currency?: string;
+    buyer_id: string;
+    seller_id: string;
+    payment_method: string;
+  }) => api.post('/escrow/create', data),
+  
+  release: (txId: string, buyerId: string) => 
+    api.post('/escrow/release', { tx_id: txId, buyer_id: buyerId }),
+  
+  dispute: (data: { tx_id: string; reason: string; evidence?: string; buyer_id: string }) => 
+    api.post('/escrow/dispute', data),
+};
+
+// KYC API
+export const kycApi = {
+  verifyNIN: (data: {
+    national_id: string;
+    first_name: string;
+    last_name: string;
+    dob: string;
+    phone: string;
+  }) => api.post('/kyc/verify-nin', data),
+  
+  verifySelfie: (data: { selfie_base64: string; national_id: string; user_id: string }) => 
+    api.post('/kyc/selfie', data),
+};
+
+// Notifications API
+export const notificationsApi = {
+  sendSMS: (data: { phone: string; type: string; data: Record<string, any> }) => 
+    api.post('/notifications/sms', data),
+  
+  subscribePush: (data: { subscription: Record<string, any>; user_id: string }) => 
+    api.post('/notifications/push/subscribe', data),
 };
 
 // Stats API

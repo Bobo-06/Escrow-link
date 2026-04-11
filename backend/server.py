@@ -1344,7 +1344,7 @@ Tanzania social commerce context."""
                 if clean_response.startswith("json"):
                     clean_response = clean_response[4:]
             result = json.loads(clean_response)
-        except:
+        except (json.JSONDecodeError, IndexError):
             result = {
                 "risk_level": "medium",
                 "reasons": ["Analysis unavailable"],

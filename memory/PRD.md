@@ -1,166 +1,202 @@
-# CraftHer - Trade Finance Platform for Women Entrepreneurs
+# SecureTrade TZ / Biz-Salama PWA
+## Product Requirements Document
 
-## Overview
-CraftHer is a secure payment link generator and trade finance platform connecting women entrepreneurs in Tanzania with diaspora buyers worldwide. The platform provides escrow-protected transactions, multi-currency support, and bilingual (English/Kiswahili) interfaces.
+### Overview
+SecureTrade TZ is Tanzania's premier escrow-protected marketplace PWA. It enables secure social commerce transactions with escrow protection, mobile money integration (M-Pesa, Airtel, Tigo), and AI-powered support.
 
-## Core Features
+### Target Market
+- Women entrepreneurs in Tanzania
+- Social commerce sellers (Instagram, WhatsApp)
+- Diaspora buyers (NALA integration for USD/GBP/EUR)
+- Artisans and small business owners
 
-### ✅ Implemented Features
+---
 
-#### 1. Authentication System
-- **JWT-based Custom Auth**: Registration, login with email/password
-- **Google OAuth Integration**: Emergent-managed Google OAuth flow
-- **Session Management**: Secure token-based session handling
-- **User Types**: Sellers with "Women-Owned Business" verification
+## ✅ Implemented Features
 
-#### 2. Seller Dashboard
-- **Bilingual Interface**: Full English/Kiswahili support
-- **Trade Metrics**: Success rate, completed transactions, repeat buyers
-- **Earnings Overview**: Total earnings, escrow balance, international earnings
-- **Quick Actions**: Create payment links, view orders
-- **NALA Diaspora Card**: Multi-currency payment info (USD, GBP, EUR)
+### Phase 1: Core Infrastructure (COMPLETED)
+- [x] FastAPI backend with MongoDB
+- [x] JWT-based custom authentication
+- [x] Phone/Email registration toggle
+- [x] Product CRUD operations
+- [x] Order management lifecycle
+- [x] 5% fee structure (3% buyer protection + 2% seller acquisition)
 
-#### 3. Payment Link Generator
-- **Product Creation**: Name, price (TZS), description, image upload
-- **Diaspora Sales Toggle**: Enable international shipping/payments
-- **Export Categories**: Textiles, handicrafts, food, beauty, jewelry, etc.
-- **Fee Transparency**: Real-time fee breakdown (3% buyer protection, 2% seller)
-- **Unique Link Codes**: Shareable payment links
+### Phase 2: SecureTrade PWA Design (COMPLETED - April 2026)
+- [x] Premium fintech UI theme
+  - Dark ink (#0a0a0f) header with gold (#c8a96e) accents
+  - Emerald (#1a7a5a) for success/security states
+  - Surface (#f4f3ef) light backgrounds
+- [x] Landing page with trust stats
+- [x] Trust strip (Escrow, M-Pesa, KYC, Dispute)
+- [x] Sample product card with trust score
+- [x] Feature grid (NMB Escrow, NALA Diaspora, AI Support, M-Pesa)
 
-#### 4. Buyer Flow
-- **Product Page**: High-trust design with seller verification, escrow info
-- **Multi-Currency**: Support for TZS, USD, GBP, EUR
-- **Checkout Process**: Delivery details → Payment selection → Processing
-- **Payment Methods**: M-Pesa, Airtel Money, Tigo Pesa, NALA (Diaspora)
-- **Order Tracking**: Real-time status with escrow protection display
-- **Delivery Confirmation**: Release payment or dispute options
+### Phase 3: Bilingual UI (COMPLETED)
+- [x] Full Swahili/English interface
+- [x] All labels in both languages
+- [x] Placeholder text bilingual
+- [x] Error messages bilingual
 
-#### 5. Sophisticated Bilingual UI
-- **Premium Design**: Deep emerald/teal gradient header with gold accents
-- **Trust Signals**: NMB Escrow badges, NALA payment indicators
-- **Kiswahili/English**: All screens fully bilingual
-- **Mobile-First**: Optimized for 390x844 viewport
-- **Premium Elements**: LinearGradients, shadows, modern typography
+### Phase 4: Tanzania-Specific Features (COMPLETED)
+- [x] M-Pesa STK Push payment screen (simulated)
+- [x] Voice confirmation (Swahili TTS) - uses expo-speech
+- [x] Offline mode indicator - uses @react-native-community/netinfo
+- [x] Seller Trust Score card component
+- [x] TZS/USD currency display
 
-### Backend API Endpoints
-```
-POST /api/auth/register    - User registration
-POST /api/auth/login       - User login
-POST /api/auth/session     - OAuth session exchange
-GET  /api/auth/me          - Get current user
-POST /api/auth/logout      - Logout
+### Phase 5: AI Integration (COMPLETED)
+- [x] Claude Sonnet 4 integration via Emergent LLM Key
+- [x] AI Support Chatbot (Swahili/English)
+- [x] AI Dispute Mediator with recommendations (RELEASE/REFUND/ESCALATE)
+- [x] AI Fraud Detection (risk level analysis)
+- [x] Chat session history in MongoDB
 
-GET  /api/products         - List seller's products
-POST /api/products         - Create product
-GET  /api/pay/:code        - Get product by payment link code
+### Phase 6: Complete Buyer Flow (COMPLETED)
+- [x] Product page with escrow badges
+- [x] Checkout page with delivery form
+- [x] Payment gateway selection (M-Pesa, Airtel, Tigo, NALA)
+- [x] M-Pesa STK Push simulation
+- [x] Confirmation page with voice playback
+- [x] Order tracking with timeline
+- [x] Release payment / Open dispute actions
 
-POST /api/orders           - Create order
-GET  /api/orders/:id       - Get order details
-POST /api/orders/:id/confirm - Confirm delivery
-POST /api/orders/:id/dispute - Create dispute
+### Phase 7: Seller Dashboard (COMPLETED)
+- [x] Revenue stats card
+- [x] Products count, success rate, trust score
+- [x] Quick actions (Withdraw, Analytics, Settings)
+- [x] Product list with copy link action
+- [x] Create payment link flow
 
-GET  /api/stats/seller     - Seller statistics
-```
+---
 
-### Data Models
+## 🔄 In Progress / Upcoming
 
-#### Users
-```
-{
-  user_id, email, name, phone, business_name,
-  is_verified, is_women_owned, auth_type, created_at
-}
-```
+### P1: Google OAuth Finalization
+- [ ] Complete Expo web-browser redirect handling
+- [ ] Backend OAuth callback token exchange
+- [ ] Zustand auth store integration
 
-#### Products
-```
-{
-  product_id, seller_id, name, price_tzs, description,
-  image, payment_link_code, international_shipping,
-  export_category, created_at
-}
-```
+### P2: Real Payment Integration
+- [ ] NALA API integration for diaspora payments
+- [ ] Selcom Pesa gateway
+- [ ] Real M-Pesa STK Push via Vodacom API
 
-#### Orders
-```
-{
-  order_id, product_id, buyer_name, buyer_phone,
-  buyer_location, status, total_paid, protection_fee,
-  escrow_status, payment_method, buyer_currency
-}
-```
+### P3: Real Escrow Integration
+- [ ] NMB Bank escrow account setup
+- [ ] Automated fund release on confirmation
+- [ ] Dispute fund holding
 
-## Technology Stack
-- **Frontend**: Expo/React Native with file-based routing
-- **Backend**: FastAPI (Python)
-- **Database**: MongoDB
-- **Auth**: JWT + Emergent Google OAuth
-- **UI Components**: expo-linear-gradient, @expo/vector-icons
+---
+
+## 📋 Backlog / Future Features
+
+### P4: Advanced Seller Features
+- [ ] Seller profile page with ratings
+- [ ] Trade history for credit scoring
+- [ ] Export readiness certification
+- [ ] Women-owned business verification badge
+
+### P5: Enhanced Security
+- [ ] KYC integration (Smile Identity)
+- [ ] Two-factor authentication
+- [ ] Transaction signing
+
+### P6: Logistics Integration
+- [ ] Sendy Africa integration
+- [ ] Real-time delivery tracking
+- [ ] Automated delivery confirmation
+
+---
 
 ## Architecture
+
+### Frontend Stack
+- **Framework:** React Native + Expo
+- **Router:** Expo Router (file-based)
+- **State:** Zustand
+- **UI:** Custom components with SecureTrade theme
+- **Icons:** @expo/vector-icons (Ionicons)
+
+### Backend Stack
+- **API:** FastAPI (Python)
+- **Database:** MongoDB (Motor async driver)
+- **Auth:** JWT + bcrypt
+- **AI:** Emergent Integrations (Claude Sonnet 4)
+
+### File Structure
 ```
 /app
 ├── backend/
-│   └── server.py           # FastAPI backend (all logic)
-└── frontend/
-    ├── app/
-    │   ├── index.tsx       # Landing page (bilingual)
-    │   ├── login.tsx       # Login (bilingual)
-    │   ├── register.tsx    # Registration (bilingual)
-    │   ├── auth-callback.tsx # OAuth callback
-    │   ├── seller/
-    │   │   ├── index.tsx   # Dashboard (bilingual)
-    │   │   └── create.tsx  # Create product
-    │   ├── pay/
-    │   │   └── [code].tsx  # Product page
-    │   ├── checkout/
-    │   │   └── [orderId].tsx # Checkout flow
-    │   ├── track/
-    │   │   └── [orderId].tsx # Order tracking
-    │   └── confirm/
-    │       └── [orderId].tsx # Delivery confirmation
-    └── src/
-        ├── store/
-        │   └── authStore.ts # Zustand auth state
-        ├── api/
-        │   └── api.ts       # API client
-        └── components/
-            └── LoadingScreen.tsx
+│   ├── server.py           # All API endpoints
+│   ├── .env                 # MONGO_URL, EMERGENT_LLM_KEY
+│   └── requirements.txt
+├── frontend/
+│   ├── app/
+│   │   ├── index.tsx        # Landing page
+│   │   ├── login.tsx        # Auth screens
+│   │   ├── register.tsx
+│   │   ├── seller/index.tsx # Seller dashboard
+│   │   ├── create.tsx       # Create product
+│   │   ├── pay/[code].tsx   # Product page (buyer)
+│   │   ├── checkout/[orderId].tsx
+│   │   ├── confirm/[orderId].tsx
+│   │   └── track/[orderId].tsx
+│   └── src/
+│       ├── components/      # Reusable UI
+│       ├── constants/theme.ts
+│       └── store/authStore.ts
+└── memory/
+    └── PRD.md
 ```
 
-## Pending/Future Features
+---
 
-### P1 - High Priority
-- [ ] Implement Seller Profile & Ratings page
-- [ ] Complete product creation success page with sharing
+## API Endpoints
 
-### P2 - Medium Priority
-- [ ] Real payment integration (NALA API)
-- [ ] Real escrow integration (NMB Bank)
-- [ ] Push notifications for order updates
+### Auth
+- `POST /api/auth/register` - Register (phone OR email)
+- `POST /api/auth/login` - Login
+- `GET /api/auth/me` - Current user
 
-### P3 - Future Enhancements
-- [ ] Seller analytics dashboard
-- [ ] Buyer reviews and ratings
-- [ ] Multi-product orders
-- [ ] Inventory management
-- [ ] Export documentation assistance
+### Products
+- `GET /api/products` - List seller's products
+- `POST /api/products` - Create product
+- `GET /api/pay/{link_id}` - Public product page
 
-## Mocked/Simulated Features
-⚠️ **Payment Flow**: Currently simulated - not connected to real payment providers
-⚠️ **Escrow System**: Simulated - not connected to real banking partner
+### Orders
+- `POST /api/orders` - Create order
+- `GET /api/orders/{id}` - Get order details
+- `POST /api/orders/{id}/confirm-delivery` - Buyer confirms
 
-## Environment Variables
-```
-# Backend
-MONGO_URL=mongodb://...
-DB_NAME=crafther
+### AI
+- `POST /api/ai/support` - AI support chatbot
+- `POST /api/ai/dispute` - AI dispute mediator
+- `POST /api/ai/fraud-check` - Fraud analysis
 
-# Frontend
-EXPO_PUBLIC_BACKEND_URL=https://escrow-link.preview.emergentagent.com
-```
+---
 
-## Last Updated
-- Date: April 2026
-- Session: Sophisticated bilingual UI implementation complete
-- Status: Production-ready UI, pending real payment integration
+## Testing Notes
+
+### Test Credentials
+- Phone: 0712345678
+- Email: test@example.com
+- Password: any
+
+### Test URLs
+- Landing: https://escrow-link.preview.emergentagent.com
+- Login: /login
+- Register: /register
+- Dashboard: /seller
+
+---
+
+## Known Limitations (MOCKED)
+1. **Payment Processing:** M-Pesa STK Push is simulated
+2. **Escrow:** Fund holding is simulated in DB status
+3. **Voice:** Uses browser Web Speech API / expo-speech
+4. **Google OAuth:** Button present but flow incomplete
+
+---
+
+*Last Updated: April 11, 2026*

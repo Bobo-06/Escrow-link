@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, RADIUS, SHADOWS, formatTZS, TRACKING_STATUSES } from '../../src/constants/theme';
 import { AIChatbot } from '../../src/components/AIChatbot';
+import { RatingModal } from '../../src/components/RatingModal';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
@@ -23,6 +25,8 @@ export default function TrackingPage() {
   const [loading, setLoading] = useState(true);
   const [showChat, setShowChat] = useState(false);
   const [showDispute, setShowDispute] = useState(false);
+  const [showRating, setShowRating] = useState(false);
+  const [deliveryConfirmed, setDeliveryConfirmed] = useState(false);
 
   useEffect(() => {
     fetchOrder();
@@ -43,13 +47,40 @@ export default function TrackingPage() {
 
   const handleConfirmDelivery = async () => {
     try {
-      await fetch(`${API_URL}/api/orders/${orderId}/confirm-delivery`, {
+      const response = await fetch(`${API_URL}/api/orders/${orderId}/confirm-delivery`, {
         method: 'POST',
       });
-      // Show success or navigate
-      router.push('/');
+      
+      if (response.ok) {
+        setDeliveryConfirmed(true);
+        // Show rating modal after delivery confirmation
+        setShowRating(true);
+      }
     } catch (err) {
       console.error(err);
+      Alert.alert('Kosa / Error', 'Imeshindikana kuthibitisha. Jaribu tena. / Failed to confirm. Please try again.');
+    }
+  };
+
+  const handleRatingSubmit = async (rating: number, comment: string) => {
+    try {
+      // Submit rating to backend
+      await fetch(`${API_URL}/api/orders/${orderId}/rate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating, comment }),
+      });
+      
+      setShowRating(false);
+      Alert.alert(
+        'Asante! / Thank you!', 
+        'Ukadiriaji wako umehifadhiwa. / Your rating has been saved.',
+        [{ text: 'OK', onPress: () => router.push('/') }]
+      );
+    } catch (err) {
+      console.error(err);
+      setShowRating(false);
+      router.push('/');
     }
   };
 
@@ -227,6 +258,18 @@ export default function TrackingPage() {
           onClose={() => setShowDispute(false)}
         />
       )}
+
+      {/* Rating Modal - shows after delivery confirmation */}
+      <RatingModal
+        visible={showRating}
+        sellerName={order?.seller_name || 'Muuzaji'}
+        orderId={orderId || ''}
+        onSubmit={handleRatingSubmit}
+        onClose={() => {
+          setShowRating(false);
+          router.push('/');
+        }}
+      />
     </SafeAreaView>
   );
 }

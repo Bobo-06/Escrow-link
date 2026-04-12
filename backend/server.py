@@ -1340,6 +1340,58 @@ async def confirm_delivery(order_id: str):
         "is_international": order.get('is_international', False)
     }
 
+class RatingCreate(BaseModel):
+    rating: int
+    comment: Optional[str] = None
+
+@api_router.post("/orders/{order_id}/rate")
+async def rate_seller(order_id: str, rating_data: RatingCreate):
+    """Buyer rates the seller after delivery"""
+    order = await db.orders.find_one({"order_id": order_id}, {"_id": 0})
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    if rating_data.rating < 1 or rating_data.rating > 5:
+        raise HTTPException(status_code=400, detail="Rating must be between 1 and 5")
+    
+    # Store the rating
+    rating_record = {
+        "rating_id": f"rate_{uuid.uuid4().hex[:12]}",
+        "order_id": order_id,
+        "seller_id": order['seller_id'],
+        "buyer_name": order['buyer_name'],
+        "rating": rating_data.rating,
+        "comment": rating_data.comment,
+        "created_at": datetime.now(timezone.utc)
+    }
+    await db.ratings.insert_one(rating_record)
+    
+    # Update seller's average rating
+    seller = await db.users.find_one({"user_id": order['seller_id']}, {"_id": 0})
+    current_rating = seller.get('average_rating', 4.8)
+    total_ratings = seller.get('total_ratings', 0)
+    
+    # Calculate new average
+    new_total_ratings = total_ratings + 1
+    new_average = ((current_rating * total_ratings) + rating_data.rating) / new_total_ratings
+    
+    await db.users.update_one(
+        {"user_id": order['seller_id']},
+        {
+            "$set": {
+                "average_rating": round(new_average, 1),
+                "total_ratings": new_total_ratings
+            }
+        }
+    )
+    
+    return {
+        "success": True,
+        "message": "Asante kwa ukadiriaji! / Thank you for your rating!",
+        "new_seller_rating": round(new_average, 1)
+    }
+
 @api_router.post("/orders/{order_id}/dispute")
 async def create_dispute(order_id: str, dispute: DisputeCreate):
     """Buyer reports an issue"""

@@ -93,6 +93,91 @@ SecureTrade TZ (Biz-Salama) is Tanzania's premier escrow-protected marketplace P
 - [x] Demo OTP display for testing (to be removed in production)
 - [x] Session invalidation after password reset
 
+### Phase 13: Rating & Feedback System (COMPLETED - April 2026)
+- [x] Backend API: POST /api/orders/{id}/rate
+- [x] RatingModal component with 5-star rating
+- [x] Optional comment field
+- [x] Seller average rating calculation
+- [x] Rating shown on product pages
+- [x] Modal triggered after delivery confirmation
+
+---
+
+## Complete Customer Journey
+
+### Step 1: Landing Page
+Customer arrives at Masoko Salama (Protected Marketplace) and sees:
+- Live exchange rates (USD, GBP, EUR to TSh)
+- "ESCROW PROTECTED" badge
+- Trust stats: 1,000+ sellers, TZS 500M+ volume, 98% success
+- Trust strip: Escrow, M-Pesa, KYC, Dispute
+- Trending products with TRUST scores
+
+### Step 2: Product Page (/pay/{code})
+Customer clicks a product and sees:
+- Product image and description
+- Price in TZS with USD equivalent
+- **Seller Trust Card**: Name, Trust Score (0-100), Trades, Rating, Member since
+- "Muuzaji Mwaminifu · Trusted" badge
+- Buyer Protection notice
+- **"Nunua Salama · Buy Securely"** button
+
+### Step 3: Checkout (/checkout/{code})
+Customer enters delivery details:
+- Order summary with price breakdown
+- 3% buyer protection fee shown
+- Full name, phone (+255), address fields
+- **"Endelea · Continue"** to payment selection
+
+### Step 4: Payment Gateway Selection
+Customer chooses payment method:
+- **M-Pesa** (Vodacom) - STK Push
+- **Airtel Money** - STK Push
+- **Tigo Pesa** - STK Push
+- **Selcom** (Bank/Wallet/USSD)
+- **NALA** (Diaspora - USD/GBP/EUR)
+- **Stripe** (International cards)
+
+### Step 5: Payment Confirmation (/confirm/{orderId})
+After successful payment:
+- "Pesa Imeshikwa · Funds Secured" header
+- Receipt with TX ID, amounts, seller, method
+- **Voice Confirmation** (Swahili TTS)
+- SMS notification via Africa's Talking
+- **"Fuatilia Agizo · Track Order"** button
+
+### Step 6: Order Tracking (/track/{orderId})
+Customer tracks delivery:
+- Sendy Africa tracking integration
+- Real-time shipment timeline (5 stages)
+- ETA display
+- Escrow status shown
+- **AI Support Chatbot** (floating button)
+
+### Step 7: Delivery Actions
+When item arrives, customer has two options:
+
+**A) Release Payment (Happy Path)**
+- Click "Toa Malipo / Release Payment"
+- Escrow released to seller's mobile wallet
+- **Rating Modal** appears:
+  - 5-star rating selection
+  - Optional comment field
+  - "Wasilisha Ukadiriaji / Submit Rating"
+
+**B) Open Dispute (Problem)**
+- Click "Fungua Tatizo / Open Dispute"
+- **AI Dispute Mediator** opens
+- Explains issue to AI
+- AI recommends: RELEASE / REFUND / ESCALATE
+- Human escalation if needed
+
+### Step 8: Post-Transaction
+- Seller receives payment
+- Seller's rating updated
+- Transaction recorded for credit scoring
+- Protection expires after 14 days (auto-release)
+
 ---
 
 ## Bug Fixes (April 2026)

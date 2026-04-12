@@ -10,6 +10,52 @@ SecureTrade TZ (Biz-Salama) is Tanzania's premier escrow-protected marketplace P
 - Diaspora buyers (NALA integration for USD/GBP/EUR)
 - Artisans and small business owners
 
+## Grant Requirements Compliance (FSDT/UNCDF/BOT Sandbox) ✅
+
+All 6 grant requirements have been implemented and verified:
+
+### ✅ GAP 1: Authentication Layer
+- Phone OTP login via `/login` with phone/email toggle
+- Password reset via `/forgot-password` with OTP verification
+- Registration at `/register` with full form
+- JWT session management with secure token storage
+
+### ✅ GAP 2: Transaction History
+- Full transaction history at `/seller` → History tab
+- Filters: All, Released, In Escrow, Disputed, Refunded
+- Search by item, TX ID, or seller name
+- Status badges with Swahili/English labels
+- Total spent/earned summary card
+
+### ✅ GAP 3: Bottom Navigation
+- Persistent 4-tab navigation: Home (Nyumbani), History (Historia), Support (Msaada), Profile (Wasifu)
+- Available on all authenticated screens
+- Modern fintech design with active state indicators
+
+### ✅ GAP 4: Onboarding Flow
+- 4-screen trust-building onboarding on first visit:
+  1. "Biashara Salama / Trade Safely" - BOT-licensed escrow
+  2. "Njia 5 za Malipo / 5 Payment Methods" - M-Pesa, Airtel, Tigo, NALA, Selcom
+  3. "AI Inasuluhisha / AI Mediates Disputes" - 24h resolution
+  4. "Imefanywa Tanzania / Made in Tanzania" - Local legitimacy
+- Skip button and swipe navigation
+- Stored in AsyncStorage to show only once
+
+### ✅ GAP 5: Profile / KYC Screen
+- Full profile page at `/seller/profile`
+- KYC Tier Display:
+  - Tier 0: Mgeni (Guest) - TZS 50K limit
+  - Tier 1: Msingi (Basic) - TZS 500K limit
+  - Tier 2: Imethibitishwa (Verified) - TZS 5M limit
+  - Tier 3: Biashara (Business) - TZS 50M limit
+- Requirements shown for each tier
+- "Panda Kiwango / Upgrade" button for next tier
+
+### ✅ GAP 6: Service Worker / PWA
+- `manifest.json` linked in HTML head
+- Service worker `sw.js` registered on page load
+- Offline caching, background sync, push notifications
+
 ---
 
 ## Implemented Features

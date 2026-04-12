@@ -8,6 +8,7 @@ import {
   Image,
   RefreshControl,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,6 +17,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '../../src/store/authStore';
 import { COLORS, RADIUS, SHADOWS, formatTZS, formatTZSShort } from '../../src/constants/theme';
 import { AIChatbot } from '../../src/components/AIChatbot';
+import { BottomNav } from '../../src/components/BottomNav';
+import { TransactionHistory } from '../../src/components/TransactionHistory';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 const { width } = Dimensions.get('window');
@@ -23,6 +26,7 @@ const { width } = Dimensions.get('window');
 export default function SellerDashboard() {
   const { user, sessionToken, isAuthenticated, isLoading, logout, checkAuth } = useAuthStore();
   const [products, setProducts] = useState<any[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showChat, setShowChat] = useState(false);
@@ -250,7 +254,7 @@ export default function SellerDashboard() {
             <Text style={styles.quickActionEn}>Analytics</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.quickAction}>
+          <TouchableOpacity style={styles.quickAction} onPress={() => router.push('/seller/profile')}>
             <View style={[styles.quickActionIcon, { backgroundColor: COLORS.bluePale }]}>
               <Ionicons name="settings" size={22} color={COLORS.blue} />
             </View>
@@ -260,20 +264,29 @@ export default function SellerDashboard() {
         </View>
       </ScrollView>
 
-      {/* Floating Chat Button */}
-      {!showChat && (
-        <TouchableOpacity
-          style={styles.chatFab}
-          onPress={() => setShowChat(true)}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.chatFabText}>💬</Text>
-        </TouchableOpacity>
-      )}
+      {/* Bottom Navigation */}
+      <BottomNav
+        active="home"
+        onHome={() => {}}
+        onHistory={() => setShowHistory(true)}
+        onSupport={() => setShowChat(true)}
+        onProfile={() => {
+          if (Platform.OS === 'web') {
+            window.location.href = '/seller/profile';
+          } else {
+            router.push('/seller/profile');
+          }
+        }}
+      />
 
       {/* AI Chatbot */}
       {showChat && (
         <AIChatbot mode="support" onClose={() => setShowChat(false)} />
+      )}
+
+      {/* Transaction History */}
+      {showHistory && (
+        <TransactionHistory onClose={() => setShowHistory(false)} />
       )}
     </SafeAreaView>
   );

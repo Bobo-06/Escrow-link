@@ -12,6 +12,19 @@ export default function Root({ children }: PropsWithChildren) {
           name="viewport"
           content="width=device-width, initial-scale=1, shrink-to-fit=no"
         />
+        
+        {/* PWA Meta Tags */}
+        <meta name="theme-color" content="#0a0a0f" />
+        <meta name="description" content="SecureTrade TZ - Tanzania's Premier Escrow-Protected Marketplace for Social Commerce" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Biz-Salama" />
+        
+        {/* PWA Manifest */}
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="icon" href="/icon-192.png" />
+        <link rel="apple-touch-icon" href="/icon-512.png" />
+        
         {/*
           Disable body scrolling on web to make ScrollView components work correctly.
           If you want to enable scrolling, remove `ScrollViewStyleReset` and
@@ -24,6 +37,25 @@ export default function Root({ children }: PropsWithChildren) {
               body > div:first-child { position: fixed !important; top: 0; left: 0; right: 0; bottom: 0; }
               [role="tablist"] [role="tab"] * { overflow: visible !important; }
               [role="heading"], [role="heading"] * { overflow: visible !important; }
+            `,
+          }}
+        />
+        
+        {/* Service Worker Registration */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/sw.js')
+                    .then(function(registration) {
+                      console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    })
+                    .catch(function(err) {
+                      console.log('ServiceWorker registration failed: ', err);
+                    });
+                });
+              }
             `,
           }}
         />

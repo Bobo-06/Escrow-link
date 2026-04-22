@@ -17,6 +17,7 @@ import { COLORS, RADIUS, SHADOWS, formatTZS, formatTZSShort } from '../../src/co
 import { TrustStrip } from '../../src/components/TrustStrip';
 import { SellerTrustCard } from '../../src/components/SellerTrustCard';
 import { AIChatbot } from '../../src/components/AIChatbot';
+import { AIProductSuggestions } from '../../src/components/AIProductSuggestions';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 const { width } = Dimensions.get('window');
@@ -184,6 +185,13 @@ export default function ProductPage() {
             <Text style={styles.feeTotalValue}>{formatTZS(product.total_buyer_pays || product.price_tzs || product.price)}</Text>
           </View>
         </View>
+
+        {/* AI Product Suggestions - Only shown BEFORE payment/escrow */}
+        <AIProductSuggestions
+          currentProductId={product.product_id}
+          orderId={null}  // No order yet - suggestions enabled
+          preferences={['price', 'rating', 'shipping_speed']}
+        />
 
         <View style={{ height: 100 }} />
       </ScrollView>

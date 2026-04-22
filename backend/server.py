@@ -327,6 +327,36 @@ class AuditLogRequest(BaseModel):
     actor: str
     metadata: Optional[Dict[str, Any]] = None
 
+# ═══════════════════════════════════════════════════════════════════════════
+# THREE-PARTY ESCROW MODELS (Hawker ↔ Supplier ↔ Buyer)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class ThreePartyEscrowCreate(BaseModel):
+    """Hawker creates stock request to supplier"""
+    item_name: str
+    item_description: Optional[str] = None
+    buyer_price: float  # Price hawker will charge buyer
+    supplier_phone: str  # Supplier's phone number
+    quantity: int = 1
+
+class ThreePartyEscrowApprove(BaseModel):
+    """Supplier approves with their wholesale price"""
+    tx_id: str
+    supplier_cost: float  # Wholesale price supplier charges hawker
+    
+class ThreePartyEscrowPay(BaseModel):
+    """Buyer pays for the item"""
+    tx_id: str
+    buyer_name: str
+    buyer_phone: str
+    buyer_address: str
+    payment_method: str  # mpesa, airtel, tigo
+
+class ThreePartyEscrowRelease(BaseModel):
+    """Release funds after delivery confirmation"""
+    tx_id: str
+    released_by: str  # buyer or hawker
+
 # ============== HELPER FUNCTIONS ==============
 
 def generate_payment_link_code():
@@ -1705,6 +1735,144 @@ Tanzania social commerce context."""
         }
 
 # ═══════════════════════════════════════════════════════════════════════════
+# AI PRODUCT SUGGESTIONS — NO POACHING AFTER ESCROW
+# ═══════════════════════════════════════════════════════════════════════════
+
+class SuggestionRequest(BaseModel):
+    user_id: Optional[str] = None
+    current_product_id: str
+    order_id: Optional[str] = None  # If exists, no suggestions (anti-poaching)
+    preferences: List[str] = ["price", "rating", "shipping_speed"]
+
+@api_router.post("/ai/suggestions")
+async def get_ai_suggestions(request: SuggestionRequest):
+    """
+    AI-powered product suggestions for buyers.
+    IMPORTANT: Returns empty array if order_id exists (no client poaching after escrow)
+    """
+    
+    # Anti-poaching rule: If order exists, don't suggest alternatives
+    if request.order_id:
+        # Check if order is in escrow/paid status
+        order = await db.orders.find_one({"order_id": request.order_id}, {"_id": 0})
+        if order and order.get('status') in ['paid', 'in_escrow', 'shipped', 'delivered']:
+            logger.info(f"Anti-poaching: No suggestions for order {request.order_id} (status: {order.get('status')})")
+            return {"suggestions": [], "reason": "Transaction in progress - suggestions disabled"}
+    
+    # Get current product details
+    current_product = await db.products.find_one(
+        {"product_id": request.current_product_id},
+        {"_id": 0}
+    )
+    
+    if not current_product:
+        return {"suggestions": [], "reason": "Product not found"}
+    
+    current_price = current_product.get('price', 0)
+    current_category = current_product.get('category', 'general')
+    seller_id = current_product.get('seller_id', '')
+    
+    # Find similar products (different sellers, similar price range)
+    price_min = current_price * 0.7  # 30% cheaper
+    price_max = current_price * 1.3  # 30% more expensive
+    
+    similar_products = await db.products.find(
+        {
+            "product_id": {"$ne": request.current_product_id},
+            "seller_id": {"$ne": seller_id},  # Different seller
+            "price": {"$gte": price_min, "$lte": price_max}
+        },
+        {"_id": 0}
+    ).limit(10).to_list(10)
+    
+    if not similar_products:
+        return {"suggestions": [], "reason": "No alternatives found in this price range"}
+    
+    # Get seller info for each product
+    suggestions = []
+    for product in similar_products[:5]:
+        seller = await db.users.find_one(
+            {"user_id": product.get('seller_id')},
+            {"_id": 0, "name": 1, "average_rating": 1, "total_ratings": 1, "is_verified": 1}
+        )
+        
+        # Calculate score based on preferences
+        score = 0
+        if 'price' in request.preferences:
+            # Lower price = higher score
+            price_diff = (current_price - product.get('price', 0)) / current_price
+            score += price_diff * 30
+        
+        if 'rating' in request.preferences:
+            rating = seller.get('average_rating', 4.0) if seller else 4.0
+            score += rating * 10
+        
+        if 'shipping_speed' in request.preferences:
+            if product.get('express_shipping'):
+                score += 15
+        
+        # Bonus for verified sellers
+        if seller and seller.get('is_verified'):
+            score += 10
+        
+        suggestions.append({
+            "product_id": product.get('product_id'),
+            "name": product.get('name'),
+            "price": product.get('price'),
+            "price_formatted": f"TZS {product.get('price', 0):,.0f}",
+            "description": product.get('description', '')[:100],
+            "image": product.get('image_b64', '')[:100] if product.get('image_b64') else None,
+            "link_code": product.get('link_code'),
+            "seller": {
+                "name": seller.get('name', 'Muuzaji') if seller else 'Muuzaji',
+                "rating": seller.get('average_rating', 4.5) if seller else 4.5,
+                "total_ratings": seller.get('total_ratings', 0) if seller else 0,
+                "is_verified": seller.get('is_verified', False) if seller else False
+            },
+            "savings": current_price - product.get('price', 0) if product.get('price', 0) < current_price else 0,
+            "score": round(score, 1)
+        })
+    
+    # Sort by score (highest first)
+    suggestions.sort(key=lambda x: x['score'], reverse=True)
+    
+    # Use AI to generate personalized message if available
+    ai_message = "Bidhaa zinazofanana kutoka kwa wauzaji wengine waliothibitishwa"
+    ai_message_en = "Similar products from other verified sellers"
+    
+    if EMERGENT_LLM_KEY and suggestions:
+        try:
+            chat = LlmChat(
+                api_key=EMERGENT_LLM_KEY,
+                model="claude-sonnet-4-20250514"
+            )
+            
+            prompt = f"""You are a helpful shopping assistant for SecureTrade Tanzania.
+            
+The buyer is looking at: {current_product.get('name')} for TZS {current_price:,.0f}
+
+We found {len(suggestions)} alternatives. Top option: {suggestions[0]['name']} for TZS {suggestions[0]['price']:,.0f}
+
+Generate a brief, friendly message (max 2 sentences) in Swahili explaining why they might want to consider alternatives. Focus on savings or better ratings if applicable. Be helpful, not pushy."""
+
+            response = await asyncio.to_thread(
+                chat.send_message,
+                prompt,
+                "Generate shopping suggestion message"
+            )
+            ai_message = response.strip()
+        except Exception as e:
+            logger.warning(f"AI suggestion message failed: {e}")
+    
+    return {
+        "suggestions": suggestions[:3],  # Return top 3
+        "message_sw": ai_message,
+        "message_en": ai_message_en,
+        "total_found": len(similar_products),
+        "anti_poach_active": False  # Not in escrow
+    }
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SMS NOTIFICATIONS — AFRICA'S TALKING
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -2393,6 +2561,394 @@ async def escrow_verify(tx_id: str):
         "platform": "SecureTrade TZ",
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# THREE-PARTY ESCROW (Hawker ↔ Supplier ↔ Buyer)
+# Solves trust gap in Tanzania's informal supply chain
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Platform fee for three-party transactions
+THREE_PARTY_FEE_RATE = 0.025  # 2.5% total platform fee
+
+@api_router.post("/escrow/three-party/create")
+async def three_party_create(request: ThreePartyEscrowCreate, current_user: dict = Depends(get_current_user)):
+    """
+    Hawker (Mchuuzi) creates stock request to a supplier
+    Flow: Hawker sets buyer price → Supplier approves with their cost → Buyer pays → Delivery → Split
+    """
+    tx_id = f"3P_{uuid.uuid4().hex[:12]}"
+    
+    # Find supplier by phone
+    supplier = await db.users.find_one(
+        {"$or": [{"phone": request.supplier_phone}, {"email": request.supplier_phone}]},
+        {"_id": 0}
+    )
+    supplier_id = supplier["user_id"] if supplier else None
+    
+    transaction = {
+        "tx_id": tx_id,
+        "type": "three_party",
+        "status": "pending_approval",  # Awaiting supplier approval
+        "escrow_status": "empty",
+        
+        # Hawker (Street Seller) - Creator
+        "hawker_id": current_user["user_id"],
+        "hawker_name": current_user.get("username") or current_user.get("name", "Mchuuzi"),
+        "hawker_phone": current_user.get("phone", ""),
+        
+        # Supplier (Shop Owner) - Must approve
+        "supplier_phone": request.supplier_phone,
+        "supplier_id": supplier_id,
+        "supplier_name": supplier.get("username") if supplier else "Pending",
+        "supplier_cost": None,  # Set when supplier approves
+        
+        # Item Details
+        "item_name": request.item_name,
+        "item_description": request.item_description,
+        "quantity": request.quantity,
+        
+        # Pricing (Hawker sets buyer price, supplier sets their cost)
+        "buyer_price": request.buyer_price,
+        "commission": None,  # buyer_price - supplier_cost - platform_fee
+        "platform_fee": None,
+        
+        # Buyer (Filled when they pay)
+        "buyer_id": None,
+        "buyer_name": None,
+        "buyer_phone": None,
+        "buyer_address": None,
+        
+        # Timestamps
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "approved_at": None,
+        "paid_at": None,
+        "released_at": None,
+    }
+    
+    await db.three_party_transactions.insert_one(transaction)
+    
+    # Create audit log
+    await create_audit_log(tx_id, "THREE_PARTY_CREATED", current_user["user_id"], {
+        "item": request.item_name,
+        "buyer_price": request.buyer_price,
+        "supplier_phone": request.supplier_phone
+    })
+    
+    return {
+        "ok": True,
+        "tx_id": tx_id,
+        "status": "pending_approval",
+        "message_sw": "Ombi limetumwa kwa msambazaji. Subiri uidhinishaji.",
+        "message_en": "Request sent to supplier. Awaiting approval."
+    }
+
+@api_router.get("/escrow/three-party/pending")
+async def three_party_pending(current_user: dict = Depends(get_current_user)):
+    """Get pending approval requests for supplier (by phone match)"""
+    phone = current_user.get("phone", "")
+    user_id = current_user["user_id"]
+    
+    # Find transactions where user is supplier (by phone or user_id)
+    pending = await db.three_party_transactions.find(
+        {
+            "$or": [
+                {"supplier_phone": phone},
+                {"supplier_id": user_id}
+            ],
+            "status": "pending_approval"
+        },
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    
+    return {"pending": pending, "count": len(pending)}
+
+@api_router.post("/escrow/three-party/approve")
+async def three_party_approve(request: ThreePartyEscrowApprove, current_user: dict = Depends(get_current_user)):
+    """
+    Supplier approves stock request with their wholesale cost
+    Validates: supplier_cost < buyer_price (hawker must make profit)
+    """
+    tx = await db.three_party_transactions.find_one(
+        {"tx_id": request.tx_id},
+        {"_id": 0}
+    )
+    
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    if tx["status"] != "pending_approval":
+        raise HTTPException(status_code=400, detail="Transaction already processed")
+    
+    # Verify user is the supplier
+    phone = current_user.get("phone", "")
+    if tx["supplier_phone"] != phone and tx.get("supplier_id") != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="Not authorized to approve this transaction")
+    
+    # Validate supplier cost is less than buyer price (hawker margin)
+    buyer_price = tx["buyer_price"]
+    if request.supplier_cost >= buyer_price:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Bei ya msambazaji lazima iwe chini ya bei ya mnunuaji / Supplier cost must be less than buyer price (TZS {buyer_price:,.0f})"
+        )
+    
+    # Calculate splits
+    platform_fee = round(buyer_price * THREE_PARTY_FEE_RATE, 2)
+    hawker_commission = buyer_price - request.supplier_cost - platform_fee
+    
+    if hawker_commission < 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Bei ya msambazaji kubwa sana / Supplier cost too high for platform fee"
+        )
+    
+    # Update transaction
+    await db.three_party_transactions.update_one(
+        {"tx_id": request.tx_id},
+        {"$set": {
+            "status": "approved",
+            "supplier_id": current_user["user_id"],
+            "supplier_name": current_user.get("username") or current_user.get("name", "Msambazaji"),
+            "supplier_cost": request.supplier_cost,
+            "commission": hawker_commission,
+            "platform_fee": platform_fee,
+            "approved_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Create audit log
+    await create_audit_log(request.tx_id, "THREE_PARTY_APPROVED", current_user["user_id"], {
+        "supplier_cost": request.supplier_cost,
+        "hawker_commission": hawker_commission,
+        "platform_fee": platform_fee
+    })
+    
+    # Notify hawker
+    template_msg = f"Biz-Salama: Ombi lako la bidhaa limekubaliwa! TX: {request.tx_id}. Sasa unaweza kuuza kwa wateja."
+    # await send_sms(tx["hawker_phone"], template_msg, template_msg)
+    
+    return {
+        "ok": True,
+        "tx_id": request.tx_id,
+        "status": "approved",
+        "split_preview": {
+            "buyer_pays": buyer_price,
+            "supplier_receives": request.supplier_cost,
+            "hawker_receives": hawker_commission,
+            "platform_fee": platform_fee
+        },
+        "message_sw": "Umekubali! Mchuuzi anaweza sasa kuuza bidhaa.",
+        "message_en": "Approved! Hawker can now sell to customers."
+    }
+
+@api_router.get("/escrow/three-party/my-transactions")
+async def three_party_my_transactions(current_user: dict = Depends(get_current_user)):
+    """Get all three-party transactions for current user (as hawker, supplier, or buyer)"""
+    user_id = current_user["user_id"]
+    phone = current_user.get("phone", "")
+    
+    transactions = await db.three_party_transactions.find(
+        {
+            "$or": [
+                {"hawker_id": user_id},
+                {"supplier_id": user_id},
+                {"supplier_phone": phone},
+                {"buyer_id": user_id}
+            ]
+        },
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    
+    # Add role indicator for each transaction
+    for tx in transactions:
+        if tx.get("hawker_id") == user_id:
+            tx["my_role"] = "hawker"
+        elif tx.get("supplier_id") == user_id or tx.get("supplier_phone") == phone:
+            tx["my_role"] = "supplier"
+        elif tx.get("buyer_id") == user_id:
+            tx["my_role"] = "buyer"
+        else:
+            tx["my_role"] = "unknown"
+    
+    return {"transactions": transactions, "count": len(transactions)}
+
+@api_router.get("/escrow/three-party/{tx_id}")
+async def three_party_get(tx_id: str):
+    """Get three-party transaction details (public for buyer view)"""
+    tx = await db.three_party_transactions.find_one(
+        {"tx_id": tx_id},
+        {"_id": 0}
+    )
+    
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    # Don't expose supplier cost to public
+    if tx["status"] == "approved":
+        tx_public = {**tx}
+        tx_public.pop("supplier_cost", None)
+        tx_public.pop("commission", None)
+        return tx_public
+    
+    return tx
+
+@api_router.post("/escrow/three-party/pay")
+async def three_party_pay(request: ThreePartyEscrowPay, current_user: dict = Depends(get_current_user)):
+    """
+    Buyer pays for item - funds go to escrow
+    Triggers: STK Push → Escrow hold → Await delivery
+    """
+    tx = await db.three_party_transactions.find_one(
+        {"tx_id": request.tx_id},
+        {"_id": 0}
+    )
+    
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    if tx["status"] != "approved":
+        raise HTTPException(status_code=400, detail="Transaction not available for payment")
+    
+    buyer_price = tx["buyer_price"]
+    
+    # MOCK: Simulate payment success
+    # In production, integrate with M-Pesa STK Push
+    payment_ref = f"PAY_{uuid.uuid4().hex[:8].upper()}"
+    
+    # Update transaction with buyer details
+    await db.three_party_transactions.update_one(
+        {"tx_id": request.tx_id},
+        {"$set": {
+            "status": "paid",
+            "escrow_status": "held",
+            "buyer_id": current_user["user_id"],
+            "buyer_name": request.buyer_name,
+            "buyer_phone": request.buyer_phone,
+            "buyer_address": request.buyer_address,
+            "payment_method": request.payment_method,
+            "payment_ref": payment_ref,
+            "paid_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Create audit log
+    await create_audit_log(request.tx_id, "THREE_PARTY_PAID", current_user["user_id"], {
+        "amount": buyer_price,
+        "payment_method": request.payment_method,
+        "payment_ref": payment_ref
+    })
+    
+    # Notify all parties
+    # await send_sms(tx["hawker_phone"], f"Biz-Salama: Malipo yamefanikiwa! TZS {buyer_price:,.0f} imeshikwa. TX: {request.tx_id}", "")
+    # await send_sms(tx["supplier_phone"], f"Biz-Salama: Agizo jipya! Peleka bidhaa: {tx['item_name']}. TX: {request.tx_id}", "")
+    
+    return {
+        "ok": True,
+        "tx_id": request.tx_id,
+        "status": "paid",
+        "escrow_status": "held",
+        "payment_ref": payment_ref,
+        "amount": buyer_price,
+        "message_sw": "Malipo yamefanikiwa! Pesa imeshikwa salama.",
+        "message_en": "Payment successful! Funds held in escrow."
+    }
+
+@api_router.post("/escrow/three-party/release")
+async def three_party_release(request: ThreePartyEscrowRelease, current_user: dict = Depends(get_current_user)):
+    """
+    Release escrow funds after delivery confirmation
+    Splits: Supplier gets cost, Hawker gets commission, Platform gets fee
+    """
+    tx = await db.three_party_transactions.find_one(
+        {"tx_id": request.tx_id},
+        {"_id": 0}
+    )
+    
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    if tx["status"] != "paid" or tx["escrow_status"] != "held":
+        raise HTTPException(status_code=400, detail="Transaction not in releasable state")
+    
+    # Verify releaser is buyer or hawker
+    user_id = current_user["user_id"]
+    if user_id not in [tx["buyer_id"], tx["hawker_id"]]:
+        raise HTTPException(status_code=403, detail="Not authorized to release this transaction")
+    
+    # Calculate disbursements
+    supplier_payout = tx["supplier_cost"]
+    hawker_payout = tx["commission"]
+    platform_fee = tx["platform_fee"]
+    
+    # MOCK: Process payouts
+    # In production: trigger M-Pesa B2C to supplier and hawker wallets
+    payout_refs = {
+        "supplier": f"OUT_{uuid.uuid4().hex[:6].upper()}",
+        "hawker": f"OUT_{uuid.uuid4().hex[:6].upper()}"
+    }
+    
+    # Update transaction
+    await db.three_party_transactions.update_one(
+        {"tx_id": request.tx_id},
+        {"$set": {
+            "status": "completed",
+            "escrow_status": "released",
+            "released_by": user_id,
+            "released_at": datetime.now(timezone.utc).isoformat(),
+            "payout_refs": payout_refs,
+            "disbursements": {
+                "supplier": supplier_payout,
+                "hawker": hawker_payout,
+                "platform": platform_fee
+            }
+        }}
+    )
+    
+    # Create audit log
+    await create_audit_log(request.tx_id, "THREE_PARTY_RELEASED", user_id, {
+        "supplier_payout": supplier_payout,
+        "hawker_payout": hawker_payout,
+        "platform_fee": platform_fee,
+        "released_by": request.released_by
+    })
+    
+    return {
+        "ok": True,
+        "tx_id": request.tx_id,
+        "status": "completed",
+        "disbursements": {
+            "supplier_receives": {"name": tx["supplier_name"], "amount": supplier_payout, "ref": payout_refs["supplier"]},
+            "hawker_receives": {"name": tx["hawker_name"], "amount": hawker_payout, "ref": payout_refs["hawker"]},
+            "platform_fee": platform_fee
+        },
+        "message_sw": "Malipo yametolewa! Asante kwa kutumia Biz-Salama.",
+        "message_en": "Funds released! Thank you for using Biz-Salama."
+    }
+
+@api_router.post("/escrow/three-party/reject")
+async def three_party_reject(tx_id: str, reason: str = "Not available", current_user: dict = Depends(get_current_user)):
+    """Supplier rejects stock request"""
+    tx = await db.three_party_transactions.find_one({"tx_id": tx_id}, {"_id": 0})
+    
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    if tx["status"] != "pending_approval":
+        raise HTTPException(status_code=400, detail="Transaction already processed")
+    
+    # Verify supplier
+    phone = current_user.get("phone", "")
+    if tx["supplier_phone"] != phone and tx.get("supplier_id") != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    await db.three_party_transactions.update_one(
+        {"tx_id": tx_id},
+        {"$set": {"status": "rejected", "rejection_reason": reason, "rejected_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    await create_audit_log(tx_id, "THREE_PARTY_REJECTED", current_user["user_id"], {"reason": reason})
+    
+    return {"ok": True, "status": "rejected", "message_sw": "Ombi limekataliwa", "message_en": "Request rejected"}
 
 # ═══════════════════════════════════════════════════════════════════════════
 # BOT AUDIT TRAIL (Bank of Tanzania Compliance)

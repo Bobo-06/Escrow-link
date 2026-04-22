@@ -19,6 +19,7 @@ import { COLORS, RADIUS, SHADOWS, formatTZS, formatTZSShort } from '../../src/co
 import { AIChatbot } from '../../src/components/AIChatbot';
 import { BottomNav } from '../../src/components/BottomNav';
 import { TransactionHistory } from '../../src/components/TransactionHistory';
+import ThreePartyEscrow from '../../src/components/ThreePartyEscrow';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 const { width } = Dimensions.get('window');
@@ -32,6 +33,7 @@ export default function SellerDashboard() {
   const [showChat, setShowChat] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const [showThreeParty, setShowThreeParty] = useState(false);
   
   // Only use router when component is mounted
   const router = useRouter();
@@ -238,20 +240,24 @@ export default function SellerDashboard() {
 
         {/* Quick Actions */}
         <View style={styles.quickActions}>
+          <TouchableOpacity 
+            style={styles.quickAction}
+            onPress={() => setShowThreeParty(true)}
+            data-testid="btn-three-party-escrow"
+          >
+            <View style={[styles.quickActionIcon, { backgroundColor: COLORS.goldLight + '40' }]}>
+              <Ionicons name="people" size={22} color={COLORS.goldDark} />
+            </View>
+            <Text style={styles.quickActionText}>Escrow 3</Text>
+            <Text style={styles.quickActionEn}>3-Party</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.quickAction}>
             <View style={[styles.quickActionIcon, { backgroundColor: COLORS.emeraldPale }]}>
               <Ionicons name="wallet" size={22} color={COLORS.emerald} />
             </View>
             <Text style={styles.quickActionText}>Ondoa Pesa</Text>
             <Text style={styles.quickActionEn}>Withdraw</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.quickAction}>
-            <View style={[styles.quickActionIcon, { backgroundColor: COLORS.amberPale }]}>
-              <Ionicons name="analytics" size={22} color={COLORS.amber} />
-            </View>
-            <Text style={styles.quickActionText}>Ripoti</Text>
-            <Text style={styles.quickActionEn}>Analytics</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.quickAction} onPress={() => router.push('/seller/profile')}>
@@ -287,6 +293,11 @@ export default function SellerDashboard() {
       {/* Transaction History */}
       {showHistory && (
         <TransactionHistory onClose={() => setShowHistory(false)} />
+      )}
+
+      {/* Three-Party Escrow */}
+      {showThreeParty && (
+        <ThreePartyEscrow onClose={() => setShowThreeParty(false)} />
       )}
     </SafeAreaView>
   );

@@ -74,7 +74,9 @@ VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
 VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
 
 # Base URL
-BASE_URL = os.environ.get('BASE_URL', 'https://escrow-link.preview.emergentagent.com')
+BASE_URL = os.environ.get('BASE_URL', '')
+if not BASE_URL:
+    BASE_URL = 'https://escrow-link.preview.emergentagent.com'  # Fallback for dev only
 
 # AI System Prompts
 AI_SUPPORT_SYSTEM = """You are SecureTrade's customer support assistant for Tanzania.

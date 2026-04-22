@@ -115,11 +115,13 @@ export const FONTS = {
 export const STEPS = ['Bidhaa', 'Malipo', 'Escrow', '✓', 'Track', 'Toa'];
 
 // Format currency
-export const formatTZS = (amount: number): string => {
+export const formatTZS = (amount: number | null | undefined): string => {
+  if (amount == null || isNaN(amount)) return 'TZS 0';
   return `TZS ${amount.toLocaleString('en-TZ')}`;
 };
 
-export const formatTZSShort = (amount: number): string => {
+export const formatTZSShort = (amount: number | null | undefined): string => {
+  if (amount == null || isNaN(amount)) return 'TZS 0';
   if (amount >= 1000000) {
     return `TZS ${(amount / 1000000).toFixed(1)}M`;
   }

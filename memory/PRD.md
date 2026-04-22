@@ -147,6 +147,24 @@ All 6 grant requirements have been implemented and verified:
 - [x] Rating shown on product pages
 - [x] Modal triggered after delivery confirmation
 
+### Phase 14: Three-Party Escrow System (COMPLETED - April 2026)
+**Solves the Hawker ↔ Supplier ↔ Buyer trust gap**
+- [x] Backend API: POST /api/escrow/three-party/create (Hawker creates stock request)
+- [x] Backend API: GET /api/escrow/three-party/pending (Supplier sees pending requests)
+- [x] Backend API: POST /api/escrow/three-party/approve (Supplier approves with wholesale price)
+- [x] Backend API: GET /api/escrow/three-party/{tx_id} (Get transaction details)
+- [x] Backend API: POST /api/escrow/three-party/pay (Buyer pays, funds held in escrow)
+- [x] Backend API: POST /api/escrow/three-party/release (Split funds after delivery)
+- [x] Backend API: GET /api/escrow/three-party/my-transactions (Transaction history)
+- [x] Backend API: POST /api/escrow/three-party/reject (Supplier rejects request)
+- [x] ThreePartyEscrow.tsx React Native component
+- [x] Three tabs: Create Request, Pending Approvals, Transaction History
+- [x] Bilingual UI (Swahili/English)
+- [x] 2.5% platform fee on transactions
+- [x] Split preview showing Supplier/Hawker/Platform amounts
+- [x] Integrated into Seller Dashboard Quick Actions
+- [x] Mobile-responsive design (tested on 390x844 viewport)
+
 ---
 
 ## Complete Customer Journey
@@ -273,6 +291,7 @@ When item arrives, customer has two options:
 - [ ] Add real Selcom API keys for production
 - [ ] Add real Stripe API keys for production
 - [ ] Complete Google OAuth token exchange flow
+- [ ] Link custom domain www.biz-salama.co.tz (see Domain Setup section)
 
 ## Future Tasks (P2-P4)
 
@@ -280,8 +299,34 @@ When item arrives, customer has two options:
 - [ ] Seller profile page with ratings
 - [ ] Trade history export for credit scoring
 - [ ] Two-factor authentication
+- [ ] SMS notifications for three-party escrow flow
+- [ ] Supplier dashboard with incoming requests view
 
 ---
 
-*Last Updated: April 11, 2026*
-*Version: 3.1 (Auth Bug Fixes)*
+## Custom Domain Setup (www.biz-salama.co.tz)
+
+To link your custom domain to this app:
+
+1. **In Emergent Platform:**
+   - Go to your project settings
+   - Click "Deployment" → "Custom Domain"
+   - Enter: `www.biz-salama.co.tz`
+
+2. **In your DNS provider (e.g., GoDaddy, Namecheap, Cloudflare):**
+   - Add a **CNAME record**:
+     - Name: `www`
+     - Value: `your-app-name.preview.emergentagent.com` (or the provided target)
+   - OR Add an **A record** (if provided by Emergent)
+   - SSL will be auto-provisioned
+
+3. **Verification:**
+   - Wait 15-30 minutes for DNS propagation
+   - Visit https://www.biz-salama.co.tz
+
+Note: The root domain `biz-salama.co.tz` (without www) may need a redirect to the www version.
+
+---
+
+*Last Updated: April 22, 2026*
+*Version: 4.0 (Three-Party Escrow System)*

@@ -1004,16 +1004,23 @@ async def get_public_products(
         {"_id": 0}
     ).sort(sort_field, sort_order).to_list(50)
     
-    # Get seller info for each product
+    # Batch fetch all seller info to avoid N+1 queries
+    seller_ids = list(set(p.get('seller_id') for p in products if p.get('seller_id')))
+    sellers = await db.users.find(
+        {"user_id": {"$in": seller_ids}}, 
+        {"_id": 0, "user_id": 1, "name": 1, "username": 1}
+    ).to_list(len(seller_ids)) if seller_ids else []
+    seller_map = {s['user_id']: s for s in sellers}
+    
+    # Process products with seller info
     for p in products:
         if isinstance(p.get('created_at'), datetime):
             p['created_at'] = p['created_at'].isoformat()
         
-        # Get seller name
-        if p.get('seller_id'):
-            seller = await db.users.find_one({"user_id": p['seller_id']}, {"_id": 0, "name": 1, "username": 1})
-            if seller:
-                p['seller_name'] = seller.get('name') or seller.get('username', 'Seller')
+        # Get seller name from map
+        if p.get('seller_id') and p['seller_id'] in seller_map:
+            seller = seller_map[p['seller_id']]
+            p['seller_name'] = seller.get('name') or seller.get('username', 'Seller')
     
     return {"products": products, "count": len(products)}
 

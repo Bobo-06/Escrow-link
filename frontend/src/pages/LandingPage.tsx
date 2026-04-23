@@ -205,6 +205,226 @@ const LandingPage: React.FC = () => {
         </div>
       </section>
 
+      {/* Three-Party Escrow Showcase */}
+      <section id="three-party" className="py-20 bg-gradient-to-b from-ink-800 via-ink-900 to-ink-800 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-gold-500/10 rounded-full blur-3xl" />
+
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-14">
+            <div className="inline-flex items-center px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-full mb-5">
+              <Users className="w-4 h-4 text-emerald-400 mr-2" />
+              <span className="text-emerald-300 text-sm font-medium">Three-Party Escrow · Hawker ↔ Shop ↔ Buyer</span>
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-display font-bold text-white mb-4">
+              Sell stock you <span className="gradient-text">don't own yet</span>
+            </h2>
+            <p className="text-ink-300 text-lg max-w-2xl mx-auto">
+              For <strong className="text-white">Wachuuzi</strong> (street hawkers): list items from Kariakoo shop owners,
+              share an escrow link, and earn commission the moment delivery is confirmed —
+              without paying a single shilling upfront.
+            </p>
+          </div>
+
+          {/* Flow diagram — 5 numbered steps */}
+          <div className="grid md:grid-cols-5 gap-4 mb-14">
+            {[
+              { num: '1', emoji: '📱', title: 'Hawker creates link', sw: 'Mchuuzi atengeneza kiungo', desc: 'Set buyer price + supplier cost in the 4-step wizard' },
+              { num: '2', emoji: '💬', title: 'Shop owner approves', sw: 'Mmiliki anakubali kwa SMS', desc: 'Gets WhatsApp/SMS → taps link → accepts (no account needed)' },
+              { num: '3', emoji: '🔒', title: 'Buyer pays escrow', sw: 'Mnunuzi analipa escrow', desc: 'Funds held in licensed bank account · M-Pesa / Tigo Pesa' },
+              { num: '4', emoji: '📦', title: 'Goods delivered', sw: 'Bidhaa inatolewa', desc: 'Hawker collects from shop, delivers to buyer' },
+              { num: '5', emoji: '💰', title: 'Auto split payout', sw: 'Malipo yanagawanywa', desc: 'Supplier → M-Pesa · Hawker → commission · instant' },
+            ].map((s, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.08 }}
+                viewport={{ once: true }}
+                className="relative"
+              >
+                <div className="glass rounded-2xl p-5 h-full hover:border-emerald-500/40 transition-all">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-bold text-sm">
+                      {s.num}
+                    </div>
+                    <div className="text-3xl">{s.emoji}</div>
+                  </div>
+                  <h4 className="text-white font-bold mb-1 text-sm">{s.title}</h4>
+                  <p className="text-emerald-300/70 text-xs mb-2 italic">{s.sw}</p>
+                  <p className="text-ink-400 text-xs leading-relaxed">{s.desc}</p>
+                </div>
+                {i < 4 && (
+                  <div className="hidden md:block absolute top-1/2 -right-2 text-gold-500/40 text-2xl">→</div>
+                )}
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Commission breakdown + Letter of Comfort preview */}
+          <div className="grid lg:grid-cols-2 gap-6">
+            {/* LEFT: Commission breakdown */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="glass rounded-3xl p-8"
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-xl bg-gold-500/20 flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-gold-400" />
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-lg">Transparent Split</h3>
+                  <p className="text-ink-400 text-xs">Everyone sees every shilling</p>
+                </div>
+              </div>
+
+              {/* Example tx */}
+              <div className="bg-ink-900 rounded-2xl p-5 mb-4 border border-ink-700">
+                <p className="text-ink-400 text-xs mb-1">EXAMPLE · Samsung Galaxy S24</p>
+                <div className="flex items-baseline justify-between mb-4">
+                  <span className="text-white text-2xl font-bold">TSh 1,850,000</span>
+                  <span className="text-emerald-400 text-xs font-medium">Buyer pays</span>
+                </div>
+
+                <div className="space-y-0">
+                  {[
+                    { label: 'Mmiliki Anapata · Supplier', amount: '1,650,000', pct: '89.2%', color: 'text-emerald-300', bar: 'bg-emerald-500' },
+                    { label: 'Faida Yako · Hawker Commission', amount: '181,500', pct: '9.8%', color: 'text-gold-300', bar: 'bg-gold-500' },
+                    { label: 'Ada ya Biz-Salama · 1% fee', amount: '18,500', pct: '1.0%', color: 'text-ink-400', bar: 'bg-ink-500' },
+                  ].map((row, i) => (
+                    <div key={i} className="py-3 border-b border-ink-800 last:border-0">
+                      <div className="flex justify-between items-center mb-1.5">
+                        <span className="text-ink-300 text-sm">{row.label}</span>
+                        <span className={`${row.color} font-bold text-sm`}>TSh {row.amount}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-ink-800 rounded-full overflow-hidden">
+                          <div className={`h-full ${row.bar}`} style={{ width: row.pct }} />
+                        </div>
+                        <span className="text-ink-500 text-xs w-10 text-right">{row.pct}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-start gap-3">
+                <Lock className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                <p className="text-emerald-200 text-xs leading-relaxed">
+                  Split happens <strong>automatically</strong> the moment the buyer taps "Confirm Delivery".
+                  Supplier's share goes to their M-Pesa · Hawker's commission goes to theirs.
+                </p>
+              </div>
+            </motion.div>
+
+            {/* RIGHT: Letter of Comfort preview */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="relative"
+            >
+              <div className="glass rounded-3xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                    <Shield className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-white font-bold text-lg">Letter of Comfort</h3>
+                    <p className="text-ink-400 text-xs">What the shop owner gets</p>
+                  </div>
+                </div>
+
+                {/* Mock phone frame with the letter */}
+                <div className="bg-ink-900 rounded-2xl p-5 border border-gold-500/20 shadow-2xl">
+                  <div className="flex items-center justify-between pb-3 mb-3 border-b border-ink-700">
+                    <div>
+                      <div className="text-white font-display font-bold text-base">
+                        Biz-<span className="text-gold-400">Salama</span>
+                      </div>
+                      <div className="text-ink-500 text-[10px]">biz-salama.co.tz · Escrow Licensed</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-ink-500 text-[10px]">Tarehe</div>
+                      <div className="text-white text-xs font-bold">Today</div>
+                    </div>
+                  </div>
+
+                  <div className="inline-flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/40 rounded-full px-3 py-1 mb-4">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-emerald-300 text-[10px] font-bold tracking-wider">IMESHIKWA SALAMA · FUNDS SECURED</span>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    {[
+                      ['🔐 TX ID', '3PT-A47F2X', true],
+                      ['📦 Item', 'Samsung Galaxy S24 Ultra', false],
+                      ['💰 Amount', 'TSh 1,850,000', false],
+                      ['📱 Supplier', 'Jumla Electronics Kariakoo', false],
+                      ['🏦 Held at', 'CRDB Bank PLC', false],
+                      ['⏳ Released when', 'Buyer confirms delivery', false],
+                    ].map(([l, v, mono], i) => (
+                      <div key={i} className="flex justify-between py-1 border-b border-ink-800 last:border-0">
+                        <span className="text-ink-400">{l as string}</span>
+                        <span className={`text-white font-medium text-right ml-2 ${mono ? 'font-mono' : ''}`}>
+                          {v as string}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 bg-ink-800 rounded-lg p-3 text-center border border-ink-700">
+                    <div className="text-ink-500 text-[9px] font-bold tracking-widest mb-1">VERIFY YOURSELF</div>
+                    <div className="text-emerald-400 text-[10px] font-mono break-all">
+                      biz-salama.co.tz/verify/3PT-A47F2X
+                    </div>
+                  </div>
+
+                  <div className="mt-3 text-ink-500 text-[10px] leading-relaxed">
+                    Shop owner taps the link → sees escrow status live → taps <strong className="text-emerald-300">"NDIO / Accept"</strong>
+                    from their own phone. No Biz-Salama account required.
+                  </div>
+                </div>
+
+                <div className="flex gap-2 mt-5">
+                  <div className="flex-1 bg-[#25D366]/15 border border-[#25D366]/40 rounded-xl p-3 text-center">
+                    <div className="text-[#25D366] text-xs font-bold mb-1">💬 WhatsApp</div>
+                    <div className="text-ink-400 text-[10px]">1-tap share to supplier</div>
+                  </div>
+                  <div className="flex-1 bg-blue-500/15 border border-blue-500/30 rounded-xl p-3 text-center">
+                    <div className="text-blue-400 text-xs font-bold mb-1">📱 SMS</div>
+                    <div className="text-ink-400 text-[10px]">Feature-phone ready</div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* CTA row */}
+          <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
+            <Link
+              data-testid="landing-try-three-party-btn"
+              to="/hawker/new"
+              className="inline-flex items-center justify-center px-8 py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-full font-bold hover:from-emerald-400 hover:to-emerald-500 transition-all shadow-lg hover:shadow-emerald-500/25"
+            >
+              <Users className="w-5 h-5 mr-2" />
+              Try 3-Party Escrow Now
+              <ArrowRight className="w-5 h-5 ml-2" />
+            </Link>
+            <Link
+              data-testid="landing-supplier-portal-btn"
+              to="/supplier/portal"
+              className="inline-flex items-center justify-center px-8 py-4 border-2 border-ink-600 text-white rounded-full font-bold hover:bg-ink-800 hover:border-gold-500/40 transition-all"
+            >
+              <Shield className="w-5 h-5 mr-2" />
+              I'm a Shop Owner (Supplier)
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* Trust Section */}
       <section id="trust" className="py-20 bg-ink-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

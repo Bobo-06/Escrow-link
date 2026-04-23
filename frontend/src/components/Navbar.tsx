@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { Shield, Menu, X, ShoppingBag, User, LogOut, LayoutDashboard } from 'lucide-react';
+import { Shield, Menu, X, ShoppingBag, User, LogOut, LayoutDashboard, Users } from 'lucide-react';
+import InstallAppButton from './InstallAppButton';
 
 const Navbar: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -30,6 +31,9 @@ const Navbar: React.FC = () => {
             <Link to="/marketplace" className="text-ink-300 hover:text-white transition-colors font-medium">
               Marketplace
             </Link>
+            <Link to="/#three-party" className="text-ink-300 hover:text-white transition-colors font-medium">
+              3-Party Escrow
+            </Link>
             <Link to="/#how-it-works" className="text-ink-300 hover:text-white transition-colors font-medium">
               How It Works
             </Link>
@@ -39,7 +43,8 @@ const Navbar: React.FC = () => {
           </div>
 
           {/* Auth Buttons */}
-          <div className="hidden md:flex items-center space-x-4">
+          <div className="hidden md:flex items-center space-x-3">
+            <InstallAppButton />
             {isAuthenticated ? (
               <div className="flex items-center space-x-4">
                 <Link
@@ -89,12 +94,29 @@ const Navbar: React.FC = () => {
       {isMenuOpen && (
         <div className="md:hidden glass border-t border-ink-700">
           <div className="px-4 py-4 space-y-3">
+            <div className="pb-2">
+              <InstallAppButton className="w-full justify-center" />
+            </div>
             <Link
               to="/marketplace"
               className="block text-ink-300 hover:text-white py-2"
               onClick={() => setIsMenuOpen(false)}
             >
               Marketplace
+            </Link>
+            <Link
+              to="/#three-party"
+              className="block text-ink-300 hover:text-white py-2"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              3-Party Escrow
+            </Link>
+            <Link
+              to="/hawker/new"
+              className="block text-emerald-300 hover:text-emerald-200 py-2 font-medium"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              + New 3-Party Transaction
             </Link>
             {isAuthenticated ? (
               <>

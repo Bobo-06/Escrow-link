@@ -10,7 +10,11 @@ export default function EscrowLetterOfComfort({ tx, onClose }: Props) {
   const [shared, setShared] = useState(false);
   const txId = tx?.tx_id || "3PT-AB12XYZ";
   const origin = typeof window !== "undefined" ? window.location.origin : "https://www.biz-salama.co.tz";
-  const verifyUrl = `${origin}/verify/${txId}`;
+
+  // Prefer the backend-provided signed URL; fall back to public URL for demo data
+  const verifyUrl =
+    tx?.supplier_verify_url ||
+    (tx?.supplier_token ? `${origin}/verify/${txId}?t=${tx.supplier_token}&r=supplier` : `${origin}/verify/${txId}`);
 
   const letter = {
     sw: `Biz-Salama Tanzania inathibitisha kwamba ${fmtTSh(tx?.buyer_price || 1850000)} imeshikwa salama katika akaunti ya escrow iliyoidhinishwa kwa ajili ya muamala ${txId}.\n\nPesa hii itatolewa MOJA KWA MOJA kwa M-Pesa yako (+255${tx?.supplier_phone || "7XX"}) mara mnunuzi athibitishapo kupokea bidhaa.\n\nThibitisha hapa: ${verifyUrl}`,

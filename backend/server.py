@@ -2640,23 +2640,25 @@ async def escrow_dispute(request: EscrowDisputeRequest):
     return {"ok": True, "case_no": case_no, "status": "opened"}
 
 @api_router.get("/escrow/verify/{tx_id}")
-async def escrow_verify(tx_id: str):
-    """Public verification endpoint for escrow transactions (2-party AND 3-party)."""
+async def escrow_verify(tx_id: str, token: Optional[str] = None, role: Optional[str] = None):
+    """Public verification endpoint for escrow transactions (2-party AND 3-party).
+    
+    Role-based output (Option B):
+      - No token/role: MINIMAL public view (tx exists, amount locked, status, bank)
+      - role=supplier + valid token: supplier view (their payout, hawker name, no commission)
+      - role=buyer + valid token: buyer view (item, amount paid, status, escrow guarantee)
+    
+    Security: commission and supplier_cost are NEVER shown to random visitors —
+    the hawker's markup stays confidential.
+    """
     # First try three-party transactions
     tx = await db.three_party_transactions.find_one({"tx_id": tx_id}, {"_id": 0})
     if tx:
-        return {
+        # Always-public minimal fields (safe for any viewer)
+        base = {
             "ok": True,
             "tx_id": tx["tx_id"],
             "type": "three_party",
-            "item": tx.get("item_name"),
-            "item_condition": tx.get("item_condition"),
-            "buyer_price": tx.get("buyer_price"),
-            "supplier_cost": tx.get("supplier_cost"),
-            "supplier_name": tx.get("supplier_name"),
-            "supplier_phone": tx.get("supplier_phone"),
-            "supplier_location": tx.get("supplier_location"),
-            "hawker_name": tx.get("hawker_name"),
             "status": tx.get("status"),
             "bank": "CRDB Bank PLC (Escrow Trust)",
             "locked_at": tx.get("paid_at") or tx.get("approved_at") or tx.get("created_at"),
@@ -2666,7 +2668,51 @@ async def escrow_verify(tx_id: str):
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
-    # Fallback: two-party escrow
+        # Validate token against role (HMAC over tx_id:role:identifier)
+        valid_token = False
+        if token and role in ("supplier", "buyer"):
+            identifier = tx.get("supplier_phone") if role == "supplier" else (tx.get("buyer_id") or tx.get("hawker_id"))
+            expected = _sign_verify_token(tx_id, role, identifier)
+            valid_token = hmac.compare_digest(token, expected)
+
+        if valid_token and role == "supplier":
+            # SUPPLIER view — sees their payout, hawker name, item, but NOT hawker's commission
+            return {
+                **base,
+                "view": "supplier",
+                "item": tx.get("item_name"),
+                "item_condition": tx.get("item_condition"),
+                "buyer_price": tx.get("buyer_price"),
+                "supplier_cost": tx.get("supplier_cost"),        # Their payout
+                "supplier_name": tx.get("supplier_name"),
+                "supplier_phone": tx.get("supplier_phone"),
+                "supplier_location": tx.get("supplier_location"),
+                "hawker_name": tx.get("hawker_name"),
+                # commission & platform_fee INTENTIONALLY omitted
+            }
+
+        if valid_token and role == "buyer":
+            # BUYER view — sees what they paid, item, seller (hawker) name, status, NO supplier info
+            return {
+                **base,
+                "view": "buyer",
+                "item": tx.get("item_name"),
+                "item_condition": tx.get("item_condition"),
+                "buyer_price": tx.get("buyer_price"),
+                "seller_name": tx.get("hawker_name"),            # Buyer only knows the hawker
+                # supplier_cost, supplier_name, supplier_phone, commission all HIDDEN
+            }
+
+        # DEFAULT public view — just enough to prove escrow exists, nothing competitive
+        return {
+            **base,
+            "view": "public",
+            "item": tx.get("item_name"),
+            "buyer_price": tx.get("buyer_price"),
+            "funds_secured": tx.get("status") in ("paid", "escrowed"),
+        }
+
+    # Fallback: two-party escrow (legacy)
     escrow = await db.escrow_transactions.find_one(
         {"tx_id": tx_id},
         {"_id": 0, "tx_id": 1, "status": 1, "escrow_status": 1, "amount": 1, "currency": 1, "created_at": 1}
@@ -2681,6 +2727,12 @@ async def escrow_verify(tx_id: str):
         "platform": "Biz-Salama TZ",
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
+
+
+def _sign_verify_token(tx_id: str, role: str, identifier: Optional[str]) -> str:
+    """HMAC-SHA256 signed token for role-scoped verify URLs. 16 hex chars (64-bit)."""
+    msg = f"{tx_id}:{role}:{identifier or ''}".encode()
+    return hmac.new(JWT_SECRET.encode(), msg, hashlib.sha256).hexdigest()[:16]
 
 # ═══════════════════════════════════════════════════════════════════════════
 # THREE-PARTY ESCROW (Hawker ↔ Supplier ↔ Buyer)
@@ -2758,10 +2810,21 @@ async def three_party_create(request: ThreePartyEscrowCreate, current_user: dict
         "supplier_phone": request.supplier_phone
     })
     
+    # Generate role-scoped signed verify URLs (Option B: HMAC tokens)
+    base_url = os.environ.get("BASE_URL", "").rstrip("/")
+    supplier_token = _sign_verify_token(tx_id, "supplier", request.supplier_phone)
+    hawker_token = _sign_verify_token(tx_id, "buyer", current_user["user_id"])
+    supplier_verify_url = f"{base_url}/verify/{tx_id}?t={supplier_token}&r=supplier" if base_url else f"/verify/{tx_id}?t={supplier_token}&r=supplier"
+    public_verify_url = f"{base_url}/verify/{tx_id}" if base_url else f"/verify/{tx_id}"
+
     return {
         "ok": True,
         "tx_id": tx_id,
         "status": "pending_approval",
+        "supplier_verify_url": supplier_verify_url,   # → share this via WhatsApp/SMS to supplier
+        "supplier_token": supplier_token,
+        "public_verify_url": public_verify_url,        # → safe to share anywhere (minimal view)
+        "hawker_token": hawker_token,                  # → hawker uses this if they want a buyer-view link
         "message_sw": "Ombi limetumwa kwa msambazaji. Subiri uidhinishaji.",
         "message_en": "Request sent to supplier. Awaiting approval."
     }

@@ -179,9 +179,9 @@ export default function SupplierConfirmationScreen({ txId, supplierPhone, token,
         <div style={{ background: C.emeraldPale, border: "1px solid rgba(26,122,90,0.15)", borderRadius: 12, padding: "12px 14px", marginBottom: 10 }}>
           <div style={{ fontFamily: "Syne,sans-serif", fontSize: 12, fontWeight: 700, color: C.emerald, marginBottom: 4 }}>🛡️ Upande Wako / Your Side Only</div>
           <div style={{ fontSize: 12, color: "rgba(10,10,15,0.6)", lineHeight: 1.55 }}>
-            Unaidhinisha <strong>upande wako wa muamala</strong> — bei ya jumla yako na ada ya 2% ya mfumo. Biz-Salama ina ada nyingine upande wa mnunuzi ambayo <strong>haikuhusishi wewe</strong>.
+            Unaidhinisha <strong>upande wako tu wa muamala</strong> — bei yako ya jumla na ada ya 2% ya mfumo.
             <br /><br />
-            You are approving <strong>your side of the deal</strong> — your wholesale price and the 2% platform fee on supply side. Biz-Salama has a separate buyer-side fee that <strong>does not concern you</strong>.
+            You are approving <strong>your side of the deal only</strong> — your wholesale price and the 2% platform fee.
           </div>
         </div>
       </div>

@@ -382,8 +382,7 @@ export default function ThreePartyTransactionCreator({ hawker, onCreated, onClos
                 [
                   ["Mnunuzi Analipa / Buyer Pays", fmtTSh(bp), C.ink],
                   ["💰 Mmiliki Anapata / Supplier Payout (after 2% fee)", fmtTSh(supplierPayout), C.emerald],
-                  ["🧑‍💼 Faida Yako / Your Commission", fmtTSh(commission), C.gold],
-                  ["🏛 Ada ya Biz-Salama (2% supply + 3% buyer)", fmtTSh(platformFee), C.muted],
+                  ["🧑‍💼 Faida Yako / Your Commission (net)", fmtTSh(commission), C.gold],
                 ] as [string, string, string][]
               ).map(([l, v, color]) => (
                 <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #F4F3EF", fontSize: 13 }}>
@@ -391,9 +390,6 @@ export default function ThreePartyTransactionCreator({ hawker, onCreated, onClos
                   <span style={{ fontWeight: 700, color }}>{v}</span>
                 </div>
               ))}
-              <div style={{ marginTop: 8, fontSize: 11, color: C.muted, textAlign: "center" }}>
-                ✓ {fmtTSh(supplierPayout + commission + platformFee)} = {fmtTSh(bp)}
-              </div>
             </div>
           </div>
         )}

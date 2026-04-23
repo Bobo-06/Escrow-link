@@ -127,8 +127,7 @@ export default function HawkerTxEditPage() {
             {[
               ["Mnunuzi Analipa", fmtTSh(bp), C.ink],
               ["💰 Mmiliki (payout)", fmtTSh(supplierPayout), C.emerald],
-              ["🧑‍💼 Faida Yako", fmtTSh(commission), C.gold],
-              ["🏛 Ada (2% + 3%)", fmtTSh(platformFee), C.muted],
+              ["🧑‍💼 Faida Yako (net)", fmtTSh(commission), C.gold],
             ].map(([l, v, col]) => (
               <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #F4F3EF", fontSize: 13 }}>
                 <span style={{ color: C.muted }}>{l}</span>

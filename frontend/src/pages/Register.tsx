@@ -5,6 +5,7 @@ import { Shield, Phone, Lock, User, Eye, EyeOff, ArrowRight, CheckCircle } from 
 import { authAPI } from '../lib/api';
 import { useAuthStore } from '../store/authStore';
 import toast from 'react-hot-toast';
+import SEO from '../components/SEO';
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
@@ -58,6 +59,11 @@ const Register: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-ink-900 pt-20 pb-12">
+      <SEO
+        title="Create Your Free Seller Account"
+        description="Join 1,200+ sellers on Biz-Salama. Start selling with escrow protection, verified buyers, and M-Pesa payments. Free to register."
+        url="/register"
+      />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           {/* Left - Benefits */}

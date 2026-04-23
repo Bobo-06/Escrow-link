@@ -5,6 +5,7 @@ import { Shield, Phone, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { authAPI } from '../lib/api';
 import { useAuthStore } from '../store/authStore';
 import toast from 'react-hot-toast';
+import SEO from '../components/SEO';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -38,6 +39,12 @@ const Login: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-ink-900 flex items-center justify-center pt-20 pb-12 px-4">
+      <SEO
+        title="Sign In"
+        description="Sign in to your Biz-Salama account to buy, sell, and track escrow-protected transactions."
+        url="/login"
+        noindex
+      />
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

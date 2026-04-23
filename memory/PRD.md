@@ -28,6 +28,17 @@ Source code previously built and saved at: https://github.com/Bobo-06/Escrow-lin
 - [x] Verified landing page, navbar, hero, escrow card render correctly
 - [x] Verified APIs 200 OK: `/api/currencies`, `/api/products/public`, `/api/export-categories`, `/api/auth/register`
 
+## SEO / Link Preview Overhaul (Apr 23, 2026)
+- [x] Generated branded 1200×630 PNG at `/public/og-image.png` (shield + Biz-Salama + "Shop Safely with Escrow Protection" + ESCROW PROTECTED badge)
+- [x] Rewrote `/public/index.html` with: title, description, keywords, canonical, full Open Graph (og:*), Twitter card, apple/PWA tags, `<noscript>` content for crawlers, and two JSON-LD blocks (Organization + WebSite search schema)
+- [x] Updated `/public/manifest.json` — brand name, gold theme color (#F59E0B), ink background (#0F172A)
+- [x] Added `/public/robots.txt` (disallow /dashboard, /checkout, /track) and `/public/sitemap.xml`
+- [x] Installed `react-helmet-async`; wrapped app with `<HelmetProvider>` in `index.tsx`
+- [x] Created reusable `<SEO>` component (`src/components/SEO.tsx`) — per-route title/description/OG/Twitter
+- [x] Integrated `<SEO>` into LandingPage, Marketplace, ProductDetail, Login (noindex), Register
+- [x] Installed `react-snap` + added `postbuild` script in `package.json` → prerenders `/`, `/marketplace`, `/login`, `/register` into real static HTML at build time so WhatsApp / Facebook / Twitter / Google see actual content (not the JS shell)
+- [x] `index.tsx` uses `hydrateRoot` when prerendered HTML is present, `createRoot` otherwise
+
 ## Key Pages (from GitHub code)
 - `/` LandingPage — hero, trust indicators, how-it-works, CTA
 - `/marketplace` Marketplace — grid, search, filters, sort

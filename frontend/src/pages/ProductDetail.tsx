@@ -1,6 +1,7 @@
 import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Shield, Star, MapPin, CheckCircle, ShoppingCart, Heart, Share2 } from 'lucide-react';
+import SEO from '../components/SEO';
 
 const ProductDetail: React.FC = () => {
   const { id } = useParams();
@@ -24,6 +25,12 @@ const ProductDetail: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-ink-900 pt-20">
+      <SEO
+        title={product.name}
+        description={`${product.description.substring(0, 155)}`}
+        url={`/product/${product.id}`}
+        type="product"
+      />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid lg:grid-cols-2 gap-12">
           {/* Product Image */}

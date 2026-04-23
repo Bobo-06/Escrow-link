@@ -13,6 +13,7 @@ import {
   TrendingUp,
   Smartphone
 } from 'lucide-react';
+import SEO from '../components/SEO';
 
 const LandingPage: React.FC = () => {
   const fadeInUp = {
@@ -23,6 +24,11 @@ const LandingPage: React.FC = () => {
 
   return (
     <div className="overflow-hidden">
+      <SEO
+        title="Shop Safely with Escrow Protection"
+        description="Tanzania's #1 trusted escrow marketplace. Your money stays protected until you receive your goods. 2,000+ happy customers. M-Pesa, Tigo Pesa & Airtel Money supported."
+        url="/"
+      />
       {/* Hero Section */}
       <section className="relative min-h-screen flex items-center pt-20">
         {/* Background gradient */}

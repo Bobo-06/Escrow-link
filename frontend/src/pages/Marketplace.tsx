@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Search, Filter, Star, Shield, MapPin, ChevronDown } from 'lucide-react';
 import { productsAPI } from '../lib/api';
+import SEO from '../components/SEO';
 
 interface Product {
   product_id: string;
@@ -132,6 +133,11 @@ const Marketplace: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-ink-900 pt-20">
+      <SEO
+        title="Marketplace — Verified Sellers in Tanzania"
+        description="Browse thousands of products from verified Tanzanian sellers. Fashion, electronics, home, beauty & more. Every purchase protected by escrow."
+        url="/marketplace"
+      />
       {/* Hero Banner */}
       <div className="bg-gradient-to-r from-ink-800 to-ink-900 py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

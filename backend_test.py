@@ -12,7 +12,7 @@ import random
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://escrow-link.preview.emergentagent.com/api"
+BASE_URL = "https://salama-secure.preview.emergentagent.com/api"
 session_token = None
 product_id = None
 order_id = None

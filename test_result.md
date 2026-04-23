@@ -595,7 +595,7 @@ agent_communication:
     message: |
       🎯 THREE-PARTY ESCROW FEATURE TESTING COMPLETE - ALL REVIEW REQUIREMENTS VERIFIED!
       
-      Completed comprehensive testing of the NEW Three-Party Escrow feature as specified in the review request at https://escrow-link.preview.emergentagent.com in mobile dimensions (390x844):
+      Completed comprehensive testing of the NEW Three-Party Escrow feature as specified in the review request at https://salama-secure.preview.emergentagent.com in mobile dimensions (390x844):
       
       ✅ TEST 1: LOGIN FLOW - PASSED
       - Successfully navigated to /login page ✅
@@ -727,7 +727,7 @@ agent_communication:
     message: |
       🚨 COMPREHENSIVE E2E TESTING COMPLETE - CRITICAL ISSUES IDENTIFIED
       
-      Completed full end-to-end testing of CraftHer platform using public URL https://escrow-link.preview.emergentagent.com in mobile viewport (390x844):
+      Completed full end-to-end testing of CraftHer platform using public URL https://salama-secure.preview.emergentagent.com in mobile viewport (390x844):
       
       ❌ CRITICAL FAILURES:
       1. REGISTRATION FLOW BROKEN: Registration form submits successfully but doesn't redirect to /seller dashboard. User remains stuck on /register page after successful form submission.
@@ -901,7 +901,7 @@ agent_communication:
     message: |
       🎯 SECURETRADE TZ / BIZ-SALAMA PWA COMPREHENSIVE TESTING COMPLETE - ALL FEATURES VERIFIED!
       
-      Completed comprehensive testing of SecureTrade TZ / Biz-Salama PWA application at https://escrow-link.preview.emergentagent.com on mobile viewport (390x844) as requested in review:
+      Completed comprehensive testing of SecureTrade TZ / Biz-Salama PWA application at https://salama-secure.preview.emergentagent.com on mobile viewport (390x844) as requested in review:
       
       ✅ LANDING PAGE VERIFICATION - PERFECT MATCH TO REQUIREMENTS:
       - Premium fintech design with dark theme header confirmed ✅
@@ -944,7 +944,7 @@ agent_communication:
       
       🎯 APPLICATION IDENTITY CONFIRMED:
       - Application correctly identified as SecureTrade TZ / Biz-Salama PWA ✅
-      - URL https://escrow-link.preview.emergentagent.com verified ✅
+      - URL https://salama-secure.preview.emergentagent.com verified ✅
       - All features from review request specification present ✅
       - Mobile-first design optimized for Tanzania market ✅
       
@@ -968,7 +968,7 @@ agent_communication:
     message: |
       🎯 COMPREHENSIVE BACKEND API TESTING COMPLETE - ALL ENDPOINTS VERIFIED!
       
-      Completed comprehensive testing of ALL backend API endpoints as specified in the review request for Biz-Salama / SecureTrade at https://escrow-link.preview.emergentagent.com/api:
+      Completed comprehensive testing of ALL backend API endpoints as specified in the review request for Biz-Salama / SecureTrade at https://salama-secure.preview.emergentagent.com/api:
       
       ✅ 1. AUTH FLOW - FULLY FUNCTIONAL:
       - User Registration: ✅ Creates user with phone/password, returns session_token
@@ -1037,7 +1037,7 @@ agent_communication:
     message: |
       🎯 FINAL BIZ-SALAMA / SECURETRADE PWA TESTING COMPLETE - ALL REVIEW REQUIREMENTS VERIFIED!
       
-      Completed comprehensive testing of Biz-Salama / SecureTrade Expo React Native PWA at https://escrow-link.preview.emergentagent.com in mobile dimensions (390x844) as specified in the review request:
+      Completed comprehensive testing of Biz-Salama / SecureTrade Expo React Native PWA at https://salama-secure.preview.emergentagent.com in mobile dimensions (390x844) as specified in the review request:
       
       ✅ 1. LANDING PAGE TESTS - ALL VERIFIED:
       - Live exchange rate ticker at top: ✅ VERIFIED ("LIVE RATES" with TSh 2,560, etc.)
@@ -1097,7 +1097,7 @@ agent_communication:
     message: |
       🎯 REVIEW REQUEST TESTING COMPLETE - ALL SPECIFIED FLOWS VERIFIED!
       
-      Completed comprehensive testing of all 4 specific test scenarios from the review request at https://escrow-link.preview.emergentagent.com in mobile dimensions (390x844):
+      Completed comprehensive testing of all 4 specific test scenarios from the review request at https://salama-secure.preview.emergentagent.com in mobile dimensions (390x844):
       
       ✅ TEST 1: LOGIN FLOW TEST - PASSED
       - Navigated to /login page successfully ✅
@@ -1161,7 +1161,7 @@ agent_communication:
     message: |
       🎯 GRANT REQUIREMENTS VERIFICATION COMPLETE - ALL 6 GAPS SUCCESSFULLY TESTED!
       
-      Completed comprehensive testing of ALL 6 grant requirements for Biz-Salama / SecureTrade PWA at https://escrow-link.preview.emergentagent.com in mobile viewport (390x844):
+      Completed comprehensive testing of ALL 6 grant requirements for Biz-Salama / SecureTrade PWA at https://salama-secure.preview.emergentagent.com in mobile viewport (390x844):
       
       ✅ GAP 1: AUTHENTICATION LAYER - FULLY VERIFIED
       - Login page at /login: ✅ ACCESSIBLE
@@ -1232,7 +1232,7 @@ agent_communication:
     message: |
       🎯 REACT WEB APP REVIEW REQUEST TESTING COMPLETE - ALL SPECIFIED FLOWS VERIFIED!
       
-      Completed comprehensive testing of Biz-Salama React web application at https://escrow-link.preview.emergentagent.com as specified in the review request. Tested on both desktop (1920x800) and mobile (390x844) viewports:
+      Completed comprehensive testing of Biz-Salama React web application at https://salama-secure.preview.emergentagent.com as specified in the review request. Tested on both desktop (1920x800) and mobile (390x844) viewports:
       
       ✅ TEST 1: LANDING PAGE (NO AUTH REQUIRED) - PERFECT
       - Desktop (1920x800): ✅ Hero section "Shop Safely with Escrow Protection" verified

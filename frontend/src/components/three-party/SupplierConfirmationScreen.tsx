@@ -154,34 +154,34 @@ export default function SupplierConfirmationScreen({ txId, supplierPhone, token,
             <div style={{ fontFamily: "Syne,sans-serif", fontSize: 22, fontWeight: 800, color: C.gold }}>{fmtTSh(tx.buyer_price)}</div>
           </div>
 
-          {/* Split rows */}
+          {/* Split rows — SUPPLIER SEES ONLY THEIR SIDE (2% fee) + hawker commission for transparency */}
           {[
-            { label: "💰 Wewe Unapata / You Get", sub: "Supplier payout (after 2% supply fee)", val: tx.supplier_payout, color: C.emerald, bold: true },
-            { label: "🧑‍💼 Faida ya Mchuuzi / Hawker Commission", sub: "Mchuuzi's take (visible to you)", val: tx.commission, color: C.gold },
-            { label: "🏛 Ada ya Supply (2%)", sub: "Platform fee on your side", val: tx.supply_fee, color: C.muted },
-            { label: "🏛 Ada ya Buyer (3%)", sub: "Platform fee on buyer side", val: tx.buyer_fee, color: C.muted },
+            { label: "💰 Wewe Unapata / You Get", sub: "Your payout (after 2% supply fee)", val: tx.supplier_payout, color: C.emerald, bold: true },
+            { label: "🧑‍💼 Faida ya Mchuuzi / Hawker Commission", sub: "Hawker's markup on this item", val: tx.hawker_commission_visible, color: C.gold },
+            { label: `🏛 Ada ya Supply (${tx.supply_fee_pct || 2}%)`, sub: "Platform fee on YOUR side", val: tx.supply_fee, color: C.muted },
           ].map((r) => (
             <div key={r.label} style={{ padding: "9px 0", borderBottom: "1px solid #F4F3EF" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 13 }}>
                 <span style={{ color: C.ink, fontWeight: r.bold ? 700 : 500 }}>{r.label}</span>
-                <span style={{ fontFamily: "Syne,sans-serif", fontWeight: 800, color: r.color, fontSize: r.bold ? 16 : 13 }}>{fmtTSh(r.val)}</span>
+                <span style={{ fontFamily: "Syne,sans-serif", fontWeight: 800, color: r.color, fontSize: r.bold ? 16 : 13 }}>{fmtTSh(r.val ?? 0)}</span>
               </div>
               <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{r.sub}</div>
             </div>
           ))}
 
-          {/* Total check */}
+          {/* Invariant check (supplier-side only: supplier_cost + hawker_commission = buyer_price) */}
           <div style={{ marginTop: 10, background: C.surface, borderRadius: 8, padding: "8px 10px", fontSize: 11, color: C.muted, textAlign: "center" }}>
-            ✓ {fmtTSh((tx.supplier_payout || 0) + (tx.commission || 0) + (tx.platform_fee || 0))} = {fmtTSh(tx.buyer_price)}
+            ✓ Bei ya jumla ({fmtTSh(tx.supplier_cost)}) + Faida ya mchuuzi ({fmtTSh(tx.hawker_commission_visible ?? 0)}) = {fmtTSh(tx.buyer_price)}
           </div>
         </div>
 
         {/* Trust box */}
         <div style={{ background: C.emeraldPale, border: "1px solid rgba(26,122,90,0.15)", borderRadius: 12, padding: "12px 14px", marginBottom: 10 }}>
-          <div style={{ fontFamily: "Syne,sans-serif", fontSize: 12, fontWeight: 700, color: C.emerald, marginBottom: 4 }}>🛡️ Uwazi Kamili / Full Transparency</div>
+          <div style={{ fontFamily: "Syne,sans-serif", fontSize: 12, fontWeight: 700, color: C.emerald, marginBottom: 4 }}>🛡️ Upande Wako / Your Side Only</div>
           <div style={{ fontSize: 12, color: "rgba(10,10,15,0.6)", lineHeight: 1.55 }}>
-            Unaidhinisha <strong>bei zote</strong> — yako, ya mchuuzi, na ada za mfumo. Ukiridhika, tapa <strong>"Nimekubali bei hizi zote"</strong>.
-            Ukitaka bei nyingine, tapa <strong>"Pendekeza Bei Nyingine"</strong>. You are approving <strong>the complete deal</strong> — your payout, the hawker's commission, and platform fees. Tap "I agree to all these prices" to lock it in, or "Counter-offer" to propose different numbers.
+            Unaidhinisha <strong>upande wako wa muamala</strong> — bei ya jumla yako na ada ya 2% ya mfumo. Biz-Salama ina ada nyingine upande wa mnunuzi ambayo <strong>haikuhusishi wewe</strong>.
+            <br /><br />
+            You are approving <strong>your side of the deal</strong> — your wholesale price and the 2% platform fee on supply side. Biz-Salama has a separate buyer-side fee that <strong>does not concern you</strong>.
           </div>
         </div>
       </div>

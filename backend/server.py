@@ -2714,7 +2714,13 @@ async def escrow_verify(tx_id: str, token: Optional[str] = None, role: Optional[
             valid_token = hmac.compare_digest(token, expected)
 
         if valid_token and role == "supplier":
-            # SUPPLIER view — FULL breakdown including hawker's commission (transparent approval)
+            # SUPPLIER view — sees their side only: their cost, 2% supply fee, payout, plus hawker commission (transparency)
+            # Does NOT see: buyer_fee (3% — that's buyer's concern), aggregated platform_fee
+            supplier_commission_visible = None
+            if split:
+                # From supplier's perspective, hawker's commission is simply (buyer_price - supplier_cost)
+                # The 3% buyer fee is invisible to supplier — it silently comes out of the hawker's gross take
+                supplier_commission_visible = round(split["buyer_price"] - split["supplier_cost"], 2)
             return {
                 **base,
                 "view": "supplier",
@@ -2722,25 +2728,29 @@ async def escrow_verify(tx_id: str, token: Optional[str] = None, role: Optional[
                 "item_condition": tx.get("item_condition"),
                 "buyer_price": tx.get("buyer_price"),
                 "supplier_cost": tx.get("supplier_cost"),
-                "supplier_payout": split["supplier_payout"] if split else None,   # after 2% supply fee
-                "commission": split["commission"] if split else None,             # hawker's take (visible!)
+                "supplier_payout": split["supplier_payout"] if split else None,
                 "supply_fee": split["supply_fee"] if split else None,
-                "buyer_fee": split["buyer_fee"] if split else None,
-                "platform_fee": split["platform_fee"] if split else None,
+                "supply_fee_pct": SUPPLY_FEE_PCT * 100,
+                "hawker_commission_visible": supplier_commission_visible,   # gross = buyer_price - supplier_cost
                 "supplier_name": tx.get("supplier_name"),
                 "supplier_phone": tx.get("supplier_phone"),
                 "supplier_location": tx.get("supplier_location"),
                 "hawker_name": tx.get("hawker_name"),
                 "approval_snapshot": tx.get("approval_snapshot"),
+                # buyer_fee, platform_fee (total), actual_net_commission — all HIDDEN from supplier
             }
 
         if valid_token and role == "buyer":
+            # BUYER view — sees THEIR side only: total they paid, 3% escrow fee they paid, seller name
+            # Does NOT see: supplier info, supplier_cost, supply_fee, hawker commission
             return {
                 **base,
                 "view": "buyer",
                 "item": tx.get("item_name"),
                 "item_condition": tx.get("item_condition"),
                 "buyer_price": tx.get("buyer_price"),
+                "buyer_fee": split["buyer_fee"] if split else None,
+                "buyer_fee_pct": BUYER_FEE_PCT * 100,
                 "seller_name": tx.get("hawker_name"),
             }
 
@@ -3295,13 +3305,21 @@ async def supplier_response_public(tx_id: str, payload: SupplierResponse):
         if supplier_cost >= buyer_price:
             raise HTTPException(status_code=400, detail="supplier_cost must be less than buyer_price")
         split = _compute_three_party_split(buyer_price, supplier_cost)
+        # Supplier-visible snapshot — shows only fees on their side + hawker commission (gross)
+        # 3% buyer fee intentionally excluded — that's buyer's concern, not supplier's
         snapshot = {
-            **split,
+            "buyer_price": split["buyer_price"],
+            "supplier_cost": split["supplier_cost"],
+            "supplier_payout": split["supplier_payout"],
+            "supply_fee": split["supply_fee"],
+            "supply_fee_pct": SUPPLY_FEE_PCT * 100,
+            "hawker_commission_visible": round(split["buyer_price"] - split["supplier_cost"], 2),
             "approved_by": tx.get("supplier_phone"),
             "approved_at": now_iso,
             "terms_accepted_sw": "Nimekubali bei hizi zote",
             "terms_accepted_en": "I agree to all these prices",
         }
+        # Full split stored in tx fields below (for backend/hawker/audit) but NOT shown to supplier
         update = {
             "status": "supplier_approved",
             "supplier_cost": supplier_cost,
@@ -3311,7 +3329,7 @@ async def supplier_response_public(tx_id: str, payload: SupplierResponse):
             "buyer_fee": split["buyer_fee"],
             "platform_fee": split["platform_fee"],
             "approved_at": now_iso,
-            "approval_snapshot": snapshot,    # immutable audit record of what supplier agreed to
+            "approval_snapshot": snapshot,
         }
     elif payload.counter_offer:
         if not payload.supplier_cost:

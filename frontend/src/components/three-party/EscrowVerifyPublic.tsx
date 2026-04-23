@@ -73,10 +73,10 @@ export default function EscrowVerifyPublic({ txId, onClose }: Props) {
       ["Bidhaa / Item", tx.item, null],
       ["Hali / Condition", tx.item_condition || "—", null],
       ["Mnunuzi Analipa / Buyer Pays", fmtTSh(tx.buyer_price), "Syne,sans-serif"],
+      ["Bei Yako ya Jumla / Your Wholesale Cost", fmtTSh(tx.supplier_cost), "Syne,sans-serif"],
+      [`🏛 Ada ya Supply (${tx.supply_fee_pct || 2}%)`, fmtTSh(tx.supply_fee ?? 0), null],
       ["💰 Wewe Unapata / You Get (payout)", fmtTSh(tx.supplier_payout ?? tx.supplier_cost), "Syne,sans-serif"],
-      ["🧑‍💼 Faida ya Mchuuzi / Hawker Commission", fmtTSh(tx.commission ?? 0), null],
-      ["🏛 Ada ya Supply (2%)", fmtTSh(tx.supply_fee ?? 0), null],
-      ["🏛 Ada ya Buyer (3%)", fmtTSh(tx.buyer_fee ?? 0), null],
+      ["🧑‍💼 Faida ya Mchuuzi / Hawker Commission", fmtTSh(tx.hawker_commission_visible ?? 0), null],
       ["Mchuuzi / Hawker", tx.hawker_name, null],
       ["Imeshikwa Na / Held By", tx.bank, null],
       ["Hali / Status", st.label, null],
@@ -93,12 +93,13 @@ export default function EscrowVerifyPublic({ txId, onClose }: Props) {
       ["Bidhaa / Item", tx.item, null],
       ["Hali / Condition", tx.item_condition || "—", null],
       ["Ulichopata Kulipa / Your Payment", fmtTSh(tx.buyer_price), "Syne,sans-serif"],
+      [`🏛 Ada ya Escrow (${tx.buyer_fee_pct || 3}%) / Escrow Protection Fee`, fmtTSh(tx.buyer_fee ?? 0), null],
       ["Muuzaji / Seller", tx.seller_name, null],
       ["Imeshikwa Na / Held By", tx.bank, null],
       ["Hali / Status", st.label, null],
       ["Ilishikwa / Locked At", new Date(tx.locked_at || tx.created_at).toLocaleString("sw-TZ"), null],
     ];
-    guaranteeText = `Pesa yako ya ${fmtTSh(tx.buyer_price)} iko salama — itatolewa kwa muuzaji TU baada ya wewe kuthibitisha kupokea bidhaa.\n\nYour ${fmtTSh(tx.buyer_price)} is safe — released to the seller ONLY after you confirm you've received the goods.`;
+    guaranteeText = `Pesa yako ya ${fmtTSh(tx.buyer_price)} iko salama — itatolewa kwa muuzaji TU baada ya wewe kuthibitisha kupokea bidhaa. Ndani ya malipo yako, ${fmtTSh(tx.buyer_fee ?? 0)} (${tx.buyer_fee_pct || 3}%) ni ada ya ulinzi wa escrow.\n\nYour ${fmtTSh(tx.buyer_price)} is safe — released to the seller ONLY after you confirm you've received the goods. Of your payment, ${fmtTSh(tx.buyer_fee ?? 0)} (${tx.buyer_fee_pct || 3}%) is the escrow protection fee.`;
   } else {
     // Public view — minimal, non-competitive info
     audienceBadge = "🔒 UTHIBITISHO WA ESCROW · PUBLIC VERIFY";

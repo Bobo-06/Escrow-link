@@ -2639,21 +2639,58 @@ async def escrow_dispute(request: EscrowDisputeRequest):
     
     return {"ok": True, "case_no": case_no, "status": "opened"}
 
+# ═══════════════════════════════════════════════════════════════════════════
+# THREE-PARTY ESCROW — FEE CONFIG & SPLIT HELPERS
+# Platform fee: 2% supply-side (from supplier's payout) + 3% buyer-side (from buyer_price)
+# ═══════════════════════════════════════════════════════════════════════════
+SUPPLY_FEE_PCT = 0.02
+BUYER_FEE_PCT = 0.03
+
+def _compute_three_party_split(buyer_price: float, supplier_cost: float) -> dict:
+    """Compute the full 3-party payment split.
+
+    Formula:
+      supply_fee       = supplier_cost * 2%      (deducted from supplier payout)
+      buyer_fee        = buyer_price   * 3%      (deducted from buyer pot before split)
+      supplier_payout  = supplier_cost - supply_fee
+      commission       = buyer_price - supplier_cost - buyer_fee    (hawker's take)
+      platform_fee     = supply_fee + buyer_fee  (total platform revenue)
+
+    Invariant: supplier_payout + commission + platform_fee == buyer_price
+    """
+    buyer_price = float(buyer_price)
+    supplier_cost = float(supplier_cost)
+    supply_fee = round(supplier_cost * SUPPLY_FEE_PCT, 2)
+    buyer_fee = round(buyer_price * BUYER_FEE_PCT, 2)
+    supplier_payout = round(supplier_cost - supply_fee, 2)
+    commission = round(buyer_price - supplier_cost - buyer_fee, 2)
+    platform_fee = round(supply_fee + buyer_fee, 2)
+    return {
+        "buyer_price": buyer_price,
+        "supplier_cost": supplier_cost,
+        "supplier_payout": supplier_payout,
+        "commission": commission,
+        "supply_fee": supply_fee,
+        "buyer_fee": buyer_fee,
+        "platform_fee": platform_fee,
+    }
+
+
 @api_router.get("/escrow/verify/{tx_id}")
 async def escrow_verify(tx_id: str, token: Optional[str] = None, role: Optional[str] = None):
     """Public verification endpoint for escrow transactions (2-party AND 3-party).
     
     Role-based output (Option B):
       - No token/role: MINIMAL public view (tx exists, amount locked, status, bank)
-      - role=supplier + valid token: supplier view (their payout, hawker name, no commission)
+      - role=supplier + valid token: FULL supplier view including commission breakdown
       - role=buyer + valid token: buyer view (item, amount paid, status, escrow guarantee)
-    
-    Security: commission and supplier_cost are NEVER shown to random visitors —
-    the hawker's markup stays confidential.
     """
     # First try three-party transactions
     tx = await db.three_party_transactions.find_one({"tx_id": tx_id}, {"_id": 0})
     if tx:
+        # Compute current split from stored prices (or use snapshot if approved)
+        split = _compute_three_party_split(tx.get("buyer_price"), tx.get("supplier_cost")) if tx.get("buyer_price") and tx.get("supplier_cost") else None
+
         # Always-public minimal fields (safe for any viewer)
         base = {
             "ok": True,
@@ -2665,6 +2702,7 @@ async def escrow_verify(tx_id: str, token: Optional[str] = None, role: Optional[
             "created_at": tx.get("created_at"),
             "verified": True,
             "platform": "Biz-Salama TZ",
+            "fee_pct": {"supply": SUPPLY_FEE_PCT * 100, "buyer": BUYER_FEE_PCT * 100},
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -2676,34 +2714,37 @@ async def escrow_verify(tx_id: str, token: Optional[str] = None, role: Optional[
             valid_token = hmac.compare_digest(token, expected)
 
         if valid_token and role == "supplier":
-            # SUPPLIER view — sees their payout, hawker name, item, but NOT hawker's commission
+            # SUPPLIER view — FULL breakdown including hawker's commission (transparent approval)
             return {
                 **base,
                 "view": "supplier",
                 "item": tx.get("item_name"),
                 "item_condition": tx.get("item_condition"),
                 "buyer_price": tx.get("buyer_price"),
-                "supplier_cost": tx.get("supplier_cost"),        # Their payout
+                "supplier_cost": tx.get("supplier_cost"),
+                "supplier_payout": split["supplier_payout"] if split else None,   # after 2% supply fee
+                "commission": split["commission"] if split else None,             # hawker's take (visible!)
+                "supply_fee": split["supply_fee"] if split else None,
+                "buyer_fee": split["buyer_fee"] if split else None,
+                "platform_fee": split["platform_fee"] if split else None,
                 "supplier_name": tx.get("supplier_name"),
                 "supplier_phone": tx.get("supplier_phone"),
                 "supplier_location": tx.get("supplier_location"),
                 "hawker_name": tx.get("hawker_name"),
-                # commission & platform_fee INTENTIONALLY omitted
+                "approval_snapshot": tx.get("approval_snapshot"),
             }
 
         if valid_token and role == "buyer":
-            # BUYER view — sees what they paid, item, seller (hawker) name, status, NO supplier info
             return {
                 **base,
                 "view": "buyer",
                 "item": tx.get("item_name"),
                 "item_condition": tx.get("item_condition"),
                 "buyer_price": tx.get("buyer_price"),
-                "seller_name": tx.get("hawker_name"),            # Buyer only knows the hawker
-                # supplier_cost, supplier_name, supplier_phone, commission all HIDDEN
+                "seller_name": tx.get("hawker_name"),
             }
 
-        # DEFAULT public view — just enough to prove escrow exists, nothing competitive
+        # DEFAULT public view — just enough to prove escrow exists
         return {
             **base,
             "view": "public",
@@ -2785,8 +2826,8 @@ async def three_party_create(request: ThreePartyEscrowCreate, current_user: dict
         
         # Pricing (Hawker sets buyer price, supplier sets their cost)
         "buyer_price": request.buyer_price,
-        "commission": (request.buyer_price - request.supplier_cost) if request.supplier_cost else None,
-        "platform_fee": round(request.buyer_price * 0.01, 2),
+        "commission": (_compute_three_party_split(request.buyer_price, request.supplier_cost)["commission"] if request.supplier_cost else None),
+        "platform_fee": (_compute_three_party_split(request.buyer_price, request.supplier_cost)["platform_fee"] if request.supplier_cost else None),
         
         # Buyer (Filled when they pay)
         "buyer_id": None,
@@ -3225,40 +3266,127 @@ class SupplierResponse(BaseModel):
     accepted: bool
     supplier_phone: Optional[str] = None
     supplier_cost: Optional[float] = None
+    counter_offer: bool = False    # if True → tx enters "counter_offered" status
+    note: Optional[str] = None
 
 
 @api_router.post("/escrow/three-party/{tx_id}/supplier-response")
 async def supplier_response_public(tx_id: str, payload: SupplierResponse):
-    """Supplier accepts/declines a 3-party escrow from the SMS/WhatsApp link (no login required)."""
+    """Public endpoint — supplier accepts / counter-offers / declines from SMS/WhatsApp link.
+
+    - accepted=True, counter_offer=False → lock deal, store approval_snapshot
+    - accepted=False, counter_offer=True → save supplier's counter supplier_cost, status=counter_offered
+    - accepted=False, counter_offer=False → rejected
+    """
     tx = await db.three_party_transactions.find_one({"tx_id": tx_id}, {"_id": 0})
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
-    if tx.get("status") not in ("pending_approval", "awaiting_supplier"):
+    if tx.get("status") not in ("pending_approval", "awaiting_supplier", "counter_offered"):
         raise HTTPException(status_code=400, detail=f"Cannot respond — current status: {tx.get('status')}")
 
-    if payload.accepted:
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    if payload.accepted and not payload.counter_offer:
         supplier_cost = payload.supplier_cost or tx.get("supplier_cost")
         if not supplier_cost:
             raise HTTPException(status_code=400, detail="supplier_cost required to accept")
         buyer_price = tx.get("buyer_price", 0)
-        platform_fee = round(buyer_price * 0.01, 2)
-        commission = buyer_price - supplier_cost - platform_fee
+        if supplier_cost >= buyer_price:
+            raise HTTPException(status_code=400, detail="supplier_cost must be less than buyer_price")
+        split = _compute_three_party_split(buyer_price, supplier_cost)
+        snapshot = {
+            **split,
+            "approved_by": tx.get("supplier_phone"),
+            "approved_at": now_iso,
+            "terms_accepted_sw": "Nimekubali bei hizi zote",
+            "terms_accepted_en": "I agree to all these prices",
+        }
         update = {
             "status": "supplier_approved",
             "supplier_cost": supplier_cost,
-            "commission": commission,
-            "platform_fee": platform_fee,
-            "approved_at": datetime.now(timezone.utc).isoformat(),
+            "commission": split["commission"],
+            "supplier_payout": split["supplier_payout"],
+            "supply_fee": split["supply_fee"],
+            "buyer_fee": split["buyer_fee"],
+            "platform_fee": split["platform_fee"],
+            "approved_at": now_iso,
+            "approval_snapshot": snapshot,    # immutable audit record of what supplier agreed to
+        }
+    elif payload.counter_offer:
+        if not payload.supplier_cost:
+            raise HTTPException(status_code=400, detail="supplier_cost required to counter-offer")
+        if payload.supplier_cost >= tx.get("buyer_price", 0):
+            raise HTTPException(status_code=400, detail="counter supplier_cost must be less than buyer_price")
+        update = {
+            "status": "counter_offered",
+            "supplier_cost": payload.supplier_cost,
+            "counter_note": payload.note,
+            "counter_offered_at": now_iso,
         }
     else:
         update = {
             "status": "rejected",
-            "rejected_at": datetime.now(timezone.utc).isoformat(),
+            "reject_note": payload.note,
+            "rejected_at": now_iso,
         }
 
     await db.three_party_transactions.update_one({"tx_id": tx_id}, {"$set": update})
-    return {"ok": True, "tx_id": tx_id, "status": update["status"]}
+    return {"ok": True, "tx_id": tx_id, "status": update["status"], "snapshot": update.get("approval_snapshot")}
+
+
+class ThreePartyEditRequest(BaseModel):
+    buyer_price: Optional[float] = None
+    supplier_cost: Optional[float] = None
+    item_name: Optional[str] = None
+    item_condition: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@api_router.post("/escrow/three-party/{tx_id}/edit")
+async def three_party_edit(tx_id: str, request: ThreePartyEditRequest, current_user: dict = Depends(get_current_user)):
+    """Hawker edits a tx (typically after supplier counter-offered). Resets status to pending_approval."""
+    tx = await db.three_party_transactions.find_one({"tx_id": tx_id}, {"_id": 0})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    if tx.get("hawker_id") != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="Only the hawker can edit this transaction")
+    if tx.get("status") not in ("pending_approval", "counter_offered", "rejected"):
+        raise HTTPException(status_code=400, detail=f"Cannot edit — status={tx.get('status')}")
+
+    update: dict = {"status": "pending_approval", "edited_at": datetime.now(timezone.utc).isoformat()}
+    if request.buyer_price is not None:
+        update["buyer_price"] = float(request.buyer_price)
+    if request.supplier_cost is not None:
+        update["supplier_cost"] = float(request.supplier_cost)
+    if request.item_name is not None:
+        update["item_name"] = request.item_name
+    if request.item_condition is not None:
+        update["item_condition"] = request.item_condition
+    if request.notes is not None:
+        update["notes"] = request.notes
+
+    # Recompute split if prices provided
+    bp = update.get("buyer_price", tx.get("buyer_price"))
+    sc = update.get("supplier_cost", tx.get("supplier_cost"))
+    if bp and sc:
+        split = _compute_three_party_split(bp, sc)
+        update.update({
+            "commission": split["commission"],
+            "supplier_payout": split["supplier_payout"],
+            "supply_fee": split["supply_fee"],
+            "buyer_fee": split["buyer_fee"],
+            "platform_fee": split["platform_fee"],
+        })
+
+    await db.three_party_transactions.update_one({"tx_id": tx_id}, {"$set": update})
+
+    # Regenerate supplier verify URL (token unchanged since supplier_phone same)
+    base_url = os.environ.get("BASE_URL", "").rstrip("/")
+    supplier_token = _sign_verify_token(tx_id, "supplier", tx.get("supplier_phone"))
+    supplier_verify_url = f"{base_url}/verify/{tx_id}?t={supplier_token}&r=supplier" if base_url else f"/verify/{tx_id}?t={supplier_token}&r=supplier"
+
+    return {"ok": True, "tx_id": tx_id, "status": "pending_approval", "supplier_verify_url": supplier_verify_url}
 
 
 # Include the router

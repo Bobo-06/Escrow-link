@@ -72,14 +72,20 @@ export default function EscrowVerifyPublic({ txId, onClose }: Props) {
       ["TX ID", tx.tx_id, "monospace"],
       ["Bidhaa / Item", tx.item, null],
       ["Hali / Condition", tx.item_condition || "—", null],
-      ["Kiasi cha Mnunuzi / Buyer Price", fmtTSh(tx.buyer_price), "Syne,sans-serif"],
-      ["💰 Utapata / Your Payout", fmtTSh(tx.supplier_cost), "Syne,sans-serif"],
+      ["Mnunuzi Analipa / Buyer Pays", fmtTSh(tx.buyer_price), "Syne,sans-serif"],
+      ["💰 Wewe Unapata / You Get (payout)", fmtTSh(tx.supplier_payout ?? tx.supplier_cost), "Syne,sans-serif"],
+      ["🧑‍💼 Faida ya Mchuuzi / Hawker Commission", fmtTSh(tx.commission ?? 0), null],
+      ["🏛 Ada ya Supply (2%)", fmtTSh(tx.supply_fee ?? 0), null],
+      ["🏛 Ada ya Buyer (3%)", fmtTSh(tx.buyer_fee ?? 0), null],
       ["Mchuuzi / Hawker", tx.hawker_name, null],
       ["Imeshikwa Na / Held By", tx.bank, null],
       ["Hali / Status", st.label, null],
       ["Ilishikwa / Locked At", new Date(tx.locked_at || tx.created_at).toLocaleString("sw-TZ"), null],
     ];
-    guaranteeText = `${fmtTSh(tx.supplier_cost)} itatolewa moja kwa moja kwa M-Pesa yako mara mnunuzi atakapothibitisha kupokea bidhaa.\n\n${fmtTSh(tx.supplier_cost)} will be released directly to your M-Pesa when the buyer confirms receipt.`;
+    if (tx.approval_snapshot) {
+      rows.push(["✓ Uliidhinisha", new Date(tx.approval_snapshot.approved_at).toLocaleString("sw-TZ"), null]);
+    }
+    guaranteeText = `${fmtTSh(tx.supplier_payout ?? tx.supplier_cost)} itatolewa moja kwa moja kwa M-Pesa yako mara mnunuzi atakapothibitisha kupokea bidhaa.\n\n${fmtTSh(tx.supplier_payout ?? tx.supplier_cost)} will be released directly to your M-Pesa when the buyer confirms receipt.`;
   } else if (view === "buyer") {
     audienceBadge = "🛍 KWA MNUNUZI · BUYER VIEW";
     rows = [

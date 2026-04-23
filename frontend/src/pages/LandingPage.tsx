@@ -290,9 +290,9 @@ const LandingPage: React.FC = () => {
 
                 <div className="space-y-0">
                   {[
-                    { label: 'Mmiliki Anapata · Supplier', amount: '1,650,000', pct: '89.2%', color: 'text-emerald-300', bar: 'bg-emerald-500' },
-                    { label: 'Faida Yako · Hawker Commission', amount: '181,500', pct: '9.8%', color: 'text-gold-300', bar: 'bg-gold-500' },
-                    { label: 'Ada ya Biz-Salama · 1% fee', amount: '18,500', pct: '1.0%', color: 'text-ink-400', bar: 'bg-ink-500' },
+                    { label: 'Mmiliki Anapata · Supplier (after 2% fee)', amount: '1,617,000', pct: '87.4%', color: 'text-emerald-300', bar: 'bg-emerald-500' },
+                    { label: 'Faida Yako · Hawker Commission', amount: '144,500', pct: '7.8%', color: 'text-gold-300', bar: 'bg-gold-500' },
+                    { label: 'Ada ya Biz-Salama · 2% supply + 3% buyer', amount: '88,500', pct: '4.8%', color: 'text-ink-400', bar: 'bg-ink-500' },
                   ].map((row, i) => (
                     <div key={i} className="py-3 border-b border-ink-800 last:border-0">
                       <div className="flex justify-between items-center mb-1.5">

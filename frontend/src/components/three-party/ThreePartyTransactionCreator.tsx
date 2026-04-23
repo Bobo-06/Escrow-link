@@ -24,13 +24,17 @@ export default function ThreePartyTransactionCreator({ hawker, onCreated, onClos
   const [loading, setLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const commission =
-    form.buyer_price && form.supplier_cost
-      ? Number(form.buyer_price) - Number(form.supplier_cost)
-      : 0;
-  const commissionPct = form.buyer_price
-    ? ((commission / Number(form.buyer_price)) * 100).toFixed(1)
-    : 0;
+  // Fees: 2% of supplier_cost (supply side) + 3% of buyer_price (buyer side)
+  const SUPPLY_FEE_PCT = 0.02;
+  const BUYER_FEE_PCT = 0.03;
+  const bp = Number(form.buyer_price) || 0;
+  const sc = Number(form.supplier_cost) || 0;
+  const supplyFee = Math.round(sc * SUPPLY_FEE_PCT);
+  const buyerFee = Math.round(bp * BUYER_FEE_PCT);
+  const supplierPayout = sc - supplyFee;
+  const commission = bp && sc ? bp - sc - buyerFee : 0;
+  const platformFee = supplyFee + buyerFee;
+  const commissionPct = bp ? ((commission / bp) * 100).toFixed(1) : 0;
 
   const handleImage = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -376,10 +380,10 @@ export default function ThreePartyTransactionCreator({ hawker, onCreated, onClos
               <div style={{ fontFamily: "Syne,sans-serif", fontSize: 12, fontWeight: 700, marginBottom: 10 }}>Mgawanyo wa Wazi / Transparent Split</div>
               {(
                 [
-                  ["Mnunuzi Analipa / Buyer Pays", fmtTSh(Number(form.buyer_price) || 0), C.ink],
-                  ["Mmiliki Anapata / Supplier Gets", fmtTSh(Number(form.supplier_cost) || 0), C.emerald],
-                  ["Faida Yako / Your Commission", fmtTSh(commission), C.gold],
-                  ["Ada ya Biz-Salama (1%)", fmtTSh(Math.round((Number(form.buyer_price) || 0) * 0.01)), C.muted],
+                  ["Mnunuzi Analipa / Buyer Pays", fmtTSh(bp), C.ink],
+                  ["💰 Mmiliki Anapata / Supplier Payout (after 2% fee)", fmtTSh(supplierPayout), C.emerald],
+                  ["🧑‍💼 Faida Yako / Your Commission", fmtTSh(commission), C.gold],
+                  ["🏛 Ada ya Biz-Salama (2% supply + 3% buyer)", fmtTSh(platformFee), C.muted],
                 ] as [string, string, string][]
               ).map(([l, v, color]) => (
                 <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #F4F3EF", fontSize: 13 }}>
@@ -387,6 +391,9 @@ export default function ThreePartyTransactionCreator({ hawker, onCreated, onClos
                   <span style={{ fontWeight: 700, color }}>{v}</span>
                 </div>
               ))}
+              <div style={{ marginTop: 8, fontSize: 11, color: C.muted, textAlign: "center" }}>
+                ✓ {fmtTSh(supplierPayout + commission + platformFee)} = {fmtTSh(bp)}
+              </div>
             </div>
           </div>
         )}

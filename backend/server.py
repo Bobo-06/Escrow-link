@@ -48,14 +48,14 @@ AT_USERNAME = os.environ.get('AFRICASTALKING_USERNAME', 'sandbox')
 SELCOM_API_KEY = os.environ.get('SELCOM_API_KEY', '')
 SELCOM_SECRET = os.environ.get('SELCOM_SECRET', '')
 SELCOM_VENDOR = os.environ.get('SELCOM_VENDOR', '')
-SELCOM_BASE_URL = "https://apigw.selcommobile.com/v1"
+SELCOM_BASE_URL = os.environ.get('SELCOM_BASE_URL', 'https://apigw.selcommobile.com/v1')
 
 # M-Pesa Daraja (Vodacom TZ)
 MPESA_CONSUMER_KEY = os.environ.get('MPESA_CONSUMER_KEY', '')
 MPESA_CONSUMER_SECRET = os.environ.get('MPESA_CONSUMER_SECRET', '')
 MPESA_SHORTCODE = os.environ.get('MPESA_SHORTCODE', '')
 MPESA_PASSKEY = os.environ.get('MPESA_PASSKEY', '')
-MPESA_BASE_URL = "https://openapi.m-pesa.com/sandbox/ipg/v2/vodacomTZN"
+MPESA_BASE_URL = os.environ.get('MPESA_BASE_URL', 'https://openapi.m-pesa.com/sandbox/ipg/v2/vodacomTZN')
 
 # Stripe
 STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '')
@@ -73,10 +73,11 @@ SMILE_API_KEY = os.environ.get('SMILE_IDENTITY_API_KEY', '')
 VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
 VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
 
-# Base URL
+# Base URL (required in production)
 BASE_URL = os.environ.get('BASE_URL', '')
-if not BASE_URL:
-    BASE_URL = 'https://escrow-link.preview.emergentagent.com'  # Fallback for dev only
+
+# OAuth Session URL
+OAUTH_SESSION_URL = os.environ.get('OAUTH_SESSION_URL', 'https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data')
 
 # AI System Prompts
 AI_SUPPORT_SYSTEM = """You are SecureTrade's customer support assistant for Tanzania.
@@ -749,7 +750,7 @@ async def exchange_session(request: Request, response: Response):
     async with httpx.AsyncClient() as client:
         try:
             res = await client.get(
-                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                OAUTH_SESSION_URL,
                 headers={"X-Session-ID": session_id}
             )
             if res.status_code != 200:

@@ -39,6 +39,24 @@ Source code previously built and saved at: https://github.com/Bobo-06/Escrow-lin
 - [x] Installed `react-snap` + added `postbuild` script in `package.json` → prerenders `/`, `/marketplace`, `/login`, `/register` into real static HTML at build time so WhatsApp / Facebook / Twitter / Google see actual content (not the JS shell)
 - [x] `index.tsx` uses `hydrateRoot` when prerendered HTML is present, `createRoot` otherwise
 
+## Three-Party Escrow — Full UI + Public Verify (Apr 23, 2026)
+- [x] **5 React components** in `src/components/three-party/`:
+  - `ThreePartyTransactionCreator.tsx` — 4-step hawker wizard (item → supplier → split → confirm) with Swahili+English, condition picker, image upload, live commission calculator
+  - `EscrowLetterOfComfort.tsx` — shareable "Letter of Comfort" with WhatsApp + SMS deep links for supplier
+  - `EscrowVerifyPublic.tsx` — public verify page (no login) fetched from `/api/escrow/verify/{tx_id}`
+  - `SupplierConfirmationScreen.tsx` — supplier accept/decline view reached via SMS link
+  - `SupplierPortal.tsx` — shop-owner dashboard with hawkers list + recent txs
+  - `constants.ts` — shared colors, fmtTSh/fmtK, TX_STATES, API_URL, authHeaders
+- [x] **4 new routes** in `App.tsx`: `/hawker/new`, `/verify/:txId` (public), `/supplier-confirm/:txId` (public), `/supplier/portal`
+- [x] **SellerDashboard buttons**: "3-Party Escrow" + "Supplier Portal" (quick access)
+- [x] **Backend extensions** in `server.py`:
+  - `ThreePartyEscrowCreate` model now accepts `supplier_cost`, `supplier_name`, `supplier_location`, `item_condition`, `notes`, `image_b64`
+  - `/api/escrow/three-party/create` stores all new fields, pre-computes commission + 1% platform fee
+  - **Enhanced** existing `GET /api/escrow/verify/{tx_id}` → searches `three_party_transactions` FIRST (type="three_party") then falls back to 2-party `escrow_transactions`
+  - **Added** `POST /api/escrow/three-party/{tx_id}/supplier-response` (public, no auth) — supplier accepts/declines from WhatsApp/SMS link; recomputes commission on accept
+- [x] **End-to-end verified**: register hawker → create 3P tx with upfront supplier_cost → public verify returns full JSON → public supplier-response transitions tx to `supplier_approved` → verify shows updated status + "Mmiliki Amethibitisha"
+- [x] All interactive elements have `data-testid` (three-party-*, letter-*, verify-*, supplier-*)
+
 ## Key Pages (from GitHub code)
 - `/` LandingPage — hero, trust indicators, how-it-works, CTA
 - `/marketplace` Marketplace — grid, search, filters, sort

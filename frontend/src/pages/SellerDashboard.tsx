@@ -1,7 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Shield, Plus, Package, TrendingUp, DollarSign } from 'lucide-react';
+import { Shield, Plus, Package, TrendingUp, DollarSign, Users } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import SEO from '../components/SEO';
 
 const SellerDashboard: React.FC = () => {
   const { user } = useAuthStore();
@@ -14,17 +15,36 @@ const SellerDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-ink-900 pt-20">
+      <SEO title="Seller Dashboard" url="/dashboard" noindex />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Header */}
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-wrap gap-3 justify-between items-center mb-8">
           <div>
             <h1 className="text-2xl font-display font-bold text-white">Seller Dashboard</h1>
             <p className="text-ink-400">Welcome back, {user?.name || 'Seller'}</p>
           </div>
-          <button className="flex items-center px-6 py-3 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-900 rounded-xl font-semibold hover:from-gold-400 hover:to-gold-500 transition-all">
-            <Plus className="w-5 h-5 mr-2" />
-            Add Product
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              data-testid="dashboard-three-party-btn"
+              to="/hawker/new"
+              className="flex items-center px-5 py-3 bg-emerald-500 text-white rounded-xl font-semibold hover:bg-emerald-400 transition-all"
+            >
+              <Users className="w-5 h-5 mr-2" />
+              3-Party Escrow
+            </Link>
+            <Link
+              data-testid="dashboard-supplier-portal-btn"
+              to="/supplier/portal"
+              className="flex items-center px-5 py-3 bg-ink-700 text-white rounded-xl font-semibold hover:bg-ink-600 transition-all border border-ink-600"
+            >
+              <Shield className="w-5 h-5 mr-2" />
+              Supplier Portal
+            </Link>
+            <button className="flex items-center px-5 py-3 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-900 rounded-xl font-semibold hover:from-gold-400 hover:to-gold-500 transition-all">
+              <Plus className="w-5 h-5 mr-2" />
+              Add Product
+            </button>
+          </div>
         </div>
 
         {/* Stats */}

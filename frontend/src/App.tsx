@@ -12,6 +12,10 @@ import Register from './pages/Register';
 import SellerDashboard from './pages/SellerDashboard';
 import Checkout from './pages/Checkout';
 import OrderTracking from './pages/OrderTracking';
+import Hawker from './pages/Hawker';
+import VerifyPage from './pages/VerifyPage';
+import SupplierConfirmPage from './pages/SupplierConfirmPage';
+import SupplierPortalPage from './pages/SupplierPortalPage';
 
 // Components
 import Navbar from './components/Navbar';
@@ -33,6 +37,10 @@ function App() {
             <Route path="/dashboard" element={<SellerDashboard />} />
             <Route path="/checkout/:id" element={<Checkout />} />
             <Route path="/track/:orderId" element={<OrderTracking />} />
+            <Route path="/hawker/new" element={<Hawker />} />
+            <Route path="/verify/:txId" element={<VerifyPage />} />
+            <Route path="/supplier-confirm/:txId" element={<SupplierConfirmPage />} />
+            <Route path="/supplier/portal" element={<SupplierPortalPage />} />
           </Routes>
         </main>
         <Footer />

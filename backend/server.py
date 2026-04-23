@@ -338,9 +338,15 @@ class ThreePartyEscrowCreate(BaseModel):
     """Hawker creates stock request to supplier"""
     item_name: str
     item_description: Optional[str] = None
+    item_condition: Optional[str] = None
     buyer_price: float  # Price hawker will charge buyer
+    supplier_cost: Optional[float] = None  # Wholesale price hawker will pay supplier (optional - supplier can set)
     supplier_phone: str  # Supplier's phone number
+    supplier_name: Optional[str] = None
+    supplier_location: Optional[str] = None
+    notes: Optional[str] = None
     quantity: int = 1
+    image_b64: Optional[str] = None
 
 class ThreePartyEscrowApprove(BaseModel):
     """Supplier approves with their wholesale price"""
@@ -2635,19 +2641,44 @@ async def escrow_dispute(request: EscrowDisputeRequest):
 
 @api_router.get("/escrow/verify/{tx_id}")
 async def escrow_verify(tx_id: str):
-    """Public verification endpoint for escrow transactions"""
+    """Public verification endpoint for escrow transactions (2-party AND 3-party)."""
+    # First try three-party transactions
+    tx = await db.three_party_transactions.find_one({"tx_id": tx_id}, {"_id": 0})
+    if tx:
+        return {
+            "ok": True,
+            "tx_id": tx["tx_id"],
+            "type": "three_party",
+            "item": tx.get("item_name"),
+            "item_condition": tx.get("item_condition"),
+            "buyer_price": tx.get("buyer_price"),
+            "supplier_cost": tx.get("supplier_cost"),
+            "supplier_name": tx.get("supplier_name"),
+            "supplier_phone": tx.get("supplier_phone"),
+            "supplier_location": tx.get("supplier_location"),
+            "hawker_name": tx.get("hawker_name"),
+            "status": tx.get("status"),
+            "bank": "CRDB Bank PLC (Escrow Trust)",
+            "locked_at": tx.get("paid_at") or tx.get("approved_at") or tx.get("created_at"),
+            "created_at": tx.get("created_at"),
+            "verified": True,
+            "platform": "Biz-Salama TZ",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+    # Fallback: two-party escrow
     escrow = await db.escrow_transactions.find_one(
         {"tx_id": tx_id},
         {"_id": 0, "tx_id": 1, "status": 1, "escrow_status": 1, "amount": 1, "currency": 1, "created_at": 1}
     )
-    
     if not escrow:
         raise HTTPException(status_code=404, detail="Transaction not found")
-    
+
     return {
         **escrow,
+        "type": "two_party",
         "verified": True,
-        "platform": "SecureTrade TZ",
+        "platform": "Biz-Salama TZ",
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
@@ -2688,18 +2719,22 @@ async def three_party_create(request: ThreePartyEscrowCreate, current_user: dict
         # Supplier (Shop Owner) - Must approve
         "supplier_phone": request.supplier_phone,
         "supplier_id": supplier_id,
-        "supplier_name": supplier.get("username") if supplier else "Pending",
-        "supplier_cost": None,  # Set when supplier approves
+        "supplier_name": (supplier.get("username") if supplier else None) or request.supplier_name or "Pending",
+        "supplier_location": request.supplier_location,
+        "supplier_cost": request.supplier_cost,  # May be set by hawker upfront; supplier can adjust
         
         # Item Details
         "item_name": request.item_name,
         "item_description": request.item_description,
+        "item_condition": request.item_condition,
+        "notes": request.notes,
+        "image_b64": request.image_b64,
         "quantity": request.quantity,
         
         # Pricing (Hawker sets buyer price, supplier sets their cost)
         "buyer_price": request.buyer_price,
-        "commission": None,  # buyer_price - supplier_cost - platform_fee
-        "platform_fee": None,
+        "commission": (request.buyer_price - request.supplier_cost) if request.supplier_cost else None,
+        "platform_fee": round(request.buyer_price * 0.01, 2),
         
         # Buyer (Filled when they pay)
         "buyer_id": None,
@@ -3118,6 +3153,50 @@ async def health():
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "platform": "CraftHer Trade Finance"
     }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PUBLIC SUPPLIER RESPONSE (no auth) — accept/decline via SMS/WhatsApp link
+# ═══════════════════════════════════════════════════════════════════════════
+
+class SupplierResponse(BaseModel):
+    accepted: bool
+    supplier_phone: Optional[str] = None
+    supplier_cost: Optional[float] = None
+
+
+@api_router.post("/escrow/three-party/{tx_id}/supplier-response")
+async def supplier_response_public(tx_id: str, payload: SupplierResponse):
+    """Supplier accepts/declines a 3-party escrow from the SMS/WhatsApp link (no login required)."""
+    tx = await db.three_party_transactions.find_one({"tx_id": tx_id}, {"_id": 0})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    if tx.get("status") not in ("pending_approval", "awaiting_supplier"):
+        raise HTTPException(status_code=400, detail=f"Cannot respond — current status: {tx.get('status')}")
+
+    if payload.accepted:
+        supplier_cost = payload.supplier_cost or tx.get("supplier_cost")
+        if not supplier_cost:
+            raise HTTPException(status_code=400, detail="supplier_cost required to accept")
+        buyer_price = tx.get("buyer_price", 0)
+        platform_fee = round(buyer_price * 0.01, 2)
+        commission = buyer_price - supplier_cost - platform_fee
+        update = {
+            "status": "supplier_approved",
+            "supplier_cost": supplier_cost,
+            "commission": commission,
+            "platform_fee": platform_fee,
+            "approved_at": datetime.now(timezone.utc).isoformat(),
+        }
+    else:
+        update = {
+            "status": "rejected",
+            "rejected_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    await db.three_party_transactions.update_one({"tx_id": tx_id}, {"$set": update})
+    return {"ok": True, "tx_id": tx_id, "status": update["status"]}
+
 
 # Include the router
 app.include_router(api_router)

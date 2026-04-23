@@ -835,8 +835,11 @@ async def get_me(request: Request):
     """Get current authenticated user with trade metrics"""
     user = await get_current_user(request)
     
-    # Get trade metrics
-    orders = await db.orders.find({"seller_id": user['user_id']}, {"_id": 0}).to_list(1000)
+    # Get trade metrics with optimized projection
+    orders = await db.orders.find(
+        {"seller_id": user['user_id']}, 
+        {"_id": 0, "status": 1, "escrow_status": 1, "buyer_country": 1, "total_paid": 1, "buyer_phone": 1, "seller_payout": 1, "is_international": 1}
+    ).sort("created_at", -1).limit(100).to_list(100)
     trade_metrics = calculate_trade_metrics(orders)
     
     return {
@@ -1107,8 +1110,11 @@ async def get_product_by_code(code: str, currency: str = "TZS"):
         {"_id": 0, "password_hash": 0}
     )
     
-    # Get seller's trade metrics
-    orders = await db.orders.find({"seller_id": product['seller_id']}, {"_id": 0}).to_list(1000)
+    # Get seller's trade metrics with optimized projection
+    orders = await db.orders.find(
+        {"seller_id": product['seller_id']}, 
+        {"_id": 0, "status": 1, "escrow_status": 1, "buyer_country": 1, "total_paid": 1, "buyer_phone": 1, "seller_payout": 1, "is_international": 1}
+    ).sort("created_at", -1).limit(100).to_list(100)
     trade_metrics = calculate_trade_metrics(orders)
     
     # Convert price if different currency requested
@@ -1528,7 +1534,11 @@ async def get_seller_stats(request: Request):
     
     products_count = await db.products.count_documents({"seller_id": user['user_id']})
     
-    orders = await db.orders.find({"seller_id": user['user_id']}, {"_id": 0}).to_list(1000)
+    # Optimized query with projection
+    orders = await db.orders.find(
+        {"seller_id": user['user_id']}, 
+        {"_id": 0, "status": 1, "escrow_status": 1, "seller_payout": 1, "is_international": 1, "total_paid": 1, "buyer_country": 1, "buyer_phone": 1}
+    ).sort("created_at", -1).limit(200).to_list(200)
     
     # Calculate trade metrics
     trade_metrics = calculate_trade_metrics(orders)
@@ -1559,14 +1569,17 @@ async def get_seller_stats(request: Request):
 # ============== TRADE FINANCE ENDPOINTS ==============
 
 @api_router.get("/seller/trade-history")
-async def get_trade_history(request: Request):
+async def get_trade_history(request: Request, page: int = 1, limit: int = 20):
     """Get detailed trade history for credit scoring eligibility"""
     user = await get_current_user(request)
     
+    # Paginated query with optimized projection
+    skip = (page - 1) * limit
     orders = await db.orders.find(
         {"seller_id": user['user_id']},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(100)
+        {"_id": 0, "order_id": 1, "status": 1, "escrow_status": 1, "total_paid": 1, "seller_payout": 1, 
+         "buyer_country": 1, "is_international": 1, "created_at": 1, "paid_at": 1, "delivered_at": 1}
+    ).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
     
     for order in orders:
         for key in ['created_at', 'paid_at', 'delivered_at']:

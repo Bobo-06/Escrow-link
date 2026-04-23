@@ -1,332 +1,174 @@
-# Biz-Salama / SecureTrade TZ PWA
-## Product Requirements Document
+# Biz-Salama - SecureTrade Web App
 
-### Overview
-SecureTrade TZ (Biz-Salama) is Tanzania's premier escrow-protected marketplace PWA. It enables secure social commerce transactions with escrow protection, mobile money integration (M-Pesa, Airtel, Tigo, Selcom), diaspora payments (NALA), AI-powered support, and 2025 fintech standard features.
+## Overview
+Biz-Salama is Tanzania's trusted escrow marketplace platform for social sellers. The app enables secure transactions between buyers and sellers with escrow protection, verified seller profiles, and mobile money integration.
 
-### Target Market
-- Women entrepreneurs in Tanzania
-- Social commerce sellers (Instagram, WhatsApp)
-- Diaspora buyers (NALA integration for USD/GBP/EUR)
-- Artisans and small business owners
-
-## Grant Requirements Compliance (FSDT/UNCDF/BOT Sandbox) ✅
-
-All 6 grant requirements have been implemented and verified:
-
-### ✅ GAP 1: Authentication Layer
-- Phone OTP login via `/login` with phone/email toggle
-- Password reset via `/forgot-password` with OTP verification
-- Registration at `/register` with full form
-- JWT session management with secure token storage
-
-### ✅ GAP 2: Transaction History
-- Full transaction history at `/seller` → History tab
-- Filters: All, Released, In Escrow, Disputed, Refunded
-- Search by item, TX ID, or seller name
-- Status badges with Swahili/English labels
-- Total spent/earned summary card
-
-### ✅ GAP 3: Bottom Navigation
-- Persistent 4-tab navigation: Home (Nyumbani), History (Historia), Support (Msaada), Profile (Wasifu)
-- Available on all authenticated screens
-- Modern fintech design with active state indicators
-
-### ✅ GAP 4: Onboarding Flow
-- 4-screen trust-building onboarding on first visit:
-  1. "Biashara Salama / Trade Safely" - BOT-licensed escrow
-  2. "Njia 5 za Malipo / 5 Payment Methods" - M-Pesa, Airtel, Tigo, NALA, Selcom
-  3. "AI Inasuluhisha / AI Mediates Disputes" - 24h resolution
-  4. "Imefanywa Tanzania / Made in Tanzania" - Local legitimacy
-- Skip button and swipe navigation
-- Stored in AsyncStorage to show only once
-
-### ✅ GAP 5: Profile / KYC Screen
-- Full profile page at `/seller/profile`
-- KYC Tier Display:
-  - Tier 0: Mgeni (Guest) - TZS 50K limit
-  - Tier 1: Msingi (Basic) - TZS 500K limit
-  - Tier 2: Imethibitishwa (Verified) - TZS 5M limit
-  - Tier 3: Biashara (Business) - TZS 50M limit
-- Requirements shown for each tier
-- "Panda Kiwango / Upgrade" button for next tier
-
-### ✅ GAP 6: Service Worker / PWA
-- `manifest.json` linked in HTML head
-- Service worker `sw.js` registered on page load
-- Offline caching, background sync, push notifications
+**Live URL:** https://escrow-link.preview.emergentagent.com
+**Custom Domain (Pending):** www.biz-salama.co.tz
 
 ---
 
-## Implemented Features
+## What's Been Implemented
 
-### Phase 1: Core Infrastructure (COMPLETED)
-- [x] FastAPI backend with MongoDB
-- [x] JWT-based custom authentication (phone/email toggle)
-- [x] Google OAuth integration (Emergent-managed)
-- [x] Product CRUD operations with payment link generation
-- [x] Order management lifecycle (create -> pay -> ship -> deliver -> confirm)
-- [x] 5% fee structure (3% buyer protection + 2% seller acquisition)
+### Phase 1: Backend API (COMPLETED)
+- [x] FastAPI backend with all CRUD operations
+- [x] JWT-based authentication (register/login)
+- [x] Products API (create, list, get by ID)
+- [x] Orders API (create, track, confirm delivery)
+- [x] Escrow state management
+- [x] Three-Party Escrow System (Hawker ↔ Supplier ↔ Buyer)
+- [x] AI Product Suggestions endpoint
+- [x] Forgot Password flow
 
-### Phase 2: SecureTrade PWA Design (COMPLETED)
-- [x] Premium fintech dark theme UI
-- [x] Landing page with trust stats
-- [x] Trust strip icons
-- [x] Sample product cards with trust score
+### Phase 2: React Web App (COMPLETED - April 2026)
+- [x] Converted from Expo to React web app for custom domain support
+- [x] Beautiful landing page with:
+  - Hero section with value proposition
+  - Trust indicators and stats
+  - How it works section
+  - CTA buttons
+- [x] Marketplace page with:
+  - Product grid with verified badges
+  - Search and filter functionality
+  - Category selection
+  - Sort options (newest, price, rating)
+- [x] Product detail page
+- [x] Seller profile page
+- [x] Login/Register pages with form validation
+- [x] Seller Dashboard
+- [x] Checkout flow
+- [x] Order tracking page
 
-### Phase 3: Bilingual UI (COMPLETED)
-- [x] Full Swahili/English interface throughout
-
-### Phase 4: Tanzania-Specific Features (COMPLETED)
-- [x] M-Pesa STK Push payment flow (mock mode)
-- [x] Voice confirmation (Swahili TTS)
-- [x] Offline mode indicator
-- [x] Seller Trust Score card component
-
-### Phase 5: AI Integration (COMPLETED)
-- [x] Claude Sonnet 4 integration via Emergent LLM Key
-- [x] AI Support Chatbot (bilingual)
-- [x] AI Dispute Mediator
-- [x] AI Fraud Detection
-
-### Phase 6: Complete Buyer Flow (COMPLETED)
-- [x] Product page with escrow badges
-- [x] Checkout page with delivery form
-- [x] Payment gateway selection
-- [x] Order tracking with timeline
-
-### Phase 7: Seller Dashboard (COMPLETED)
-- [x] Revenue stats card
-- [x] Product list management
-- [x] Create payment link flow
-
-### Phase 8: 2025 Fintech Upgrade Pack (COMPLETED)
-- [x] Biometric Authentication
-- [x] Dark Mode Support
-- [x] Onboarding Flow
-- [x] Transaction History
-- [x] Push Notification Banner
-- [x] KYC Tier Gate (mock)
-- [x] Live Exchange Rate Ticker
-- [x] Bottom Navigation
-
-### Phase 9: Payment Gateway Wiring (COMPLETED)
-- [x] Frontend API module with all payment endpoints
-- [x] MobileMoneyScreen wired to M-Pesa endpoint
-- [x] SelcomScreen wired to Selcom endpoints
-- [x] NalaScreen wired to NALA endpoint
-- [x] Escrow/KYC/Notifications API integration
-
-### Phase 10: PWA Features (COMPLETED)
-- [x] Service Worker with offline caching
-- [x] Web App Manifest
-- [x] Push notifications support
-
-### Phase 11: Auth Enhancements (COMPLETED - April 2026)
-- [x] Fixed login function parameter format in authStore
-- [x] Fixed expo-router web navigation issue
-- [x] Added window.location.href fallback for web navigation
-- [x] Fixed seller dashboard auth guard with proper loading states
-
-### Phase 12: Forgot Password Feature (COMPLETED - April 2026)
-- [x] Backend API: POST /api/auth/forgot-password (OTP generation)
-- [x] Backend API: POST /api/auth/reset-password (OTP verification)
-- [x] SMS template for password reset OTP
-- [x] Frontend forgot-password.tsx page with 3-step flow
-- [x] Phone/Email method toggle
-- [x] OTP verification screen with timer
-- [x] Password reset confirmation
-- [x] Demo OTP display for testing (to be removed in production)
-- [x] Session invalidation after password reset
-
-### Phase 13: Rating & Feedback System (COMPLETED - April 2026)
-- [x] Backend API: POST /api/orders/{id}/rate
-- [x] RatingModal component with 5-star rating
-- [x] Optional comment field
-- [x] Seller average rating calculation
-- [x] Rating shown on product pages
-- [x] Modal triggered after delivery confirmation
-
-### Phase 14: Three-Party Escrow System (COMPLETED - April 2026)
-**Solves the Hawker ↔ Supplier ↔ Buyer trust gap**
-- [x] Backend API: POST /api/escrow/three-party/create (Hawker creates stock request)
-- [x] Backend API: GET /api/escrow/three-party/pending (Supplier sees pending requests)
-- [x] Backend API: POST /api/escrow/three-party/approve (Supplier approves with wholesale price)
-- [x] Backend API: GET /api/escrow/three-party/{tx_id} (Get transaction details)
-- [x] Backend API: POST /api/escrow/three-party/pay (Buyer pays, funds held in escrow)
-- [x] Backend API: POST /api/escrow/three-party/release (Split funds after delivery)
-- [x] Backend API: GET /api/escrow/three-party/my-transactions (Transaction history)
-- [x] Backend API: POST /api/escrow/three-party/reject (Supplier rejects request)
-- [x] ThreePartyEscrow.tsx React Native component
-- [x] Three tabs: Create Request, Pending Approvals, Transaction History
-- [x] Bilingual UI (Swahili/English)
-- [x] 2.5% platform fee on transactions
-- [x] Split preview showing Supplier/Hawker/Platform amounts
-- [x] Integrated into Seller Dashboard Quick Actions
-- [x] Mobile-responsive design (tested on 390x844 viewport)
+### Phase 3: Design & UX (COMPLETED)
+- [x] Dark theme with gold accent colors
+- [x] Glass morphism UI effects
+- [x] Responsive design (mobile + desktop)
+- [x] Framer Motion animations
+- [x] Trust badges throughout
+- [x] Tailwind CSS styling
 
 ---
 
-## Complete Customer Journey
+## Tech Stack
 
-### Step 1: Landing Page
-Customer arrives at Masoko Salama (Protected Marketplace) and sees:
-- Live exchange rates (USD, GBP, EUR to TSh)
-- "ESCROW PROTECTED" badge
-- Trust stats: 1,000+ sellers, TZS 500M+ volume, 98% success
-- Trust strip: Escrow, M-Pesa, KYC, Dispute
-- Trending products with TRUST scores
+### Frontend (New - React Web App)
+- React 18 + TypeScript
+- React Router v6
+- Tailwind CSS v3.4
+- Framer Motion
+- Zustand (state management)
+- Axios (API calls)
+- Lucide React (icons)
 
-### Step 2: Product Page (/pay/{code})
-Customer clicks a product and sees:
-- Product image and description
-- Price in TZS with USD equivalent
-- **Seller Trust Card**: Name, Trust Score (0-100), Trades, Rating, Member since
-- "Muuzaji Mwaminifu · Trusted" badge
-- Buyer Protection notice
-- **"Nunua Salama · Buy Securely"** button
-
-### Step 3: Checkout (/checkout/{code})
-Customer enters delivery details:
-- Order summary with price breakdown
-- 3% buyer protection fee shown
-- Full name, phone (+255), address fields
-- **"Endelea · Continue"** to payment selection
-
-### Step 4: Payment Gateway Selection
-Customer chooses payment method:
-- **M-Pesa** (Vodacom) - STK Push
-- **Airtel Money** - STK Push
-- **Tigo Pesa** - STK Push
-- **Selcom** (Bank/Wallet/USSD)
-- **NALA** (Diaspora - USD/GBP/EUR)
-- **Stripe** (International cards)
-
-### Step 5: Payment Confirmation (/confirm/{orderId})
-After successful payment:
-- "Pesa Imeshikwa · Funds Secured" header
-- Receipt with TX ID, amounts, seller, method
-- **Voice Confirmation** (Swahili TTS)
-- SMS notification via Africa's Talking
-- **"Fuatilia Agizo · Track Order"** button
-
-### Step 6: Order Tracking (/track/{orderId})
-Customer tracks delivery:
-- Sendy Africa tracking integration
-- Real-time shipment timeline (5 stages)
-- ETA display
-- Escrow status shown
-- **AI Support Chatbot** (floating button)
-
-### Step 7: Delivery Actions
-When item arrives, customer has two options:
-
-**A) Release Payment (Happy Path)**
-- Click "Toa Malipo / Release Payment"
-- Escrow released to seller's mobile wallet
-- **Rating Modal** appears:
-  - 5-star rating selection
-  - Optional comment field
-  - "Wasilisha Ukadiriaji / Submit Rating"
-
-**B) Open Dispute (Problem)**
-- Click "Fungua Tatizo / Open Dispute"
-- **AI Dispute Mediator** opens
-- Explains issue to AI
-- AI recommends: RELEASE / REFUND / ESCALATE
-- Human escalation if needed
-
-### Step 8: Post-Transaction
-- Seller receives payment
-- Seller's rating updated
-- Transaction recorded for credit scoring
-- Protection expires after 14 days (auto-release)
+### Backend
+- FastAPI (Python)
+- MongoDB (database)
+- JWT authentication
+- Pydantic models
 
 ---
 
-## Bug Fixes (April 2026)
+## API Endpoints
 
-### Login/Register Navigation Fix
-**Issue:** Login and register were failing silently on web. The forms would submit successfully but not navigate to the seller dashboard.
+### Authentication
+- `POST /api/auth/register` - Register new user
+- `POST /api/auth/login` - Login
+- `GET /api/auth/me` - Get current user
+- `POST /api/auth/forgot-password` - Forgot password
 
-**Root Cause:**
-1. The `login` function in authStore was expecting individual parameters `(email, password)` but was being called with an object `{phone, password}` or `{email, password}`
-2. The expo-router `useRouter().replace()` was being called before the Root Layout component was fully mounted (expo-router web specific issue)
+### Products
+- `GET /api/products` - List all products
+- `POST /api/products` - Create product
+- `GET /api/products/{id}` - Get product details
+- `GET /api/products/seller/{seller_id}` - Get seller's products
 
-**Fix Applied:**
-1. Updated authStore login function signature to accept `LoginData` object
-2. Changed post-login navigation to use `window.location.href = '/seller'` for web platform
-3. Added proper loading states and auth guards in seller dashboard to prevent premature navigation
+### Orders
+- `POST /api/orders` - Create order
+- `GET /api/orders/{id}` - Get order details
+- `GET /api/orders/mine` - Get my orders
+- `PATCH /api/orders/{id}/status` - Update order status
 
----
-
-## Testing Status
-
-### Backend Testing (April 2026)
-- All 18+ endpoints tested and working
-- Complete E2E order flow verified
-- Mock payment gateways functional
-- AI integration working with bilingual responses
-
-### Frontend Testing (April 2026)
-- Landing page: VERIFIED
-- Auth flow (Login/Register): VERIFIED ✅
-- Seller dashboard: VERIFIED ✅
-- Mobile responsiveness: VERIFIED
+### Three-Party Escrow
+- `POST /api/escrow/three-party/create` - Hawker creates stock request
+- `GET /api/escrow/three-party/pending` - Supplier's pending requests
+- `POST /api/escrow/three-party/approve` - Supplier approves
+- `POST /api/escrow/three-party/pay` - Buyer pays
+- `POST /api/escrow/three-party/release` - Release escrow funds
+- `GET /api/escrow/three-party/my-transactions` - Transaction history
 
 ---
 
-## Known Limitations (MOCKED)
+## Upcoming Tasks
 
-1. **Payment Processing:** All payment gateway calls are simulated
-2. **Escrow:** Fund holding is database status-based
-3. **KYC:** NIDA verification is simulated
-4. **Exchange Rates:** Static rates
+### P1 - Custom Domain
+- [ ] Link www.biz-salama.co.tz via Emergent support
+- [ ] Configure DNS at Habari Node
 
----
+### P1 - Save to GitHub
+- [ ] Push code to Bobo-06/Escrow-link repository
 
-## Upcoming Tasks (P1)
-
-- [ ] Add real M-Pesa Daraja API keys for production
-- [ ] Add real Selcom API keys for production
-- [ ] Add real Stripe API keys for production
-- [ ] Complete Google OAuth token exchange flow
-- [ ] Link custom domain www.biz-salama.co.tz (see Domain Setup section)
-
-## Future Tasks (P2-P4)
-
-- [ ] Real NMB Bank escrow integration
-- [ ] Seller profile page with ratings
-- [ ] Trade history export for credit scoring
-- [ ] Two-factor authentication
-- [ ] SMS notifications for three-party escrow flow
-- [ ] Supplier dashboard with incoming requests view
+### P2 - Real Integrations
+- [ ] M-Pesa API integration
+- [ ] Selcom payment gateway
+- [ ] Smile Identity KYC
 
 ---
 
-## Custom Domain Setup (www.biz-salama.co.tz)
+## Environment Variables
 
-To link your custom domain to this app:
+### Frontend (.env)
+```
+REACT_APP_BACKEND_URL=https://escrow-link.preview.emergentagent.com
+PORT=3000
+```
 
-1. **In Emergent Platform:**
-   - Go to your project settings
-   - Click "Deployment" → "Custom Domain"
-   - Enter: `www.biz-salama.co.tz`
-
-2. **In your DNS provider (e.g., GoDaddy, Namecheap, Cloudflare):**
-   - Add a **CNAME record**:
-     - Name: `www`
-     - Value: `your-app-name.preview.emergentagent.com` (or the provided target)
-   - OR Add an **A record** (if provided by Emergent)
-   - SSL will be auto-provisioned
-
-3. **Verification:**
-   - Wait 15-30 minutes for DNS propagation
-   - Visit https://www.biz-salama.co.tz
-
-Note: The root domain `biz-salama.co.tz` (without www) may need a redirect to the www version.
+### Backend (.env)
+```
+MONGO_URL=mongodb://localhost:27017
+DB_NAME=test_database
+EMERGENT_LLM_KEY=sk-emergent-xxx
+BASE_URL=https://escrow-link.preview.emergentagent.com
+```
 
 ---
 
-*Last Updated: April 22, 2026*
-*Version: 4.0 (Three-Party Escrow System)*
+## Directory Structure
+
+```
+/app
+├── backend/
+│   └── server.py                # FastAPI backend (all endpoints)
+├── frontend/
+│   ├── src/
+│   │   ├── components/          # React components (Navbar, Footer)
+│   │   ├── pages/               # Page components
+│   │   │   ├── LandingPage.tsx
+│   │   │   ├── Marketplace.tsx
+│   │   │   ├── ProductDetail.tsx
+│   │   │   ├── SellerProfile.tsx
+│   │   │   ├── Login.tsx
+│   │   │   ├── Register.tsx
+│   │   │   ├── SellerDashboard.tsx
+│   │   │   ├── Checkout.tsx
+│   │   │   └── OrderTracking.tsx
+│   │   ├── store/               # Zustand auth store
+│   │   ├── lib/                 # API utilities
+│   │   └── index.css            # Tailwind styles
+│   ├── tailwind.config.js
+│   └── package.json
+├── frontend_expo_backup/        # Original Expo app (backup)
+└── memory/
+    └── PRD.md
+```
+
+---
+
+## Mocked Features
+- Payment gateways (M-Pesa, Selcom, Stripe) - simulation mode
+- Product images - using placeholder emojis
+- SMS notifications - logged but not sent
+
+---
+
+*Last Updated: April 23, 2026*
+*Version: 5.0 (React Web App Conversion)*

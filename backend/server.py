@@ -973,6 +973,72 @@ async def create_product(product: ProductCreate, request: Request):
         "created_at": product_data["created_at"].isoformat()
     }
 
+@api_router.get("/products/public")
+async def get_public_products(
+    category: Optional[str] = None,
+    search: Optional[str] = None,
+    sort: str = "newest"
+):
+    """Get all public products for marketplace (no auth required)"""
+    query = {}
+    
+    if category and category != 'all':
+        query["category"] = category
+    
+    if search:
+        query["$or"] = [
+            {"name": {"$regex": search, "$options": "i"}},
+            {"description": {"$regex": search, "$options": "i"}}
+        ]
+    
+    # Define sort order
+    sort_order = -1 if sort in ["newest", "price_high"] else 1
+    sort_field = "created_at" if sort == "newest" else "price" if sort in ["price_low", "price_high"] else "rating"
+    
+    products = await db.products.find(
+        query,
+        {"_id": 0}
+    ).sort(sort_field, sort_order).to_list(50)
+    
+    # Get seller info for each product
+    for p in products:
+        if isinstance(p.get('created_at'), datetime):
+            p['created_at'] = p['created_at'].isoformat()
+        
+        # Get seller name
+        if p.get('seller_id'):
+            seller = await db.users.find_one({"user_id": p['seller_id']}, {"_id": 0, "name": 1, "username": 1})
+            if seller:
+                p['seller_name'] = seller.get('name') or seller.get('username', 'Seller')
+    
+    return {"products": products, "count": len(products)}
+
+@api_router.get("/products/detail/{product_id}")
+async def get_product_public(product_id: str):
+    """Get single product details for public view (no auth required)"""
+    product = await db.products.find_one(
+        {"product_id": product_id},
+        {"_id": 0}
+    )
+    
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    if isinstance(product.get('created_at'), datetime):
+        product['created_at'] = product['created_at'].isoformat()
+    
+    # Get seller info
+    if product.get('seller_id'):
+        seller = await db.users.find_one(
+            {"user_id": product['seller_id']}, 
+            {"_id": 0, "name": 1, "username": 1, "phone": 1}
+        )
+        if seller:
+            product['seller_name'] = seller.get('name') or seller.get('username', 'Seller')
+            product['seller_phone'] = seller.get('phone', '')
+    
+    return product
+
 @api_router.get("/products")
 async def get_my_products(request: Request):
     """Get all products for current seller"""

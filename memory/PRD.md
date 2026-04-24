@@ -124,10 +124,9 @@ ENABLE_HEALTH_CHECK=false
 - **NOT YET IMPLEMENTED** Click-Pesa (scheduled P1)
 - Exchange rates static (USD=2500, GBP=3200, EUR=2700, KES=18, UGX=0.67, TZS=1)
 
-## Test Results (iteration_1.json)
-- Backend: 100% (15/15 PASS) — phone normalization, 3-party escrow, HMAC role views, fee invariant
-- Frontend: 100% critical flows — login across 5 phone formats, PWA Install modal, role-scoped verify
-- Minor items flagged: CORS `*` + credentials, password min_length validator, invalid-link page contrast
+## Test Results
+- **Iter 2 (Apr 24, 2026)**: 23/23 backend PASS (8 new + 15 regression); 100% critical frontend flows. No critical bugs. Minor: Whisper BadRequestError now mapped → HTTP 400 (fixed post-test). See `/app/test_reports/iteration_2.json`.
+- **Iter 1 (Apr 23, 2026)**: 15/15 backend PASS. See `/app/test_reports/iteration_1.json`.
 
 ---
-*Version 6.1 — Continuing session, Apr 24, 2026*
+*Version 6.2 — Voice + Seed + SEO prerender shipped, Apr 24, 2026*

@@ -3518,9 +3518,16 @@ async def voice_transcribe(
         )
         text = getattr(response, "text", None) or ""
         return {"text": text.strip(), "language": language or "auto", "duration_bytes": len(raw)}
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Whisper transcription failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {e}")
+        msg = str(e)
+        logger.error(f"Whisper transcription failed: {msg}")
+        # Translate BadRequest-style errors (invalid/empty audio, wrong format) → 400
+        low = msg.lower()
+        if any(k in low for k in ("badrequest", "invalid", "decode", "400", "could not be decoded")):
+            raise HTTPException(status_code=400, detail=f"Invalid audio: {msg}")
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {msg}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

@@ -10,6 +10,7 @@ import {
   Loader2,
   AlertCircle,
   Sparkles,
+  Share2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import SEO from '../components/SEO';
@@ -139,6 +140,33 @@ const MyOrderPage: React.FC = () => {
     }
   };
 
+  const handleShare = async () => {
+    if (!order) return;
+    const base = window.location.origin;
+    const orderUrl = `${base}/my-orders/${order.id}${buyerToken ? `?t=${buyerToken}` : ''}`;
+    const isDone = released || order.status === 'completed' || order.escrow_status === 'released';
+    const itemLine = `${order.name}${order.seller_name ? ` — ${order.seller_name}` : ''}`;
+    const message = isDone
+      ? `📦 Nimenunua ${itemLine} kupitia Biz-Salama — malipo yalindwa na escrow hadi nikathibitisha risiti ✅\n\nI just bought ${itemLine} safely with Biz-Salama escrow — funds only released after I confirmed delivery.\n\n🛡️ ${base}`
+      : `🛡️ Ninanunua ${itemLine} kupitia Biz-Salama — malipo yangu yamelindwa na escrow salama ✅\n\nI'm buying ${itemLine} safely with Biz-Salama escrow.\n\n${base}`;
+
+    // Try native Web Share first (mobile), fall back to WhatsApp deep-link
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: 'Biz-Salama — Escrow-protected purchase',
+          text: message,
+          url: orderUrl,
+        });
+        return;
+      }
+    } catch {
+      /* user cancelled or unsupported — fall through */
+    }
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(message + '\n\n' + orderUrl)}`;
+    window.open(waUrl, '_blank', 'noopener,noreferrer');
+  };
+
   // ────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -224,6 +252,22 @@ const MyOrderPage: React.FC = () => {
               ? 'Pesa imetolewa kwa muuzaji / Funds released to seller'
               : 'Pesa yako ipo salama kwenye escrow / Your money is safely in escrow'}
           </div>
+
+          {/* WhatsApp share — every completed order becomes organic marketing */}
+          <button
+            type="button"
+            onClick={handleShare}
+            data-testid="share-receipt-btn"
+            className="mt-3 w-full py-2.5 rounded-lg bg-[#25D366]/10 hover:bg-[#25D366]/20
+                       border border-[#25D366]/40 text-[#25D366] font-semibold text-sm
+                       flex items-center justify-center gap-2 transition-colors"
+          >
+            <Share2 className="w-4 h-4" />
+            <span className="flex flex-col items-center leading-tight sm:flex-row sm:gap-1">
+              <span>Shiriki risiti WhatsApp</span>
+              <span className="text-[11px] opacity-80 sm:opacity-100">· Share receipt</span>
+            </span>
+          </button>
         </div>
 
         {/* Stepper */}

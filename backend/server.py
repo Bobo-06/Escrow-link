@@ -781,11 +781,27 @@ async def reset_password(data: ResetPasswordRequest):
     if len(data.new_password) < 6:
         raise HTTPException(status_code=400, detail="Nenosiri liwe na herufi 6 au zaidi / Password must be at least 6 characters")
     
+    # Normalize phone/email to match storage format (same as register/login)
+    if data.phone:
+        normalized = normalize_tz_phone(data.phone)
+        if not normalized:
+            raise HTTPException(
+                status_code=400,
+                detail="Nambari ya simu si sahihi. Tumia fomati: 0712345678 au +255712345678 / Invalid phone number. Use format: 0712345678 or +255712345678",
+            )
+        data.phone = normalized
+    if data.email:
+        data.email = data.email.strip().lower()
+    
     # Find user
     if data.email:
         user = await db.users.find_one({"email": data.email}, {"_id": 0})
     else:
         user = await db.users.find_one({"phone": data.phone}, {"_id": 0})
+        if not user and data.phone:
+            # Backward-compat for legacy records stored without +255
+            last9 = data.phone[-9:]
+            user = await db.users.find_one({"phone": {"$regex": f"{last9}$"}}, {"_id": 0})
     
     if not user:
         raise HTTPException(status_code=404, detail="Akaunti haijapatikana / Account not found")

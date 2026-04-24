@@ -136,5 +136,17 @@ ENABLE_HEALTH_CHECK=false
 - **Iter 2 (Apr 24, 2026)**: 23/23 backend PASS (8 new + 15 regression); 100% critical frontend flows. No critical bugs. Minor: Whisper BadRequestError now mapped → HTTP 400 (fixed post-test). See `/app/test_reports/iteration_2.json`.
 - **Iter 1 (Apr 23, 2026)**: 15/15 backend PASS. See `/app/test_reports/iteration_1.json`.
 
+## ⚠️ CRITICAL — Production vs Preview Discrepancy (Apr 24, 2026)
+When users report "sign in still failing" or "PWA still shows React atom icon", **check which URL they are using before assuming a code bug**:
+- `salama-secure.preview.emergentagent.com` = preview env, has all current fixes (phone normalization, gold shield PWA icon, voice features, buyer order page)
+- `www.biz-salama.co.tz` = production custom domain; only has whatever build was last deployed from Emergent → Deployments. If the user reports issues that are already fixed in preview, **the cause is almost always that production has not been redeployed yet**.
+- Quick sanity check: `curl -s https://www.biz-salama.co.tz/logo192.png | python3 -c "from PIL import Image; import sys, io; px=Image.open(io.BytesIO(sys.stdin.buffer.read())).convert('RGBA').getpixel((96,96)); print('Gold ✓' if px[0]>200 and px[1]>150 and px[2]<100 else 'Stale React atom ✗')"`
+
+## Shipped Apr 24, 2026 (post-iter3) — PWA Icon Rebranding
+- [x] **Branded PWA icons** — generated gold shield + white checkmark on dark ink navy via `/app/backend/scripts/generate_icons.py`. Replaces default CRA React atom (RGB cyan `97,218,251`) with brand gold (RGB `251,191,36`). Outputs: `favicon.ico` (multi-res 16/32/48/64), `logo192.png`, `logo512.png`, new `apple-touch-icon.png` (180).
+- [x] **Cache-bust** applied via `?v=2` query string in `index.html` + `manifest.json` so browsers and OS install flows force-refresh icons.
+- [x] **manifest.json** — added `purpose: "any maskable"` for Android adaptive icons, `description`, `categories`, `scope`, `orientation` for better install experience.
+- [x] Verified login on preview works for all 5 phone formats (`+255712345678`, `255712345678`, `0712345678`, `712345678`, spaced) → redirects to `/dashboard`. Issue reported by user was on production domain which still runs a pre-fix build.
+
 ---
-*Version 6.2 — Voice + Seed + SEO prerender shipped, Apr 24, 2026*
+*Version 6.3 — PWA icon rebranding + production-vs-preview disambiguation, Apr 24, 2026*

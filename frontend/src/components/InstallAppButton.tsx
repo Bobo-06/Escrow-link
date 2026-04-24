@@ -11,11 +11,19 @@ const InstallAppButton: React.FC<{ className?: string }> = ({ className = '' }) 
   const [showModal, setShowModal] = useState(false);
   const [installed, setInstalled] = useState(false);
   const [platform, setPlatform] = useState<'ios' | 'android' | 'desktop'>('desktop');
+  const [inIframe, setInIframe] = useState(false);
 
   useEffect(() => {
     const ua = navigator.userAgent;
     if (/iPhone|iPad|iPod/.test(ua)) setPlatform('ios');
     else if (/Android/.test(ua)) setPlatform('android');
+
+    // Detect iframe — PWAs cannot install from inside an iframe (e.g. Emergent's preview panel)
+    try {
+      setInIframe(window.self !== window.top);
+    } catch {
+      setInIframe(true); // cross-origin throws → we are framed
+    }
 
     const handler = (e: Event) => {
       e.preventDefault();
@@ -89,6 +97,22 @@ const InstallAppButton: React.FC<{ className?: string }> = ({ className = '' }) 
             </div>
 
             <div className="p-6 space-y-4 text-ink-300 text-sm">
+              {inIframe ? (
+                <div className="p-4 bg-red-500/10 border border-red-500/40 rounded-xl text-red-200 text-xs" data-testid="install-iframe-warning">
+                  <p className="font-semibold text-red-100 mb-1">You are in a preview window.</p>
+                  <p className="mb-2">Browsers block PWA install from inside an embedded preview. Open the app in a real Chrome tab first:</p>
+                  <a
+                    href={window.location.href}
+                    target="_top"
+                    rel="noreferrer"
+                    className="inline-block underline text-red-100 font-semibold"
+                    data-testid="install-open-in-tab"
+                  >
+                    Open in a new tab
+                  </a>
+                </div>
+              ) : null}
+
               {platform === 'ios' && (
                 <ol className="space-y-3">
                   <li className="flex gap-3">

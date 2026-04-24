@@ -76,10 +76,18 @@ export default {
 - Discovery UI layer — related products, trending sellers, compare drawer, "lowest price" badge on search
 - Admin moderator panel + user role `admin`
 - Ratings / reviews surfaced on SellerProfile + ProductDetail
+- Voice AI assistant loop (STT → Claude → Web Speech API TTS) for in-app support
 - Tighten CORS (replace `*` with explicit origins when `allow_credentials=True`)
 - Add Pydantic `min_length=6` validator on `UserCreate.password`
-- Refactor `server.py` (3,484 lines) into routers (`auth.py`, `escrow_2p.py`, `escrow_3p.py`, `payments.py`, `audit.py`)
+- Refactor `server.py` (~3,800 lines) into routers (`auth.py`, `escrow_2p.py`, `escrow_3p.py`, `voice.py`, `seo.py`, `payments.py`, `audit.py`)
 - Native app wrapper (Capacitor → Play Store / App Store)
+- Optional category dropdown inside voice-listing modal (currently auto-detected, defaults to 'general')
+
+## Shipped Apr 24, 2026 (post-iter2)
+- [x] **Buyer Order Page** `/my-orders/:orderId` — dual-mode (supports traditional `order_*` and 3-party `3P_*` IDs); stepper UI; big emerald "📦 Nimepokea bidhaa / Confirm Delivery" button; auto-detects completed state; Swahili+English confirm dialog.
+- [x] **Public 3-party buyer confirm-delivery** endpoint `POST /api/escrow/three-party/{tx_id}/buyer-confirm-delivery?token=<hmac>` — no login, HMAC-authed, releases escrow to supplier+hawker+platform.
+- [x] **Voice engagement strip** on landing page — `GET /api/products/voice-listed` returns 3 latest voice-created products; `<VoiceListedStrip>` renders cards with "VOICE" mic badges + "Try voice listing" CTA → `/dashboard`. Hides gracefully when empty.
+- [x] **Category support** on `ProductCreate` (default `'general'`) + backfilled on all existing products so marketplace filters stay sane for future voice listings.
 
 ## Key API Endpoints
 - **Auth**: `/api/auth/{register,login,forgot-password,reset-password,session,me,profile,logout}`

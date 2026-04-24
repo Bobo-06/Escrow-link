@@ -214,6 +214,8 @@ class ProductCreate(BaseModel):
     currency: str = "TZS"  # Base pricing currency
     description: Optional[str] = None
     image: Optional[str] = None
+    category: Optional[str] = "general"
+    location: Optional[str] = None
     export_category: Optional[str] = None
     international_shipping: bool = False
     shipping_countries: Optional[List[str]] = None
@@ -1002,6 +1004,8 @@ async def create_product(product: ProductCreate, request: Request):
         "currency": product.currency,
         "description": product.description,
         "image": product.image,
+        "category": product.category or "general",
+        "location": product.location,
         "payment_link_code": payment_link_code,
         "export_category": product.export_category,
         "international_shipping": product.international_shipping,
@@ -1029,6 +1033,8 @@ async def create_product(product: ProductCreate, request: Request):
         "currency": product_data["currency"],
         "description": product_data["description"],
         "image": product_data["image"],
+        "category": product_data["category"],
+        "location": product_data["location"],
         "payment_link_code": product_data["payment_link_code"],
         "export_category": product_data["export_category"],
         "international_shipping": product_data["international_shipping"],

@@ -186,7 +186,7 @@ EXPORT_CATEGORIES = [
 class UserCreate(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
-    password: str
+    password: str = Field(..., min_length=6, description="Password must be at least 6 characters")
     name: str
     business_name: Optional[str] = None
     is_women_owned: bool = True  # Default to women-owned for this platform
@@ -206,7 +206,7 @@ class ResetPasswordRequest(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     otp: str
-    new_password: str
+    new_password: str = Field(..., min_length=6)
 
 class ProductCreate(BaseModel):
     name: str
@@ -3470,7 +3470,11 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in os.environ.get(
+        "CORS_ORIGINS",
+        "https://www.biz-salama.co.tz,https://biz-salama.co.tz,https://salama-secure.preview.emergentagent.com,http://localhost:3000"
+    ).split(",") if o.strip() and o.strip() != "*"],
+    allow_origin_regex=r"https://.*\.preview\.emergentagent\.com",
     allow_methods=["*"],
     allow_headers=["*"],
 )

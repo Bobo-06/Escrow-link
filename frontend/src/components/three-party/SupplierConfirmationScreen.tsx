@@ -111,12 +111,13 @@ export default function SupplierConfirmationScreen({ txId, supplierPhone, token,
   // Public/minimal response from backend (no token) — can't show full breakdown
   if (tx.view !== "supplier") {
     return (
-      <div style={{ minHeight: "100vh", padding: 32, background: C.surface, fontFamily: "DM Sans,sans-serif", textAlign: "center" }}>
-        <div style={{ fontSize: 40, marginBottom: 10 }}>🔒</div>
-        <div style={{ fontFamily: "Syne,sans-serif", fontSize: 17, fontWeight: 800, marginBottom: 6 }}>Kiungo hakijatimia</div>
-        <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6, maxWidth: 360, margin: "0 auto" }}>
-          Tafadhali fungua kiungo kamili kilichotumwa kwako na mchuuzi (na token).
-          <br />Please open the full signed link sent to you by the hawker.
+      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 32, background: C.ink, fontFamily: "DM Sans,sans-serif", textAlign: "center", color: "white" }}>
+        <div style={{ fontSize: 48, marginBottom: 14 }}>🔒</div>
+        <div style={{ fontFamily: "Syne,sans-serif", fontSize: 20, fontWeight: 800, marginBottom: 10, color: "white" }}>Kiungo hakijatimia</div>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", lineHeight: 1.7, maxWidth: 360, margin: "0 auto" }}>
+          Tafadhali fungua kiungo kamili kilichotumwa kwako na mchuuzi (na token ya uthibitisho).
+          <br /><br />
+          Please open the full signed link sent to you by the hawker (with verification token).
         </div>
       </div>
     );

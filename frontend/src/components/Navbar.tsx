@@ -48,7 +48,15 @@ const Navbar: React.FC = () => {
             <BuildBadge />
             <InstallAppButton />
             {isAuthenticated ? (
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-3">
+                <Link
+                  to="/hawker/new"
+                  data-testid="desktop-new-3p-cta"
+                  className="flex items-center gap-2 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-900 px-4 py-2 rounded-full font-bold text-sm hover:from-gold-400 hover:to-gold-500 shadow-lg shadow-gold-500/30 whitespace-nowrap"
+                >
+                  <Users className="w-4 h-4" />
+                  + New 3-Party
+                </Link>
                 <Link
                   to="/dashboard"
                   className="flex items-center space-x-2 text-ink-300 hover:text-white transition-colors"

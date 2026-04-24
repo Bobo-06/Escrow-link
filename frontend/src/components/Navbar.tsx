@@ -96,6 +96,17 @@ const Navbar: React.FC = () => {
       {isMenuOpen && (
         <div className="md:hidden glass border-t border-ink-700">
           <div className="px-4 py-4 space-y-3">
+            {isAuthenticated && (
+              <Link
+                to="/hawker/new"
+                data-testid="mobile-new-3p-cta"
+                onClick={() => setIsMenuOpen(false)}
+                className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-gold-500 to-gold-600 text-ink-900 px-4 py-3 rounded-xl font-bold shadow-lg shadow-gold-500/30 hover:from-gold-400 hover:to-gold-500"
+              >
+                <Users className="w-5 h-5" />
+                + New 3-Party Transaction
+              </Link>
+            )}
             <div className="pb-2">
               <InstallAppButton className="w-full justify-center" />
             </div>
@@ -111,14 +122,7 @@ const Navbar: React.FC = () => {
               className="block text-ink-300 hover:text-white py-2"
               onClick={() => setIsMenuOpen(false)}
             >
-              3-Party Escrow
-            </Link>
-            <Link
-              to="/hawker/new"
-              className="block text-emerald-300 hover:text-emerald-200 py-2 font-medium"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              + New 3-Party Transaction
+              About 3-Party Escrow
             </Link>
             {isAuthenticated ? (
               <>

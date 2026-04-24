@@ -14,6 +14,7 @@ import {
   Smartphone
 } from 'lucide-react';
 import SEO from '../components/SEO';
+import VoiceListedStrip from '../components/VoiceListedStrip';
 
 const LandingPage: React.FC = () => {
   const fadeInUp = {
@@ -502,6 +503,9 @@ const LandingPage: React.FC = () => {
           </div>
         </div>
       </section>
+
+      {/* Voice-Listed Engagement Strip (hides when empty) */}
+      <VoiceListedStrip />
 
       {/* CTA Section */}
       <section className="py-20 bg-gradient-to-r from-gold-600 to-gold-500">

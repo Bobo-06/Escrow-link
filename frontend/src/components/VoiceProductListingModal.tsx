@@ -81,6 +81,7 @@ const VoiceProductListingModal: React.FC<Props> = ({ open, onClose, onCreated })
           price: fields.price,
           currency: 'TZS',
           description: fields.description,
+          listed_via_voice: true,
         }),
       });
       if (!res.ok) {

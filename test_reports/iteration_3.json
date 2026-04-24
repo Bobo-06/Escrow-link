@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 3 — Full e2e verification of (1) Buyer's Order Page /my-orders/:orderId with Nimepokea bidhaa confirm-delivery button, and (2) VoiceListedStrip on landing page. All 8 new backend tests PASS. All 22 regression tests from iter1+iter2 still PASS except 1 pre-existing data issue (voice-listed seed + voice-created products lack 'category' field — surfaced because iter2 marketplace test requires all products to have category). Frontend: /my-orders/nonexistent 404 state + /my-orders/<paid_order> full UI (summary, 4-step stepper, confirm button, bilingual dialog) + VoiceListedStrip on landing (3 cards, VOICE badges, 'Try voice listing' CTA → /dashboard) all render correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/products (voice path)", "issue": "ProductCreate model does not include 'category' field. Products listed via voice (VoiceProductListingModal) and voice-seeded products (Samsung A54, Kitenge, Tabora Honey, and iter3-created TEST items) are persisted without a category, which breaks the iter2 marketplace regression (expects every public product to have a category). Either add optional category to ProductCreate and default to 'general' server-side for voice flows, or patch the 3 seed voice products to have category set."},
+      {"endpoint": "POST /api/escrow/three-party/{tx_id}/buyer-confirm-delivery", "issue": "Endpoint uses 'tx.get(buyer_id) or tx.get(buyer_phone) or buyer_phone or \"\"' for HMAC identifier. This is fine but the 3-fallback semantics is subtle — main agent should document that once tx is paid, the identifier is locked to buyer_id (user_id) and the link signed at create time (hawker_token using buyer-role) still matches only for the hawker/buyer_id case. Current behavior is consistent with iter1 signing scheme. No blocker."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/my-orders/<id> stepper", "issues": ["Step labels are 'Order placed / Seller preparing / On the way / Delivered & funds released' — spec said 'Supplier preparing'. Minor copy variance (still clear). No action required unless product wants strict 'Supplier preparing' wording."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter3_features.py",
+    "/app/backend/tests/test_iter2_features.py",
+    "/app/backend/tests/test_biz_salama.py",
+    "/app/test_reports/pytest/iteration_3.xml"
+  ],
+  "action_items": [
+    "(Minor) Add optional 'category' to ProductCreate model in /app/backend/server.py (line 211) and default voice-flow products to 'general' / 'electronics' / ... OR backfill category on the 3 seeded voice products (Samsung A54, Kitenge, Tabora Honey). Also patch VoiceProductListingModal.tsx to send a category so all future voice-listed products have one. This will re-green the iter2 marketplace regression test.",
+    "(Optional copy) Consider renaming stepper step 2 from 'Seller preparing' to 'Supplier preparing' to match spec."
+  ],
+  "critical_code_review_comments": [
+    "server.py now 3789 lines — still needs to be split into routers (voice, seo, three-party, orders). Technical debt compounding.",
+    "/api/escrow/three-party/{tx_id}/buyer-confirm-delivery accepts 'token' as a plain query param — consider also accepting POST body token for better logging hygiene (query strings leak into access logs).",
+    "ProductCreate is the only POST /products model and is missing category+location — these are shown on marketplace cards and filtered on. Voice flow silently drops them. Should be a required field or at minimum present with default."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter3_features.py"
+  ],
+  "success_rate": {"backend": "97% (30/31 — 8 new iter3 + 14 iter1 regression + 8 iter2 (1 pre-existing data failure))", "frontend": "100% critical flows (landing strip, /my-orders 404, /my-orders paid with confirm dialog)"},
+  "test_credentials": "Primary: +255712345678 / test1234. Fresh supplier (registered during test): random +2557557xxxxx / SupPw1234!",
+  "seed_data_creation": "Created: 1 paid order (order_04730ae2131e) for UI screenshots; 3-party tx for buyer-confirm flow (auto-cleaned class fixture); 1 voice-listed test product (TEST Voice Item).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test_iter3_features.py covers voice-listed endpoint + buyer-confirm-delivery HMAC flow + 404 orders regression. HMAC helper _hmac_sig uses JWT_SECRET=biz-salama-secret-change-in-prod-2026. For buyer-confirm paid path, the full escrow dance is: login hawker → register fresh supplier → /three-party/create → supplier /three-party/approve → hawker /three-party/pay (needs buyer_name/phone/address) → sign token with tx.buyer_id → POST confirm-delivery. See paid_tx fixture. For MyOrderPage UI, use existing order_04730ae2131e (paid) or create one via /api/orders + /api/payments/simulate with payment_method in body. Confirm button dialog is Swahili 'Umepokea bidhaa salama?' + English — handle via page.on('dialog', ...) → dismiss. VoiceListedStrip renders only if count>0; currently shows 3 products (recently-created TEST items appear first due to created_at desc sort, which may push out real seeded Samsung A54 etc.). Category field gap on voice products is the only open backend issue.",
+  "rca_of_the_issue": "iter2 marketplace regression fail root cause: VoiceProductListingModal.tsx POSTs to /api/products with only {name, price, description, image, listed_via_voice:true} — no category. Server-side ProductCreate model (server.py L211-220) has no category field at all. So any voice-listed product persists with no category and iter2's assertion 'all public products have category' fails. Fix: add `category: Optional[str] = 'general'` to ProductCreate and persist it into product_data dict at L994-1016; also update VoiceProductListingModal to let user pick a category (dropdown) before publish, OR default it server-side."
+}

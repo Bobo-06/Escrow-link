@@ -17,6 +17,7 @@ import VerifyPage from './pages/VerifyPage';
 import SupplierConfirmPage from './pages/SupplierConfirmPage';
 import SupplierPortalPage from './pages/SupplierPortalPage';
 import HawkerTxEditPage from './pages/HawkerTxEditPage';
+import MyOrderPage from './pages/MyOrderPage';
 
 // Components
 import Navbar from './components/Navbar';
@@ -43,6 +44,7 @@ function App() {
             <Route path="/supplier-confirm/:txId" element={<SupplierConfirmPage />} />
             <Route path="/supplier/portal" element={<SupplierPortalPage />} />
             <Route path="/hawker/edit/:txId" element={<HawkerTxEditPage />} />
+            <Route path="/my-orders/:orderId" element={<MyOrderPage />} />
           </Routes>
         </main>
         <Footer />

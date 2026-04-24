@@ -217,6 +217,7 @@ class ProductCreate(BaseModel):
     export_category: Optional[str] = None
     international_shipping: bool = False
     shipping_countries: Optional[List[str]] = None
+    listed_via_voice: bool = False  # Flagged when created from voice listing flow
 
 class OrderCreate(BaseModel):
     product_id: str
@@ -1005,6 +1006,7 @@ async def create_product(product: ProductCreate, request: Request):
         "export_category": product.export_category,
         "international_shipping": product.international_shipping,
         "shipping_countries": product.shipping_countries or [],
+        "listed_via_voice": product.listed_via_voice,
         "buyer_protection_fee": fees['buyer_protection_fee'],
         "seller_acquisition_fee": fees['seller_acquisition_fee'],
         "total_buyer_pays": fees['total_buyer_pays'],
@@ -1036,6 +1038,7 @@ async def create_product(product: ProductCreate, request: Request):
         "total_buyer_pays": product_data["total_buyer_pays"],
         "seller_receives": product_data["seller_receives"],
         "is_active": product_data["is_active"],
+        "listed_via_voice": product_data["listed_via_voice"],
         "created_at": product_data["created_at"].isoformat()
     }
 
@@ -1085,6 +1088,23 @@ async def get_public_products(
             p['seller_name'] = seller.get('name') or seller.get('username', 'Seller')
     
     return {"products": products, "count": len(products)}
+
+@api_router.get("/products/voice-listed")
+async def get_voice_listed_products(limit: int = 3):
+    """Public — latest products created via voice listing.
+    Used by landing page 'Listed by voice in 20 seconds' engagement strip."""
+    limit = max(1, min(limit, 10))
+    products = await db.products.find(
+        {"listed_via_voice": True, "is_active": True},
+        {"_id": 0, "product_id": 1, "name": 1, "price": 1, "price_tzs": 1,
+         "image": 1, "image_b64": 1, "seller_name": 1, "seller_id": 1,
+         "category": 1, "location": 1, "created_at": 1},
+    ).sort("created_at", -1).to_list(limit)
+    for p in products:
+        if isinstance(p.get("created_at"), datetime):
+            p["created_at"] = p["created_at"].isoformat()
+    return {"products": products, "count": len(products)}
+
 
 @api_router.get("/products/detail/{product_id}")
 async def get_product_public(product_id: str):
@@ -3218,6 +3238,65 @@ async def three_party_release(request: ThreePartyEscrowRelease, current_user: di
         "message_sw": "Malipo yametolewa! Asante kwa kutumia Biz-Salama.",
         "message_en": "Funds released! Thank you for using Biz-Salama."
     }
+
+@api_router.post("/escrow/three-party/{tx_id}/buyer-confirm-delivery")
+async def three_party_buyer_confirm_delivery(tx_id: str, token: str, buyer_phone: Optional[str] = None):
+    """Public buyer-scoped confirm delivery via HMAC signed token (same as /verify links).
+    Releases escrow funds: supplier gets cost, hawker gets commission, platform takes fee.
+    No login required — buyer authenticates via the signed token from their payment receipt.
+    """
+    tx = await db.three_party_transactions.find_one({"tx_id": tx_id}, {"_id": 0})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    # Validate HMAC token against the buyer identifier stored on the tx
+    buyer_identifier = tx.get("buyer_id") or tx.get("buyer_phone") or buyer_phone or ""
+    expected = _sign_verify_token(tx_id, "buyer", buyer_identifier)
+    if not hmac.compare_digest(token, expected):
+        raise HTTPException(status_code=403, detail="Invalid buyer token")
+
+    if tx["status"] != "paid" or tx.get("escrow_status") != "held":
+        raise HTTPException(status_code=400, detail=f"Transaction not in releasable state (current: {tx['status']})")
+
+    supplier_payout = tx.get("approval_snapshot", {}).get("supplier_payout", tx["supplier_cost"])
+    hawker_payout = tx.get("approval_snapshot", {}).get("commission", tx["commission"])
+    platform_fee = tx.get("approval_snapshot", {}).get("platform_fee", tx.get("platform_fee", 0))
+
+    payout_refs = {
+        "supplier": f"OUT_{uuid.uuid4().hex[:6].upper()}",
+        "hawker": f"OUT_{uuid.uuid4().hex[:6].upper()}",
+    }
+
+    await db.three_party_transactions.update_one(
+        {"tx_id": tx_id},
+        {"$set": {
+            "status": "completed",
+            "escrow_status": "released",
+            "released_by": "buyer",
+            "released_at": datetime.now(timezone.utc).isoformat(),
+            "payout_refs": payout_refs,
+            "disbursements": {
+                "supplier": supplier_payout,
+                "hawker": hawker_payout,
+                "platform": platform_fee,
+            },
+        }},
+    )
+
+    await create_audit_log(tx_id, "THREE_PARTY_RELEASED_BY_BUYER", buyer_identifier, {
+        "supplier_payout": supplier_payout,
+        "hawker_payout": hawker_payout,
+        "platform_fee": platform_fee,
+    })
+
+    return {
+        "ok": True,
+        "tx_id": tx_id,
+        "status": "completed",
+        "message_sw": "Asante! Pesa imetolewa kwa muuzaji na mchuuzi.",
+        "message_en": "Thank you! Funds released to supplier and hawker.",
+    }
+
 
 @api_router.post("/escrow/three-party/reject")
 async def three_party_reject(tx_id: str, reason: str = "Not available", current_user: dict = Depends(get_current_user)):

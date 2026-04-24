@@ -142,6 +142,32 @@ export default function SupplierConfirmationScreen({ txId, supplierPhone, token,
           <div style={{ fontSize: 11, color: C.muted }}>TX {tx.tx_id}</div>
         </div>
 
+        {/* Negotiation history — visible after first counter-offer */}
+        {tx.negotiation_history && tx.negotiation_history.length > 1 && (
+          <div data-testid="supplier-history" style={{ background: "white", borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: "0 1px 4px rgba(10,10,15,0.06)" }}>
+            <div style={{ fontFamily: "Syne,sans-serif", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 10, letterSpacing: "0.5px" }}>
+              💬 HISTORIA / HISTORY ({tx.negotiation_history.length})
+            </div>
+            {tx.negotiation_history.map((h: any, i: number) => {
+              const isHawker = h.by === "hawker";
+              const label = ({opened:"Alifungua/Opened", counter:"Alipendekeza/Countered", accepted:"Alikubali/Accepted", rejected:"Alikataa/Declined"} as any)[h.action] || h.action;
+              return (
+                <div key={i} style={{ display: "flex", gap: 8, marginBottom: i === tx.negotiation_history.length - 1 ? 0 : 8, flexDirection: isHawker ? "row" : "row-reverse", alignItems: "flex-start" }}>
+                  <div style={{ flex: 1, background: isHawker ? "#EEF6FF" : "#FEF8EC", borderLeft: `3px solid ${isHawker ? "#2563EB" : "#D4850A"}`, padding: 8, borderRadius: 8 }}>
+                    <div style={{ fontSize: 9, color: isHawker ? "#2563EB" : "#D4850A", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 2 }}>
+                      {isHawker ? "Mchuuzi / Hawker" : "Wewe / You"} · {label}
+                    </div>
+                    {h.supplier_cost != null && (
+                      <div style={{ fontSize: 13, fontWeight: 800, fontFamily: "Syne,sans-serif", color: C.ink }}>{fmtTSh(h.supplier_cost)}</div>
+                    )}
+                    {h.note && <div style={{ fontSize: 10, color: C.muted, fontStyle: "italic", marginTop: 2 }}>"{h.note}"</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* Full breakdown — NIMEKUBALI BEI HIZI ZOTE */}
         <div style={{ background: "white", borderRadius: 14, padding: 16, marginBottom: 12, boxShadow: "0 1px 4px rgba(10,10,15,0.06)" }}>
           <div style={{ fontFamily: "Syne,sans-serif", fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 12, letterSpacing: "0.5px" }}>MUUNDO WA MALIPO KAMILI / FULL BREAKDOWN</div>

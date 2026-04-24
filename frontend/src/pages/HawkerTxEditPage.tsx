@@ -17,21 +17,22 @@ export default function HawkerTxEditPage() {
   const [buyerPrice, setBuyerPrice] = useState("");
   const [supplierCost, setSupplierCost] = useState("");
   const [saving, setSaving] = useState(false);
+  const [sendingCounter, setSendingCounter] = useState(false);
+  const [counterNote, setCounterNote] = useState("");
   const [msg, setMsg] = useState("");
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/escrow/three-party/${txId}`, { headers: authHeaders() });
-        if (res.ok) {
-          const data = await res.json();
-          setTx(data);
-          setBuyerPrice(String(data.buyer_price || ""));
-          setSupplierCost(String(data.supplier_cost || ""));
-        }
-      } catch { /* ignore */ }
-    })();
-  }, [txId]);
+  const load = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/escrow/three-party/${txId}`, { headers: authHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        setTx(data);
+        setBuyerPrice(String(data.buyer_price || ""));
+        setSupplierCost(String(data.supplier_cost || ""));
+      }
+    } catch { /* ignore */ }
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [txId]);
 
   if (!isAuthenticated) {
     return (
@@ -73,6 +74,32 @@ export default function HawkerTxEditPage() {
     }
   };
 
+  // Quick counter-offer — uses the dedicated /hawker-counter endpoint.
+  // Keeps buyer_price same; only adjusts supplier_cost and sends a note.
+  const sendCounter = async () => {
+    if (!sc || sc >= bp) { setMsg("Bei si sahihi"); return; }
+    setSendingCounter(true);
+    try {
+      const res = await fetch(`${API_URL}/api/escrow/three-party/${txId}/hawker-counter`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ supplier_cost: sc, note: counterNote || null }),
+      });
+      if (res.ok) {
+        setMsg("✅ Pendekezo jipya limetumwa / Counter-offer sent to supplier");
+        setCounterNote("");
+        await load();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setMsg("⚠️ " + (err.detail || "Kosa, jaribu tena"));
+      }
+    } catch {
+      setMsg("⚠️ Mtandao hauhusi");
+    } finally {
+      setSendingCounter(false);
+    }
+  };
+
   if (!tx) return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "white", background: C.ink }}>
       <div>Inasoma… / Loading…</div>
@@ -103,8 +130,83 @@ export default function HawkerTxEditPage() {
             </div>
             {tx.counter_note && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>"{tx.counter_note}"</div>}
             <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>
-              Ukikubali pendekezo lake, bonyeza "Hifadhi" hapa chini. Ukitaka kubadilisha bei ya mnunuzi pia, irekebishe kisha hifadhi.
+              Unaweza kukubali bei yake (bonyeza Hifadhi chini), au kutuma pendekezo lako jipya (jaza kikasha "Pendekeza Bei" hapa chini).
             </div>
+          </div>
+        )}
+
+        {/* Negotiation history timeline — shows full back-and-forth */}
+        {tx.negotiation_history && tx.negotiation_history.length > 0 && (
+          <div data-testid="negotiation-history" style={{ background: "white", borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: "0 1px 4px rgba(10,10,15,0.06)" }}>
+            <div style={{ fontFamily: "Syne,sans-serif", fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: "0.5px", marginBottom: 12 }}>
+              💬 HISTORIA YA MAJADILIANO / NEGOTIATION HISTORY
+            </div>
+            <div style={{ position: "relative" }}>
+              {tx.negotiation_history.map((h: any, i: number) => {
+                const isHawker = h.by === "hawker";
+                const actionLabel: Record<string, string> = {
+                  opened: "Alifungua / Opened",
+                  counter: "Alipendekeza bei / Countered",
+                  accepted: "Alikubali / Accepted",
+                  rejected: "Alikataa / Declined",
+                };
+                const bg = isHawker ? "#EEF6FF" : "#FEF8EC";
+                const borderCol = isHawker ? "#2563EB" : "#D4850A";
+                const chip = isHawker ? "Wewe / You" : "Mmiliki / Supplier";
+                return (
+                  <div key={i} style={{ display: "flex", gap: 10, marginBottom: i === tx.negotiation_history.length - 1 ? 0 : 10, flexDirection: isHawker ? "row" : "row-reverse" }}>
+                    <div style={{ flex: 1, background: bg, border: `1px solid ${borderCol}33`, borderLeft: `3px solid ${borderCol}`, padding: 10, borderRadius: 10 }}>
+                      <div style={{ fontSize: 10, color: borderCol, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 3 }}>
+                        {chip} · {actionLabel[h.action] || h.action}
+                      </div>
+                      {h.supplier_cost != null && (
+                        <div style={{ fontSize: 14, fontWeight: 800, fontFamily: "Syne,sans-serif", color: C.ink }}>
+                          {fmtTSh(h.supplier_cost)}
+                        </div>
+                      )}
+                      {h.note && (
+                        <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", marginTop: 3 }}>
+                          "{h.note}"
+                        </div>
+                      )}
+                      <div style={{ fontSize: 9, color: C.muted, marginTop: 4 }}>
+                        {new Date(h.at).toLocaleString("en-GB", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "short" })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Quick counter-offer — only when supplier last countered */}
+        {isCounter && (
+          <div data-testid="quick-counter-card" style={{ background: "white", borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: "0 1px 4px rgba(10,10,15,0.06)", border: `2px solid ${C.gold}33` }}>
+            <div style={{ fontFamily: "Syne,sans-serif", fontSize: 13, fontWeight: 700, marginBottom: 10, color: C.ink }}>
+              📨 Pendekeza Bei Tena / Send Counter-Offer
+            </div>
+            <label style={{ fontSize: 11, color: C.muted, fontWeight: 600, display: "block", marginBottom: 4 }}>
+              Ujumbe wako (optional)
+            </label>
+            <input
+              data-testid="counter-note-input"
+              value={counterNote}
+              onChange={(e) => setCounterNote(e.target.value)}
+              placeholder="e.g. Bei ya mwisho, nisaidie / Final price, help me out"
+              style={{ width: "100%", padding: "10px 12px", border: `1.5px solid ${C.surface3}`, borderRadius: 10, fontSize: 13, outline: "none", marginBottom: 10, color: C.ink }}
+            />
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>
+              Bei yako ya sasa: <strong style={{ color: C.ink }}>{fmtTSh(sc)}</strong> · Edit above to change.
+            </div>
+            <button
+              data-testid="send-counter-btn"
+              onClick={sendCounter}
+              disabled={sendingCounter || !sc || sc >= bp}
+              style={{ width: "100%", padding: 13, background: (sendingCounter || !sc || sc >= bp) ? "#C8A96E" : "linear-gradient(135deg, #F59E0B, #D97706)", color: C.ink, border: "none", borderRadius: 11, fontFamily: "Syne,sans-serif", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 2px 8px rgba(245,158,11,0.2)" }}
+            >
+              {sendingCounter ? "Inatuma…" : "📤 Tuma pendekezo jipya / Send counter"}
+            </button>
           </div>
         )}
 

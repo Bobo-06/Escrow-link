@@ -2856,6 +2856,7 @@ async def escrow_verify(tx_id: str, token: Optional[str] = None, role: Optional[
                 "supplier_location": tx.get("supplier_location"),
                 "hawker_name": tx.get("hawker_name"),
                 "approval_snapshot": tx.get("approval_snapshot"),
+                "negotiation_history": tx.get("negotiation_history", []),
                 # buyer_fee, platform_fee (total), actual_net_commission — all HIDDEN from supplier
             }
 
@@ -2969,6 +2970,15 @@ async def three_party_create(request: ThreePartyEscrowCreate, current_user: dict
         "approved_at": None,
         "paid_at": None,
         "released_at": None,
+
+        # Negotiation history — each entry: {at, by, action, supplier_cost?, note?}
+        "negotiation_history": [{
+            "at": datetime.now(timezone.utc).isoformat(),
+            "by": "hawker",
+            "action": "opened",
+            "supplier_cost": request.supplier_cost,
+            "note": request.notes,
+        }],
     }
     
     await db.three_party_transactions.insert_one(transaction)
@@ -3509,6 +3519,13 @@ async def supplier_response_public(tx_id: str, payload: SupplierResponse):
             "approved_at": now_iso,
             "approval_snapshot": snapshot,
         }
+        history_entry = {
+            "at": now_iso,
+            "by": "supplier",
+            "action": "accepted",
+            "supplier_cost": supplier_cost,
+            "note": payload.note,
+        }
     elif payload.counter_offer:
         if not payload.supplier_cost:
             raise HTTPException(status_code=400, detail="supplier_cost required to counter-offer")
@@ -3520,14 +3537,30 @@ async def supplier_response_public(tx_id: str, payload: SupplierResponse):
             "counter_note": payload.note,
             "counter_offered_at": now_iso,
         }
+        history_entry = {
+            "at": now_iso,
+            "by": "supplier",
+            "action": "counter",
+            "supplier_cost": payload.supplier_cost,
+            "note": payload.note,
+        }
     else:
         update = {
             "status": "rejected",
             "reject_note": payload.note,
             "rejected_at": now_iso,
         }
+        history_entry = {
+            "at": now_iso,
+            "by": "supplier",
+            "action": "rejected",
+            "note": payload.note,
+        }
 
-    await db.three_party_transactions.update_one({"tx_id": tx_id}, {"$set": update})
+    await db.three_party_transactions.update_one(
+        {"tx_id": tx_id},
+        {"$set": update, "$push": {"negotiation_history": history_entry}},
+    )
     return {"ok": True, "tx_id": tx_id, "status": update["status"], "snapshot": update.get("approval_snapshot")}
 
 
@@ -3537,6 +3570,69 @@ class ThreePartyEditRequest(BaseModel):
     item_name: Optional[str] = None
     item_condition: Optional[str] = None
     notes: Optional[str] = None
+
+
+class HawkerCounterRequest(BaseModel):
+    supplier_cost: float   # new price hawker is willing to pay the supplier
+    note: Optional[str] = None
+
+
+@api_router.post("/escrow/three-party/{tx_id}/hawker-counter")
+async def three_party_hawker_counter(
+    tx_id: str,
+    payload: HawkerCounterRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Hawker sends a counter-offer back to the supplier (after the supplier counter-offered).
+    Keeps the same tx_id and supplier_phone — just updates the proposed supplier_cost
+    and appends to the negotiation_history trail so both sides see the back-and-forth.
+    Status returns to 'pending_approval' so the supplier's SMS link re-activates.
+    """
+    tx = await db.three_party_transactions.find_one({"tx_id": tx_id}, {"_id": 0})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    if tx.get("hawker_id") != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="Only the hawker can counter this transaction")
+    if tx.get("status") not in ("counter_offered", "pending_approval"):
+        raise HTTPException(status_code=400, detail=f"Cannot counter — status={tx.get('status')}")
+
+    buyer_price = tx.get("buyer_price", 0)
+    if payload.supplier_cost >= buyer_price:
+        raise HTTPException(status_code=400, detail="Counter supplier_cost must be less than buyer_price")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    split = _compute_three_party_split(buyer_price, payload.supplier_cost)
+    update = {
+        "status": "pending_approval",
+        "supplier_cost": payload.supplier_cost,
+        "commission": split["commission"],
+        "supplier_payout": split["supplier_payout"],
+        "supply_fee": split["supply_fee"],
+        "buyer_fee": split["buyer_fee"],
+        "platform_fee": split["platform_fee"],
+        "hawker_counter_at": now_iso,
+        "hawker_counter_note": payload.note,
+    }
+    history_entry = {
+        "at": now_iso,
+        "by": "hawker",
+        "action": "counter",
+        "supplier_cost": payload.supplier_cost,
+        "note": payload.note,
+    }
+    await db.three_party_transactions.update_one(
+        {"tx_id": tx_id},
+        {"$set": update, "$push": {"negotiation_history": history_entry}},
+    )
+
+    base_url = os.environ.get("BASE_URL", "").rstrip("/")
+    supplier_token = _sign_verify_token(tx_id, "supplier", tx.get("supplier_phone"))
+    supplier_verify_url = (
+        f"{base_url}/supplier-confirm/{tx_id}?phone={tx.get('supplier_phone','')}&t={supplier_token}"
+        if base_url else
+        f"/supplier-confirm/{tx_id}?phone={tx.get('supplier_phone','')}&t={supplier_token}"
+    )
+    return {"ok": True, "tx_id": tx_id, "status": "pending_approval", "supplier_verify_url": supplier_verify_url}
 
 
 @api_router.post("/escrow/three-party/{tx_id}/edit")

@@ -1,10 +1,10 @@
 // Shared constants for Three-Party Escrow UI
 export const C = {
   ink: "#0A0A0F", ink2: "#1A1A26",
-  gold: "#C8A96E", goldD: "#9A7A42", goldL: "#E8D4A8",
-  emerald: "#1A7A5A", emeraldL: "#22A878", emeraldPale: "#E8F5F0",
-  ruby: "#C0392B", rubyPale: "#FDF0EF",
-  amber: "#D4850A", amberPale: "#FEF8EC",
+  gold: "#F59E0B", goldD: "#D97706", goldL: "#FCD34D",
+  emerald: "#10B981", emeraldL: "#34D399", emeraldPale: "#E8F5F0",
+  ruby: "#EF4444", rubyPale: "#FDF0EF",
+  amber: "#F59E0B", amberPale: "#FEF8EC",
   purple: "#7C3AED", blue: "#2563EB",
   surface: "#F4F3EF", surface2: "#ECEAE3", surface3: "#E2DED5",
   white: "#FFFFFF", muted: "#7A7A8A",

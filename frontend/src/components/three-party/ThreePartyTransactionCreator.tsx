@@ -100,6 +100,7 @@ export default function ThreePartyTransactionCreator({ hawker, onCreated, onClos
     fontFamily: "DM Sans,sans-serif",
     outline: "none",
     marginBottom: 4,
+    color: C.ink,
   };
   const lbl = (t: string) => (
     <div
@@ -124,7 +125,12 @@ export default function ThreePartyTransactionCreator({ hawker, onCreated, onClos
       data-testid="three-party-creator"
       style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: C.surface, fontFamily: "DM Sans,sans-serif" }}
     >
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
+      <style>{`
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+        .tp-input::placeholder{color:#B8B4A8;opacity:1;font-weight:400;}
+        .tp-input:focus{border-color:#F59E0B!important;box-shadow:0 0 0 3px rgba(245,158,11,0.15);}
+      `}</style>
 
       {/* Header with progress */}
       <div style={{ background: C.ink, padding: "14px 20px 0", flexShrink: 0 }}>
@@ -204,6 +210,7 @@ export default function ThreePartyTransactionCreator({ hawker, onCreated, onClos
             {lbl("Jina la Bidhaa / Item Name *")}
             <input
               data-testid="three-party-item-input"
+              className="tp-input"
               style={inputStyle}
               placeholder="Samsung Galaxy S24 Ultra"
               value={form.item}
@@ -239,6 +246,7 @@ export default function ThreePartyTransactionCreator({ hawker, onCreated, onClos
               <div style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 12, fontWeight: 700, color: C.muted }}>TSh</div>
               <input
                 data-testid="three-party-buyer-price-input"
+                className="tp-input"
                 style={{ ...inputStyle, paddingLeft: 44, fontFamily: "Syne,sans-serif", fontSize: 18, fontWeight: 800 }}
                 placeholder="1,850,000"
                 value={form.buyer_price}
@@ -271,6 +279,7 @@ export default function ThreePartyTransactionCreator({ hawker, onCreated, onClos
             {lbl("Jina la Duka / Mmiliki / Shop / Owner Name *")}
             <input
               data-testid="three-party-supplier-name-input"
+              className="tp-input"
               style={inputStyle}
               placeholder="Jumla Electronics Kariakoo"
               value={form.supplier_name}
@@ -282,7 +291,8 @@ export default function ThreePartyTransactionCreator({ hawker, onCreated, onClos
               <div style={{ padding: "13px 12px", background: C.surface2, borderRight: `1px solid ${C.surface3}`, fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>🇹🇿 +255</div>
               <input
                 data-testid="three-party-supplier-phone-input"
-                style={{ flex: 1, padding: "13px 12px", border: "none", outline: "none", fontSize: 15, background: "white", fontFamily: "monospace" }}
+                className="tp-input"
+                style={{ flex: 1, padding: "13px 12px", border: "none", outline: "none", fontSize: 15, background: "white", fontFamily: "monospace", color: "#0A0A0F" }}
                 placeholder="7XX XXX XXX"
                 value={form.supplier_phone}
                 onChange={(e) => setForm((f) => ({ ...f, supplier_phone: e.target.value.replace(/\D/g, "").slice(0, 9) }))}
@@ -293,6 +303,7 @@ export default function ThreePartyTransactionCreator({ hawker, onCreated, onClos
 
             {lbl("Mahali / Location")}
             <input
+              className="tp-input"
               style={inputStyle}
               placeholder="Kariakoo, Dar es Salaam"
               value={form.supplier_location}
@@ -301,6 +312,7 @@ export default function ThreePartyTransactionCreator({ hawker, onCreated, onClos
 
             {lbl("Maelezo ya Ziada / Notes (optional)")}
             <textarea
+              className="tp-input"
               style={{ ...inputStyle, resize: "none", height: 72, lineHeight: 1.6 }}
               placeholder="Bidhaa ipo ghala namba 12, gomba la pili / Item in stall 12, second row"
               value={form.notes}
@@ -347,6 +359,7 @@ export default function ThreePartyTransactionCreator({ hawker, onCreated, onClos
               <div style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 12, fontWeight: 700, color: C.muted }}>TSh</div>
               <input
                 data-testid="three-party-supplier-cost-input"
+                className="tp-input"
                 style={{
                   ...inputStyle,
                   paddingLeft: 44,
@@ -454,7 +467,7 @@ export default function ThreePartyTransactionCreator({ hawker, onCreated, onClos
             style={{
               width: "100%",
               padding: 15,
-              background: C.gold,
+              background: "linear-gradient(135deg, #F59E0B, #D97706)",
               color: C.ink,
               border: "none",
               borderRadius: 13,
@@ -462,6 +475,7 @@ export default function ThreePartyTransactionCreator({ hawker, onCreated, onClos
               fontSize: 15,
               fontWeight: 800,
               cursor: "pointer",
+              boxShadow: "0 4px 14px rgba(245,158,11,0.3)",
               opacity:
                 (step === "item" && (!form.item || !form.buyer_price)) ||
                 (step === "supplier" && (!form.supplier_name || form.supplier_phone.length < 9)) ||

@@ -13,92 +13,69 @@ Source code previously built and saved at: https://github.com/Bobo-06/Escrow-lin
 - **5b** Design preserved exactly from GitHub (dark + gold Biz-Salama theme)
 
 ## Tech Stack
-- **Frontend**: React 19 + TypeScript, Tailwind v3.4, Framer Motion, Zustand, Axios, Lucide, React Router v6
+- **Frontend**: React 19 + TypeScript, Tailwind v3.4, Framer Motion, Zustand, Axios, Lucide, React Router v6, react-helmet-async
 - **Backend**: FastAPI, MongoDB (motor), JWT + bcrypt, emergentintegrations (Claude), Stripe SDK
-- **Payments**: Selcom, M-Pesa Daraja, Stripe, NALA (env-key driven, graceful fallback when keys missing)
-- **AI**: Claude Sonnet 4 via Emergent LLM key (support chatbot, dispute mediator, fraud checker)
+- **Payments**: Selcom, M-Pesa Daraja, Stripe, NALA, Click-Pesa (env-key driven, graceful fallback)
+- **AI**: Claude Sonnet 4 + OpenAI Whisper + TTS via Emergent LLM key
 
-## What's Been Restored / Implemented (Apr 23, 2026)
-- [x] Pulled full codebase from GitHub into `/app`
-- [x] Installed Python deps from `backend/requirements.txt` (122 KB `server.py`)
-- [x] Installed Node deps via `yarn install` (fresh `node_modules`, new lockfile)
-- [x] Configured `/app/backend/.env` with `MONGO_URL`, `DB_NAME=biz_salama_db`, `EMERGENT_LLM_KEY`, `BASE_URL`
-- [x] Preserved `/app/frontend/.env` `REACT_APP_BACKEND_URL`
-- [x] Supervisor restarted — frontend + backend RUNNING
-- [x] Verified landing page, navbar, hero, escrow card render correctly
-- [x] Verified APIs 200 OK: `/api/currencies`, `/api/products/public`, `/api/export-categories`, `/api/auth/register`
+## Completed Features
 
-## SEO / Link Preview Overhaul (Apr 23, 2026)
-- [x] Generated branded 1200×630 PNG at `/public/og-image.png` (shield + Biz-Salama + "Shop Safely with Escrow Protection" + ESCROW PROTECTED badge)
-- [x] Rewrote `/public/index.html` with: title, description, keywords, canonical, full Open Graph (og:*), Twitter card, apple/PWA tags, `<noscript>` content for crawlers, and two JSON-LD blocks (Organization + WebSite search schema)
-- [x] Updated `/public/manifest.json` — brand name, gold theme color (#F59E0B), ink background (#0F172A)
-- [x] Added `/public/robots.txt` (disallow /dashboard, /checkout, /track) and `/public/sitemap.xml`
-- [x] Installed `react-helmet-async`; wrapped app with `<HelmetProvider>` in `index.tsx`
-- [x] Created reusable `<SEO>` component (`src/components/SEO.tsx`) — per-route title/description/OG/Twitter
-- [x] Integrated `<SEO>` into LandingPage, Marketplace, ProductDetail, Login (noindex), Register
-- [x] Installed `react-snap` + added `postbuild` script in `package.json` → prerenders `/`, `/marketplace`, `/login`, `/register` into real static HTML at build time so WhatsApp / Facebook / Twitter / Google see actual content (not the JS shell)
-- [x] `index.tsx` uses `hydrateRoot` when prerendered HTML is present, `createRoot` otherwise
+### SEO + Link Previews (Apr 23, 2026)
+- [x] Branded 1200×630 OG image at `/public/og-image.png`
+- [x] Full Open Graph + Twitter + JSON-LD schema in `index.html`
+- [x] `react-helmet-async` wired for per-route dynamic tags via `<SEO>` component
+- [x] `robots.txt` + `sitemap.xml` published
+- [x] (Deferred) `react-snap` removed due to K8s 502 at CI rollout — will re-solve via bot-UA prerender shim
 
-## Three-Party Escrow — Full UI + Public Verify (Apr 23, 2026)
-- [x] **5 React components** in `src/components/three-party/`:
-  - `ThreePartyTransactionCreator.tsx` — 4-step hawker wizard (item → supplier → split → confirm) with Swahili+English, condition picker, image upload, live commission calculator
-  - `EscrowLetterOfComfort.tsx` — shareable "Letter of Comfort" with WhatsApp + SMS deep links for supplier
-  - `EscrowVerifyPublic.tsx` — public verify page (no login) fetched from `/api/escrow/verify/{tx_id}`
-  - `SupplierConfirmationScreen.tsx` — supplier accept/decline view reached via SMS link
-  - `SupplierPortal.tsx` — shop-owner dashboard with hawkers list + recent txs
-  - `constants.ts` — shared colors, fmtTSh/fmtK, TX_STATES, API_URL, authHeaders
-- [x] Routes in `App.tsx`: `/hawker/new`, `/verify/:txId` (public), `/supplier-confirm/:txId` (public), `/supplier/portal`, `/hawker/edit/:txId`
+### Three-Party Escrow (Hawker ↔ Supplier ↔ Buyer)
+- [x] 5 React components in `src/components/three-party/`: Creator wizard, Letter of Comfort, Public Verify, Supplier Confirmation, Supplier Portal
+- [x] Routes: `/hawker/new`, `/verify/:txId`, `/supplier-confirm/:txId`, `/supplier/portal`, `/hawker/edit/:txId`
+- [x] **Fee split**: 2% supply-side (from supplier payout) + 3% buyer-side (from buyer price). Invariant enforced by `_compute_three_party_split()`
+- [x] **HMAC signed role tokens** (`_sign_verify_token`) — scoped views for Public / Supplier / Buyer on `/api/escrow/verify/{tx_id}`
+- [x] **Counter-offer flow** + hawker edit + immutable approval snapshot (Swahili terms accepted)
+- [x] Landing page showcase updated with live fee breakdown example
 
-## Option B — Role-Based Verify + Fee Upgrade + Counter-Offer + Edit Flow (Apr 23, 2026)
-- [x] **Fee structure**: 2% supply-side (from supplier payout) + 3% buyer-side (from buyer price). `_compute_three_party_split()` helper enforces invariant `supplier_payout + commission + platform_fee == buyer_price`
-- [x] **HMAC signed tokens** for role-scoped verify URLs: `_sign_verify_token(tx_id, role, identifier)` using JWT_SECRET; constant-time compare via `hmac.compare_digest`
-- [x] **3 role views** on `/api/escrow/verify/{tx_id}`:
-  - Public (no token) — just TX existence + amount locked + bank + status
-  - Supplier (valid token + role=supplier) — FULL transparent breakdown: buyer_price, supplier_payout (after 2% fee), hawker commission, supply_fee, buyer_fee, platform_fee, approval_snapshot
-  - Buyer (valid token + role=buyer) — item, amount they paid, seller_name (hawker), status — NO supplier info, NO commission
-- [x] **Counter-offer flow**: supplier taps "Pendekeza Bei Nyingine" → modal for new supplier_cost + optional note → tx status transitions to `counter_offered`
-- [x] **Hawker edit**: `POST /api/escrow/three-party/{tx_id}/edit` (auth'd) lets hawker update buyer_price / supplier_cost / item fields; status resets to `pending_approval`, split recomputed, supplier re-notified (same HMAC token). New page `/hawker/edit/:txId` with pre-filled form + yellow banner when status=`counter_offered` showing supplier's counter + optional note
-- [x] **Approval snapshot**: on supplier final accept, `approval_snapshot` dict stored with {buyer_price, supplier_cost, supplier_payout, commission, supply_fee, buyer_fee, platform_fee, approved_by, approved_at, terms_accepted_sw: "Nimekubali bei hizi zote"}. Immutable audit record — supplier cannot later claim they didn't know the commission
-- [x] **SupplierConfirmationScreen** redesigned: shows full 4-line breakdown (payout, hawker commission, 2% fee, 3% fee), large primary "Nimekubali bei hizi zote / I agree to all these prices" button + "Pendekeza Bei Nyingine" counter button + "HAPANA" decline
-- [x] **Landing page showcase** updated with new fee breakdown (TSh 1,850,000 example → supplier 1,617,000 / hawker 144,500 / platform 88,500)
-- [x] Install App button in Navbar + landing page section for 3-party flow (previous session)
+### Auth + Login (Apr 23, 2026 — phone normalization fix)
+- [x] `normalize_tz_phone()` accepts `+255XXXXXXXXX`, `255…`, `07…`, `71…`, spaced forms — all normalized to `+255XXXXXXXXX`
+- [x] Last-9-digit regex fallback for legacy DB records
+- [x] All 5 phone formats verified to authenticate same user (15/15 backend tests PASS)
+- [x] Custom JWT session (`session_token` in HttpOnly cookie + `Authorization: Bearer` header) + Emergent Google OAuth
 
-## Key Pages (from GitHub code)
-- `/` LandingPage — hero, trust indicators, how-it-works, CTA
-- `/marketplace` Marketplace — grid, search, filters, sort
-- `/product/:id` ProductDetail
-- `/seller/:id` SellerProfile
-- `/login`, `/register` — phone OR email + password
-- `/dashboard` SellerDashboard — products, orders, stats, trade-finance metrics
-- `/checkout/:id` Checkout — pick payment method
-- `/track/:orderId` OrderTracking — status + confirm delivery
+### PWA / Install App (Apr 23, 2026)
+- [x] `manifest.json` rewritten: name="Biz-Salama", gold theme (#F59E0B), ink background (#0F172A)
+- [x] `InstallAppButton.tsx` with **emerald "Why install?"** + **amber "Seeing React App?"** uninstall-and-reinstall warning (fixes cached-manifest confusion)
+- [x] Install button in Navbar + landing page CTA section
+
+## In Progress / Next Up (Apr 24, 2026)
+- [ ] **P1a** SEO prerender shim — detect bot User-Agents and serve server-rendered HTML with product/seller OG tags (deployment-safe, no `react-snap`)
+- [ ] **P1b** Click-Pesa integration (Tanzania mobile money rail)
+- [ ] **P1c** Seed 20–40 realistic Tanzanian products (electronics, fashion, agriculture) to replace dummy data
+- [ ] **P1d** Voice features — Swahili voice search, voice product listing, voice AI assistant via OpenAI Whisper + TTS (Emergent LLM key)
+
+## Backlog (P2–P3)
+- Discovery UI layer — related products, trending sellers, compare drawer, "lowest price" badge on search
+- Admin moderator panel + user role `admin`
+- Ratings / reviews surfaced on SellerProfile + ProductDetail
+- Tighten CORS (replace `*` with explicit origins when `allow_credentials=True`)
+- Add Pydantic `min_length=6` validator on `UserCreate.password`
+- Refactor `server.py` (3,484 lines) into routers (`auth.py`, `escrow_2p.py`, `escrow_3p.py`, `payments.py`, `audit.py`)
+- Native app wrapper (Capacitor → Play Store / App Store)
 
 ## Key API Endpoints
-- **Auth**: `/api/auth/register`, `/login`, `/forgot-password`, `/reset-password`, `/session` (Google), `/me`, `/profile`, `/logout`
-- **Products**: `/api/products` (CRUD, seller), `/api/products/public`, `/api/products/detail/{id}`, `/api/pay/{code}`
+- **Auth**: `/api/auth/{register,login,forgot-password,reset-password,session,me,profile,logout}`
+- **Products**: `/api/products` (CRUD seller), `/api/products/public`, `/api/products/detail/{id}`, `/api/pay/{code}`
 - **Orders**: `/api/orders`, `/api/orders/{id}`, `/api/seller/orders`, `/orders/{id}/status`, `/orders/{id}/confirm-delivery`, `/rate`, `/dispute`
-- **Escrow (3-party Hawker↔Supplier↔Buyer)**: `/api/escrow/three-party/{create,pending,approve,pay,release,my-transactions}`
-- **Payments**: `/api/payments/simulate`, Selcom, M-Pesa, Stripe, NALA routes (inside server.py)
-- **AI**: `/api/ai/support`, `/api/ai/dispute`, fraud check
+- **3-Party Escrow**: `/api/escrow/three-party/{create,pending,approve,pay,release,my-transactions,edit}`, `/api/escrow/three-party/{tx_id}/supplier-response`
+- **Verify**: `/api/escrow/verify/{tx_id}` (public / buyer / supplier via HMAC `?t=&r=`)
+- **Payments**: `/api/payments/simulate`, Selcom, M-Pesa, Stripe, NALA routes
+- **AI**: `/api/ai/{support,dispute}`, fraud check
 - **Dashboard**: `/api/seller/stats`, `/api/seller/trade-history`, `/api/currencies`, `/api/export-categories`
 
-## Live URLs
-- Preview: https://salama-secure.preview.emergentagent.com
-- Custom domain target: www.biz-salama.co.tz (user will link via Emergent deployment → Custom Domains)
-
-## Next Action Items
-- **P0** User triggers **Deploy** from Emergent → Deployments → attaches custom domain `www.biz-salama.co.tz`
-- **P1** Add production API keys to backend `.env` for: `STRIPE_SECRET_KEY`, `SELCOM_API_KEY/SECRET/VENDOR`, `MPESA_*`, `NALA_API_KEY/BUSINESS_ID`, `AFRICASTALKING_API_KEY`, `SMILE_IDENTITY_*`
-- **P1** Click-Pesa integration (requested) — not yet in codebase. Need Click-Pesa API credentials + integration playbook
-- **P2** Seed demo products + sellers so marketplace is not empty on first visit
-- **P2** Admin panel route + moderator user role
-- **P3** Ratings/reviews UI surface on SellerProfile + ProductDetail
-
-## Mocked / Fallback Behaviour
-- **MOCKED** SMS sending (Africa's Talking) — OTPs logged & returned as `demo_otp` when key missing
-- **MOCKED** Mobile Money payments fall back to `/api/payments/simulate` when real keys missing
-- **MOCKED** Click-Pesa — NOT YET IMPLEMENTED (see P1)
-- Exchange rates are static in code (USD=2500, GBP=3200, EUR=2700, KES=18, UGX=0.67, TZS=1)
+## Key DB Schemas (MongoDB)
+- `users`: {user_id, email, phone (+255…), password_hash, name, business_name}
+- `user_sessions`: {session_token, user_id, expires_at}
+- `three_party_transactions`: {tx_id, hawker_id, hawker_name, supplier_cost, buyer_price, commission, supply_fee, buyer_fee, platform_fee, status, approval_snapshot, supplier_phone}
+- `escrow_transactions`, `products`, `orders`
 
 ## Environment Variables
 ### /app/backend/.env
@@ -107,7 +84,7 @@ MONGO_URL="mongodb://localhost:27017"
 DB_NAME="biz_salama_db"
 CORS_ORIGINS="*"
 JWT_SECRET="biz-salama-secret-change-in-prod-2026"
-EMERGENT_LLM_KEY="sk-emergent-xxx" (Universal key)
+EMERGENT_LLM_KEY="sk-emergent-…"
 BASE_URL="https://salama-secure.preview.emergentagent.com"
 ```
 ### /app/frontend/.env
@@ -117,5 +94,20 @@ WDS_SOCKET_PORT=443
 ENABLE_HEALTH_CHECK=false
 ```
 
+## Live URLs
+- Preview: https://salama-secure.preview.emergentagent.com
+- Production custom domain: https://www.biz-salama.co.tz (Cloudflare + Emergent native deployment)
+
+## Mocked / Fallback Behaviour
+- **MOCKED** SMS sending (Africa's Talking) — OTPs returned as `demo_otp` when key missing
+- **MOCKED** Mobile Money → falls back to `/api/payments/simulate` when real keys missing
+- **NOT YET IMPLEMENTED** Click-Pesa (scheduled P1)
+- Exchange rates static (USD=2500, GBP=3200, EUR=2700, KES=18, UGX=0.67, TZS=1)
+
+## Test Results (iteration_1.json)
+- Backend: 100% (15/15 PASS) — phone normalization, 3-party escrow, HMAC role views, fee invariant
+- Frontend: 100% critical flows — login across 5 phone formats, PWA Install modal, role-scoped verify
+- Minor items flagged: CORS `*` + credentials, password min_length validator, invalid-link page contrast
+
 ---
-*Version 6.0 — GitHub restore on fresh Emergent project, Apr 23, 2026*
+*Version 6.1 — Continuing session, Apr 24, 2026*

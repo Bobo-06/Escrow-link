@@ -18,6 +18,8 @@ import SupplierConfirmPage from './pages/SupplierConfirmPage';
 import SupplierPortalPage from './pages/SupplierPortalPage';
 import HawkerTxEditPage from './pages/HawkerTxEditPage';
 import MyOrderPage from './pages/MyOrderPage';
+import DirectEscrowCreatePage from './pages/DirectEscrowCreatePage';
+import DirectBuyerOfferPage from './pages/DirectBuyerOfferPage';
 
 // Components
 import Navbar from './components/Navbar';
@@ -45,6 +47,8 @@ function App() {
             <Route path="/supplier/portal" element={<SupplierPortalPage />} />
             <Route path="/hawker/edit/:txId" element={<HawkerTxEditPage />} />
             <Route path="/my-orders/:orderId" element={<MyOrderPage />} />
+            <Route path="/direct/new" element={<DirectEscrowCreatePage />} />
+            <Route path="/direct-offer/:txId" element={<DirectBuyerOfferPage />} />
           </Routes>
         </main>
         <Footer />

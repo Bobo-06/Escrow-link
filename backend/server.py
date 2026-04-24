@@ -3682,6 +3682,238 @@ async def three_party_edit(tx_id: str, request: ThreePartyEditRequest, current_u
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# DIRECT ESCROW (2-party: Seller ↔ Buyer, no hawker middleman)
+# Mirror of 3-party flow but simpler — seller creates proposal, buyer
+# accepts/counter-offers/declines via signed SMS/WhatsApp link.
+# ═══════════════════════════════════════════════════════════════════════════
+class DirectEscrowCreate(BaseModel):
+    item_name: str
+    item_description: Optional[str] = None
+    item_condition: Optional[str] = "new"
+    price: float
+    buyer_phone: str
+    buyer_name: Optional[str] = None
+    notes: Optional[str] = None
+    image_b64: Optional[str] = None
+
+
+class DirectBuyerResponse(BaseModel):
+    token: str              # HMAC supplied via SMS link
+    accepted: bool = False
+    counter_offer: bool = False
+    counter_price: Optional[float] = None
+    note: Optional[str] = None
+
+
+class DirectSellerCounter(BaseModel):
+    new_price: float
+    note: Optional[str] = None
+
+
+@api_router.post("/escrow/direct/create")
+async def direct_escrow_create(
+    request: DirectEscrowCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Seller creates a direct escrow proposal for a specific buyer.
+    Returns a signed buyer-facing URL (to be sent via SMS/WhatsApp).
+    """
+    normalized_phone = normalize_tz_phone(request.buyer_phone)
+    if not normalized_phone:
+        raise HTTPException(
+            status_code=400,
+            detail="Nambari ya simu ya mnunuzi si sahihi / Invalid buyer phone",
+        )
+    if request.price <= 0:
+        raise HTTPException(status_code=400, detail="Bei si sahihi / Invalid price")
+
+    tx_id = f"D2P_{uuid.uuid4().hex[:12]}"
+    now_iso = datetime.now(timezone.utc).isoformat()
+    transaction = {
+        "tx_id": tx_id,
+        "type": "direct_2p",
+        "status": "pending_buyer_approval",
+        "escrow_status": "empty",
+        # Seller
+        "seller_id": current_user["user_id"],
+        "seller_name": current_user.get("username") or current_user.get("name", "Muuzaji"),
+        "seller_phone": current_user.get("phone", ""),
+        # Buyer (target — confirms via signed link)
+        "buyer_phone": normalized_phone,
+        "buyer_name": request.buyer_name or "Mnunuzi",
+        "buyer_id": None,   # filled when they sign in / pay
+        # Item
+        "item_name": request.item_name,
+        "item_description": request.item_description,
+        "item_condition": request.item_condition,
+        "notes": request.notes,
+        "image_b64": request.image_b64,
+        # Pricing — 3% buyer fee (same as 3-party's buyer side)
+        "price": float(request.price),
+        "buyer_fee": round(float(request.price) * BUYER_FEE_PCT, 2),
+        "total_buyer_pays": round(float(request.price) * (1 + BUYER_FEE_PCT), 2),
+        # Timestamps
+        "created_at": now_iso,
+        "accepted_at": None,
+        "paid_at": None,
+        "released_at": None,
+        # Negotiation trail
+        "negotiation_history": [{
+            "at": now_iso,
+            "by": "seller",
+            "action": "opened",
+            "price": float(request.price),
+            "note": request.notes,
+        }],
+    }
+    await db.direct_escrow_transactions.insert_one(transaction)
+    await create_audit_log(tx_id, "DIRECT_ESCROW_CREATED", current_user["user_id"], {
+        "item": request.item_name,
+        "price": request.price,
+        "buyer_phone": normalized_phone,
+    })
+
+    base_url = os.environ.get("BASE_URL", "").rstrip("/")
+    buyer_token = _sign_verify_token(tx_id, "buyer", normalized_phone)
+    buyer_offer_url = (
+        f"{base_url}/direct-offer/{tx_id}?t={buyer_token}"
+        if base_url else f"/direct-offer/{tx_id}?t={buyer_token}"
+    )
+    # WhatsApp-ready share text (Swahili + English)
+    wa_text = (
+        f"Habari {request.buyer_name or ''}! {current_user.get('name','Muuzaji')} amekutumia ombi la kununua *{request.item_name}* kwa TSh {int(request.price):,}. "
+        f"Pesa yako itakuwa salama kwenye escrow ya Biz-Salama hadi utakapopokea bidhaa. "
+        f"Fungua hapa: {buyer_offer_url}"
+    )
+    wa_url = f"https://wa.me/{normalized_phone.lstrip('+')}?text={wa_text}"
+    return {
+        "ok": True,
+        "tx_id": tx_id,
+        "status": "pending_buyer_approval",
+        "buyer_offer_url": buyer_offer_url,
+        "whatsapp_share_url": wa_url,
+    }
+
+
+@api_router.get("/escrow/direct/{tx_id}")
+async def direct_escrow_get(tx_id: str, token: Optional[str] = None):
+    """Return a direct escrow tx.
+    - Authenticated seller (matching seller_id): full view.
+    - Public caller with valid HMAC buyer token: buyer-scoped view.
+    - Otherwise: minimal public view.
+    """
+    tx = await db.direct_escrow_transactions.find_one({"tx_id": tx_id}, {"_id": 0})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    # Buyer-token scoped view
+    if token:
+        expected = _sign_verify_token(tx_id, "buyer", tx.get("buyer_phone", ""))
+        if hmac.compare_digest(token, expected):
+            return {**tx, "view": "buyer"}
+
+    # Minimal public view
+    return {
+        "tx_id": tx_id,
+        "status": tx["status"],
+        "item_name": tx.get("item_name"),
+        "price": tx.get("price"),
+        "seller_name": tx.get("seller_name"),
+        "view": "public",
+    }
+
+
+@api_router.post("/escrow/direct/{tx_id}/buyer-response")
+async def direct_buyer_response(tx_id: str, payload: DirectBuyerResponse):
+    """Public — buyer accepts/counters/declines the seller's proposal."""
+    tx = await db.direct_escrow_transactions.find_one({"tx_id": tx_id}, {"_id": 0})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    expected = _sign_verify_token(tx_id, "buyer", tx.get("buyer_phone", ""))
+    if not hmac.compare_digest(payload.token, expected):
+        raise HTTPException(status_code=403, detail="Invalid buyer token")
+    if tx.get("status") not in ("pending_buyer_approval", "seller_countered"):
+        raise HTTPException(status_code=400, detail=f"Cannot respond — status={tx.get('status')}")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if payload.accepted and not payload.counter_offer:
+        update = {
+            "status": "buyer_accepted",
+            "accepted_at": now_iso,
+            "buyer_fee": round(tx["price"] * BUYER_FEE_PCT, 2),
+            "total_buyer_pays": round(tx["price"] * (1 + BUYER_FEE_PCT), 2),
+        }
+        history_entry = {"at": now_iso, "by": "buyer", "action": "accepted", "price": tx["price"], "note": payload.note}
+    elif payload.counter_offer:
+        if not payload.counter_price or payload.counter_price <= 0:
+            raise HTTPException(status_code=400, detail="counter_price required to counter-offer")
+        update = {
+            "status": "buyer_countered",
+            "price": float(payload.counter_price),
+            "buyer_fee": round(float(payload.counter_price) * BUYER_FEE_PCT, 2),
+            "total_buyer_pays": round(float(payload.counter_price) * (1 + BUYER_FEE_PCT), 2),
+            "buyer_counter_at": now_iso,
+            "buyer_counter_note": payload.note,
+        }
+        history_entry = {"at": now_iso, "by": "buyer", "action": "counter", "price": float(payload.counter_price), "note": payload.note}
+    else:
+        update = {"status": "buyer_declined", "declined_at": now_iso, "decline_note": payload.note}
+        history_entry = {"at": now_iso, "by": "buyer", "action": "rejected", "note": payload.note}
+
+    await db.direct_escrow_transactions.update_one(
+        {"tx_id": tx_id},
+        {"$set": update, "$push": {"negotiation_history": history_entry}},
+    )
+    return {"ok": True, "tx_id": tx_id, "status": update["status"]}
+
+
+@api_router.post("/escrow/direct/{tx_id}/seller-counter")
+async def direct_seller_counter(
+    tx_id: str,
+    payload: DirectSellerCounter,
+    current_user: dict = Depends(get_current_user),
+):
+    """Seller sends a counter-offer back to the buyer (after buyer countered)."""
+    tx = await db.direct_escrow_transactions.find_one({"tx_id": tx_id}, {"_id": 0})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    if tx.get("seller_id") != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="Only the seller can counter this transaction")
+    if tx.get("status") not in ("buyer_countered", "pending_buyer_approval"):
+        raise HTTPException(status_code=400, detail=f"Cannot counter — status={tx.get('status')}")
+    if payload.new_price <= 0:
+        raise HTTPException(status_code=400, detail="Invalid price")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    update = {
+        "status": "pending_buyer_approval",
+        "price": float(payload.new_price),
+        "buyer_fee": round(float(payload.new_price) * BUYER_FEE_PCT, 2),
+        "total_buyer_pays": round(float(payload.new_price) * (1 + BUYER_FEE_PCT), 2),
+        "seller_counter_at": now_iso,
+        "seller_counter_note": payload.note,
+    }
+    history_entry = {"at": now_iso, "by": "seller", "action": "counter", "price": float(payload.new_price), "note": payload.note}
+    await db.direct_escrow_transactions.update_one(
+        {"tx_id": tx_id},
+        {"$set": update, "$push": {"negotiation_history": history_entry}},
+    )
+    base_url = os.environ.get("BASE_URL", "").rstrip("/")
+    buyer_token = _sign_verify_token(tx_id, "buyer", tx.get("buyer_phone", ""))
+    buyer_offer_url = f"{base_url}/direct-offer/{tx_id}?t={buyer_token}" if base_url else f"/direct-offer/{tx_id}?t={buyer_token}"
+    return {"ok": True, "tx_id": tx_id, "status": "pending_buyer_approval", "buyer_offer_url": buyer_offer_url}
+
+
+@api_router.get("/escrow/direct/my/seller")
+async def direct_escrow_my_seller(current_user: dict = Depends(get_current_user)):
+    """List all direct escrow transactions created by the current seller."""
+    txs = await db.direct_escrow_transactions.find(
+        {"seller_id": current_user["user_id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return {"transactions": txs, "count": len(txs)}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # VOICE (Whisper STT via Emergent LLM Key)
 # ═══════════════════════════════════════════════════════════════════════════
 @api_router.post("/voice/transcribe")

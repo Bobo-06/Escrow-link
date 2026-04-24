@@ -48,28 +48,38 @@ const Navbar: React.FC = () => {
             <BuildBadge />
             <InstallAppButton />
             {isAuthenticated ? (
-              <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-2">
+                <Link
+                  to="/direct/new"
+                  data-testid="desktop-direct-cta"
+                  className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/40 text-emerald-300 px-3 py-2 rounded-full font-bold text-xs hover:bg-emerald-500/20 whitespace-nowrap"
+                  title="Direct Escrow — seller to buyer, no middleman"
+                >
+                  <ShoppingBag className="w-4 h-4" />
+                  + Direct
+                </Link>
                 <Link
                   to="/hawker/new"
                   data-testid="desktop-new-3p-cta"
-                  className="flex items-center gap-2 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-900 px-4 py-2 rounded-full font-bold text-sm hover:from-gold-400 hover:to-gold-500 shadow-lg shadow-gold-500/30 whitespace-nowrap"
+                  className="flex items-center gap-1.5 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-900 px-3 py-2 rounded-full font-bold text-xs hover:from-gold-400 hover:to-gold-500 shadow-lg shadow-gold-500/30 whitespace-nowrap"
+                  title="3-Party Escrow — hawker ↔ supplier ↔ buyer"
                 >
                   <Users className="w-4 h-4" />
-                  + New 3-Party
+                  + 3-Party
                 </Link>
                 <Link
                   to="/dashboard"
                   className="flex items-center space-x-2 text-ink-300 hover:text-white transition-colors"
                 >
                   <LayoutDashboard className="w-5 h-5" />
-                  <span>Dashboard</span>
+                  <span className="hidden lg:inline">Dashboard</span>
                 </Link>
                 <button
                   onClick={handleLogout}
                   className="flex items-center space-x-2 text-ink-300 hover:text-white transition-colors"
                 >
                   <LogOut className="w-5 h-5" />
-                  <span>Logout</span>
+                  <span className="hidden lg:inline">Logout</span>
                 </button>
               </div>
             ) : (
@@ -105,15 +115,26 @@ const Navbar: React.FC = () => {
         <div className="md:hidden glass border-t border-ink-700">
           <div className="px-4 py-4 space-y-3">
             {isAuthenticated && (
-              <Link
-                to="/hawker/new"
-                data-testid="mobile-new-3p-cta"
-                onClick={() => setIsMenuOpen(false)}
-                className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-gold-500 to-gold-600 text-ink-900 px-4 py-3 rounded-xl font-bold shadow-lg shadow-gold-500/30 hover:from-gold-400 hover:to-gold-500"
-              >
-                <Users className="w-5 h-5" />
-                + New 3-Party Transaction
-              </Link>
+              <>
+                <Link
+                  to="/hawker/new"
+                  data-testid="mobile-new-3p-cta"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-gold-500 to-gold-600 text-ink-900 px-4 py-3 rounded-xl font-bold shadow-lg shadow-gold-500/30 hover:from-gold-400 hover:to-gold-500"
+                >
+                  <Users className="w-5 h-5" />
+                  + New 3-Party Transaction
+                </Link>
+                <Link
+                  to="/direct/new"
+                  data-testid="mobile-direct-cta"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="flex items-center justify-center gap-2 w-full bg-emerald-500/10 border border-emerald-500/40 text-emerald-300 px-4 py-3 rounded-xl font-bold hover:bg-emerald-500/20"
+                >
+                  <ShoppingBag className="w-5 h-5" />
+                  + Direct Escrow (no middleman)
+                </Link>
+              </>
             )}
             <div className="pb-2">
               <InstallAppButton className="w-full justify-center" />

@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Shield, Plus, Package, TrendingUp, DollarSign, Users } from 'lucide-react';
+import { Shield, Plus, Package, TrendingUp, DollarSign, Users, Mic } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import SEO from '../components/SEO';
+import VoiceProductListingModal from '../components/VoiceProductListingModal';
 
 const SellerDashboard: React.FC = () => {
   const { user } = useAuthStore();
+  const [voiceOpen, setVoiceOpen] = useState(false);
 
   const stats = [
     { label: 'Total Revenue', value: 'TZS 2.5M', icon: DollarSign, color: 'gold' },
@@ -40,12 +42,24 @@ const SellerDashboard: React.FC = () => {
               <Shield className="w-5 h-5 mr-2" />
               Supplier Portal
             </Link>
-            <button className="flex items-center px-5 py-3 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-900 rounded-xl font-semibold hover:from-gold-400 hover:to-gold-500 transition-all">
+            <button
+              onClick={() => setVoiceOpen(true)}
+              data-testid="dashboard-voice-listing-btn"
+              className="flex items-center px-5 py-3 bg-ink-700 text-white rounded-xl font-semibold hover:bg-ink-600 transition-all border border-gold-500/30"
+            >
+              <Mic className="w-5 h-5 mr-2 text-gold-400" />
+              List by Voice
+            </button>
+            <button
+              data-testid="dashboard-add-product-btn"
+              className="flex items-center px-5 py-3 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-900 rounded-xl font-semibold hover:from-gold-400 hover:to-gold-500 transition-all">
               <Plus className="w-5 h-5 mr-2" />
               Add Product
             </button>
           </div>
         </div>
+
+        <VoiceProductListingModal open={voiceOpen} onClose={() => setVoiceOpen(false)} />
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">

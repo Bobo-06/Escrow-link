@@ -3463,6 +3463,224 @@ async def three_party_edit(tx_id: str, request: ThreePartyEditRequest, current_u
     return {"ok": True, "tx_id": tx_id, "status": "pending_approval", "supplier_verify_url": supplier_verify_url}
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# VOICE (Whisper STT via Emergent LLM Key)
+# ═══════════════════════════════════════════════════════════════════════════
+@api_router.post("/voice/transcribe")
+async def voice_transcribe(
+    audio: UploadFile = File(...),
+    language: Optional[str] = None,
+    context: Optional[str] = None,  # "search" | "listing" | "assistant"
+):
+    """Transcribe audio (mp3/wav/webm/m4a) to text using Whisper.
+    Accepts Swahili and English (Whisper auto-detects if language is not provided).
+    """
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(status_code=503, detail="Voice transcription not configured")
+
+    # Whisper max 25 MB
+    raw = await audio.read()
+    if len(raw) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Audio too large (max 25 MB)")
+
+    # Pick an extension Whisper accepts
+    filename = (audio.filename or "recording.webm").lower()
+    ext_ok = any(filename.endswith(e) for e in (".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".wav", ".webm"))
+    if not ext_ok:
+        # Assume webm (default from MediaRecorder)
+        filename = "recording.webm"
+
+    # Write to a tmp-like BytesIO and pass to OpenAISpeechToText
+    import io
+    from emergentintegrations.llm.openai import OpenAISpeechToText
+
+    stt = OpenAISpeechToText(api_key=EMERGENT_LLM_KEY)
+
+    # Context-specific prompt helps Whisper with proper nouns & Swahili
+    prompt_map = {
+        "search": "User searching a Tanzanian marketplace. Terms may include: kitenge, Samsung, pilau, Tingatinga, Kariakoo, Arusha, Zanzibar, kanga, shea butter.",
+        "listing": "Seller describing a product for sale in Tanzania. Mention brand, size, price in TSh, and location.",
+        "assistant": "Customer support for Biz-Salama escrow marketplace in Tanzania. May mix Swahili and English.",
+    }
+    prompt = prompt_map.get(context or "")
+
+    buf = io.BytesIO(raw)
+    buf.name = filename  # OpenAI SDK reads .name for mime detection
+
+    try:
+        response = await stt.transcribe(
+            file=buf,
+            model="whisper-1",
+            response_format="json",
+            language=language if language else None,
+            prompt=prompt,
+            temperature=0,
+        )
+        text = getattr(response, "text", None) or ""
+        return {"text": text.strip(), "language": language or "auto", "duration_bytes": len(raw)}
+    except Exception as e:
+        logger.error(f"Whisper transcription failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SEO PRERENDER (bot-friendly server-rendered HTML with OG tags)
+# Deployment-safe: no build-time prerender; bots hit these routes via
+# Cloudflare Worker UA rewrite. See PRD.md for Worker snippet.
+# ═══════════════════════════════════════════════════════════════════════════
+def _html_escape(s: Any) -> str:
+    if s is None:
+        return ""
+    return (
+        str(s)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#39;")
+    )
+
+
+def _seo_html(*, title: str, description: str, url: str, image: str,
+              extra_jsonld: Optional[Dict[str, Any]] = None,
+              body_heading: str = "", body_text: str = "") -> str:
+    base = BASE_URL or ""
+    canonical = f"{base.rstrip('/')}{url}" if base else url
+    og_image = image if image.startswith("http") else (f"{base.rstrip('/')}{image}" if base else image)
+    jsonld = ""
+    if extra_jsonld:
+        import json as _json
+        jsonld = f'<script type="application/ld+json">{_json.dumps(extra_jsonld)}</script>'
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>{_html_escape(title)}</title>
+<meta name="description" content="{_html_escape(description)}"/>
+<link rel="canonical" href="{_html_escape(canonical)}"/>
+<meta property="og:type" content="website"/>
+<meta property="og:site_name" content="Biz-Salama"/>
+<meta property="og:title" content="{_html_escape(title)}"/>
+<meta property="og:description" content="{_html_escape(description)}"/>
+<meta property="og:image" content="{_html_escape(og_image)}"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta property="og:url" content="{_html_escape(canonical)}"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="{_html_escape(title)}"/>
+<meta name="twitter:description" content="{_html_escape(description)}"/>
+<meta name="twitter:image" content="{_html_escape(og_image)}"/>
+<meta name="robots" content="index,follow"/>
+{jsonld}
+</head>
+<body>
+<h1>{_html_escape(body_heading or title)}</h1>
+<p>{_html_escape(body_text or description)}</p>
+<p><a href="{_html_escape(canonical)}">Open on Biz-Salama</a></p>
+</body>
+</html>"""
+
+
+@api_router.get("/seo/render/product/{product_id}")
+async def seo_render_product(product_id: str):
+    """Server-rendered HTML for bot crawlers. Serves real OG tags for product links."""
+    from fastapi.responses import HTMLResponse
+    product = await db.products.find_one({"product_id": product_id}, {"_id": 0})
+    if not product:
+        html = _seo_html(
+            title="Product Not Found — Biz-Salama",
+            description="This product is no longer available on Biz-Salama.",
+            url=f"/product/{product_id}",
+            image="/og-image.png",
+        )
+        return HTMLResponse(content=html, status_code=404)
+
+    name = product.get("name", "Product")
+    desc = product.get("description") or f"Shop {name} on Biz-Salama — Tanzania's escrow-protected marketplace."
+    price = product.get("price_tzs") or product.get("price") or 0
+    image = product.get("image") or "/og-image.png"
+    seller = product.get("seller_name") or "Verified seller"
+    location = product.get("location") or "Tanzania"
+
+    jsonld = {
+        "@context": "https://schema.org/",
+        "@type": "Product",
+        "name": name,
+        "description": desc,
+        "image": image,
+        "brand": {"@type": "Brand", "name": "Biz-Salama"},
+        "offers": {
+            "@type": "Offer",
+            "priceCurrency": "TZS",
+            "price": int(price) if price else 0,
+            "availability": "https://schema.org/InStock",
+            "seller": {"@type": "Organization", "name": seller},
+        },
+    }
+    return HTMLResponse(content=_seo_html(
+        title=f"{name} — TSh {int(price):,} | Biz-Salama",
+        description=f"{desc[:150]}… Sold by {seller} ({location}). Escrow-protected on Biz-Salama.",
+        url=f"/product/{product_id}",
+        image=image,
+        extra_jsonld=jsonld,
+        body_heading=name,
+        body_text=f"{desc} — TSh {int(price):,} — Seller: {seller}, {location}",
+    ))
+
+
+@api_router.get("/seo/render/marketplace")
+async def seo_render_marketplace():
+    from fastapi.responses import HTMLResponse
+    # Pull top 12 products for a rich snippet
+    products = await db.products.find({"is_active": True}, {"_id": 0, "name": 1, "price_tzs": 1, "price": 1, "image": 1, "product_id": 1}).sort("created_at", -1).to_list(12)
+    items_jsonld = {
+        "@context": "https://schema.org/",
+        "@type": "ItemList",
+        "itemListElement": [
+            {
+                "@type": "ListItem",
+                "position": i + 1,
+                "url": f"{BASE_URL.rstrip('/')}/product/{p['product_id']}" if BASE_URL else f"/product/{p['product_id']}",
+                "name": p.get("name"),
+            }
+            for i, p in enumerate(products)
+        ],
+    }
+    return HTMLResponse(content=_seo_html(
+        title="Marketplace — Verified Tanzanian Sellers | Biz-Salama",
+        description="Browse authentic Tanzanian products — kitenge, electronics, Kilimanjaro coffee, Maasai crafts, Tingatinga art. Every purchase protected by escrow.",
+        url="/marketplace",
+        image="/og-image.png",
+        extra_jsonld=items_jsonld,
+        body_heading="Biz-Salama Marketplace",
+        body_text="Shop safely with escrow protection from verified sellers across Tanzania.",
+    ))
+
+
+@api_router.get("/seo/render/landing")
+async def seo_render_landing():
+    from fastapi.responses import HTMLResponse
+    org_jsonld = {
+        "@context": "https://schema.org/",
+        "@type": "Organization",
+        "name": "Biz-Salama",
+        "url": BASE_URL or "https://www.biz-salama.co.tz",
+        "logo": "/logo512.png",
+        "sameAs": [],
+        "description": "Tanzania's escrow-protected marketplace. Buyers pay, sellers ship, funds released only on delivery.",
+    }
+    return HTMLResponse(content=_seo_html(
+        title="Biz-Salama — Shop Safely with Escrow Protection in Tanzania",
+        description="Buy & sell safely across Tanzania with escrow. M-Pesa, Airtel, Tigo Pesa & card supported. Funds released only when buyer confirms delivery.",
+        url="/",
+        image="/og-image.png",
+        extra_jsonld=org_jsonld,
+        body_heading="Biz-Salama — Secure Escrow Marketplace",
+        body_text="Tanzania's trusted escrow marketplace. Shop safely, sell confidently.",
+    ))
+
+
 # Include the router
 app.include_router(api_router)
 

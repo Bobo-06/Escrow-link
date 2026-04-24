@@ -47,10 +47,30 @@ Source code previously built and saved at: https://github.com/Bobo-06/Escrow-lin
 - [x] Install button in Navbar + landing page CTA section
 
 ## In Progress / Next Up (Apr 24, 2026)
-- [ ] **P1a** SEO prerender shim — detect bot User-Agents and serve server-rendered HTML with product/seller OG tags (deployment-safe, no `react-snap`)
-- [ ] **P1b** Click-Pesa integration (Tanzania mobile money rail)
-- [ ] **P1c** Seed 20–40 realistic Tanzanian products (electronics, fashion, agriculture) to replace dummy data
-- [ ] **P1d** Voice features — Swahili voice search, voice product listing, voice AI assistant via OpenAI Whisper + TTS (Emergent LLM key)
+- [x] **P1a** SEO prerender shim — `/api/seo/render/{landing,marketplace,product/:id}` endpoints return full HTML with Open Graph + JSON-LD for bots. Deployment-safe Cloudflare Worker snippet included below (rewrites bot User-Agents to these API paths; humans still get the React SPA). (Apr 24, 2026)
+- [ ] **P1b** Click-Pesa integration — DEFERRED pending API credentials from client
+- [x] **P1c** Marketplace seed — 29 realistic Tanzanian products across fashion/electronics/home/beauty/food/agriculture via `/app/backend/scripts/seed_marketplace.py`. Idempotent upsert; seed seller `Biz-Salama Verified Collective`. (Apr 24, 2026)
+- [x] **P1d** Voice features — Whisper STT via Emergent LLM key. `/api/voice/transcribe` backend endpoint; `<VoiceRecorder>` mic on Marketplace search; `<VoiceProductListingModal>` on SellerDashboard transcribes seller's spoken description, heuristic-parses name/price/category, and publishes via `/api/products`. Supports Swahili + English auto-detect. (Apr 24, 2026)
+
+### Cloudflare Worker — Bot Prerender (deploy after attaching `www.biz-salama.co.tz`)
+```js
+// Rewrites bot UA requests to the backend SEO render endpoints.
+const BOT_UA = /(facebookexternalhit|WhatsApp|Twitterbot|LinkedInBot|Slackbot|Discordbot|TelegramBot|Googlebot|Bingbot|DuckDuckBot|Applebot|Embedly)/i;
+const BACKEND = "https://salama-secure.preview.emergentagent.com";
+export default {
+  async fetch(req) {
+    const url = new URL(req.url);
+    const ua = req.headers.get("user-agent") || "";
+    if (!BOT_UA.test(ua)) return fetch(req); // human → React SPA
+    let target = null;
+    if (url.pathname === "/" || url.pathname === "") target = "/api/seo/render/landing";
+    else if (url.pathname === "/marketplace") target = "/api/seo/render/marketplace";
+    else if (url.pathname.startsWith("/product/")) target = "/api/seo/render/product/" + url.pathname.split("/")[2];
+    if (!target) return fetch(req);
+    return fetch(BACKEND + target, { headers: { "accept": "text/html" } });
+  },
+};
+```
 
 ## Backlog (P2–P3)
 - Discovery UI layer — related products, trending sellers, compare drawer, "lowest price" badge on search

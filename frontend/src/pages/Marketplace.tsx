@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Search, Filter, Star, Shield, MapPin, ChevronDown } from 'lucide-react';
 import { productsAPI } from '../lib/api';
 import SEO from '../components/SEO';
+import VoiceRecorder from '../components/VoiceRecorder';
 
 interface Product {
   product_id: string;
@@ -11,6 +12,7 @@ interface Product {
   price: number;
   description?: string;
   image_b64?: string;
+  image?: string;
   seller_name?: string;
   seller_id?: string;
   category?: string;
@@ -157,8 +159,17 @@ const Marketplace: React.FC = () => {
                 placeholder="Search for products..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-4 bg-ink-700 border border-ink-600 rounded-xl text-white placeholder-ink-400 focus:outline-none focus:border-gold-500 transition-colors"
+                className="w-full pl-12 pr-16 py-4 bg-ink-700 border border-ink-600 rounded-xl text-white placeholder-ink-400 focus:outline-none focus:border-gold-500 transition-colors"
+                data-testid="marketplace-search-input"
               />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <VoiceRecorder
+                  context="search"
+                  size="sm"
+                  title="Search by voice (Swahili or English)"
+                  onTranscribed={(t) => setSearchTerm(t)}
+                />
+              </div>
             </div>
             <div className="flex gap-4">
               <select
@@ -217,6 +228,16 @@ const Marketplace: React.FC = () => {
                         src={`data:image/jpeg;base64,${product.image_b64}`}
                         alt={product.name}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    ) : product.image ? (
+                      <img
+                        src={product.image}
+                        alt={product.name}
+                        loading="lazy"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = 'none';
+                        }}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gold-500/20 to-emerald-500/20">

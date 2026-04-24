@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 2 — Full e2e verification of P1a (SEO prerender), P1c (Marketplace seed 29 products), P1d (Voice Whisper STT + Voice Listing modal). All 8 new backend tests PASS + all 15 regression tests from iter1 PASS (23/23). All 3 critical frontend flows PASS (marketplace mic button, seller dashboard voice modal, login + verify page regression).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/voice/transcribe", "issue": "When audio is empty or has unrecognized format (e.g. /dev/null or 0-byte file), endpoint returns HTTP 500 with structured JSON detail from Whisper BadRequestError. Acceptable per spec (no crash, JSON returned) but ideally should translate BadRequestError → 400. Valid WAV files, missing body (422) and >25MB (413) all work as expected."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/marketplace", "issues": ["Some product images (e.g. Dairy Goat, Day-Old Broiler Chicks, DK8031 Maize Seed) rendered empty/black boxes on initial paint while others loaded — may be slow Unsplash CDN or lazy-loading at time of screenshot; 29 <img> tags confirmed present in DOM. Worth double-checking image URL validity for agriculture/food category seed items."}]
+    }
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iter2_features.py",
+    "/app/backend/tests/test_biz_salama.py",
+    "/app/test_reports/pytest/iteration_2.xml"
+  ],
+  "action_items": [
+    "(Minor) Map Whisper BadRequestError → HTTP 400 instead of 500 in /api/voice/transcribe so invalid/empty audio returns a client-error status.",
+    "(Optional) Verify Unsplash image URLs for all 29 seed products render within 2s — some agriculture entries appeared slow/black during initial page paint."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 3700+ lines (added voice + seo routes). Recommend splitting into routers: routers/voice.py, routers/seo.py — matches the split suggested in iter1.",
+    "Voice endpoint: 25MB size check is good but error translation from emergentintegrations OpenAISpeechToText exceptions should be centralized (BadRequest→400, timeout→504, rate-limit→429).",
+    "SEO prerender: product/{id} lookup should index on both 'id' and legacy 'seed_xxx' prefix; verify that crawlers (Cloudflare Worker) route to the right URL scheme per PRD snippet."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter2_features.py"
+  ],
+  "success_rate": {"backend": "100% (23/23 — 8 new + 15 regression)", "frontend": "100% critical flows (marketplace mic, voice-listing modal open/close, login+dashboard, /verify regression)"},
+  "test_credentials": "Primary: +255712345678 / test1234 — verified login → /dashboard navigation works.",
+  "seed_data_creation": "No new seed needed. Marketplace DB confirmed ≥29 products via /api/products/public with all 6 categories (fashion, electronics, home, beauty, food, agriculture) present and every item has image + category.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test_iter2_features.py covers SEO, seed, and voice. /api/voice/transcribe uses Whisper via emergentintegrations — synthetic WAV (1s, 440Hz sine, 16kHz mono) via python wave module works and returns {'text': str} even for pure sine — no ffmpeg needed. Voice listing modal close-button selector was caught via OR-list (aria-label, Close text, ×, or data-testid='voice-listing-close-btn'). If you add more tests, remember REACT_APP_BACKEND_URL points to preview env and Whisper calls take ~1-3s (test completed in <3s total). Install App button IS present in Navbar (visible in dashboard.png screenshot) — text-based selector alone didn't catch it because it's in an icon-wrapper.",
+  "rca_of_the_issue": "No bugs to RCA this round. Minor: voice endpoint returning 500 for invalid audio — root cause is unhandled litellm.BadRequestError from OpenAISpeechToText bubbling through FastAPI default 500. Fix: wrap the transcribe call in try/except litellm.BadRequestError and raise HTTPException(400, detail=...)."
+}

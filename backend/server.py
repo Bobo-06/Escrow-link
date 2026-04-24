@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Response, Request, UploadFile, File, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Response, Request, UploadFile, File, Depends, Header
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -3808,6 +3808,62 @@ async def seo_render_landing():
         body_heading="Biz-Salama — Secure Escrow Marketplace",
         body_text="Tanzania's trusted escrow marketplace. Shop safely, sell confidently.",
     ))
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ADMIN — one-time Marketplace seed endpoint
+# Gated by JWT_SECRET header so only the deploying dev can trigger it.
+# Idempotent — re-runs upsert existing products by product_id without duplicates.
+# ═══════════════════════════════════════════════════════════════════════════
+@api_router.post("/admin/seed-marketplace")
+async def admin_seed_marketplace(x_admin_secret: str = Header(default="")):
+    if not x_admin_secret or x_admin_secret != JWT_SECRET:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    from scripts.seed_marketplace import SEED_SELLER, PRODUCTS, _fees  # local import
+    await db.users.update_one(
+        {"user_id": SEED_SELLER["user_id"]},
+        {"$set": {**SEED_SELLER, "created_at": datetime.now(timezone.utc)}},
+        upsert=True,
+    )
+    inserted, updated = 0, 0
+    for idx, p in enumerate(PRODUCTS):
+        product_id = f"seed_{p['slug']}"
+        payment_link_code = f"SEED{idx:03d}"
+        fees = _fees(p["price"])
+        doc = {
+            "product_id": product_id,
+            "seller_id": SEED_SELLER["user_id"],
+            "seller_name": SEED_SELLER["name"],
+            "seller_business": SEED_SELLER["business_name"],
+            "seller_is_women_owned": SEED_SELLER["is_women_owned"],
+            "name": p["name"],
+            "price": p["price"],
+            "price_tzs": p["price"],
+            "currency": "TZS",
+            "description": p["description"],
+            "image": p["image"],
+            "payment_link_code": payment_link_code,
+            "category": p["category"],
+            "location": p["location"],
+            "rating": 4.5 + (idx % 5) * 0.1,
+            "is_verified": True,
+            "is_active": True,
+            "export_category": None,
+            "international_shipping": False,
+            "shipping_countries": [],
+            "listed_via_voice": False,
+            **fees,
+        }
+        existing = await db.products.find_one({"product_id": product_id}, {"_id": 0})
+        if existing:
+            await db.products.update_one({"product_id": product_id}, {"$set": doc})
+            updated += 1
+        else:
+            doc["created_at"] = datetime.now(timezone.utc)
+            await db.products.insert_one(doc)
+            inserted += 1
+    total = await db.products.count_documents({"is_active": True})
+    return {"ok": True, "inserted": inserted, "updated": updated, "total_active_products": total}
 
 
 # Include the router

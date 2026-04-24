@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { Shield, Menu, X, ShoppingBag, User, LogOut, LayoutDashboard, Users } from 'lucide-react';
 import InstallAppButton from './InstallAppButton';
+import BuildBadge from './BuildBadge';
 
 const Navbar: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -44,6 +45,7 @@ const Navbar: React.FC = () => {
 
           {/* Auth Buttons */}
           <div className="hidden md:flex items-center space-x-3">
+            <BuildBadge />
             <InstallAppButton />
             {isAuthenticated ? (
               <div className="flex items-center space-x-4">

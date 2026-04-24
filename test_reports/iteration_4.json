@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 4 — verified hardened TZ phone validation (register + login), Halotel 6X support, PWA branded gold icons, manifest ?v=2 cache-bust, CORS preflight from production origin, and smoke regression for voice/3-party/SEO/marketplace. 30/30 backend tests PASS. UI login flow PASS on preview — +255712345678/test1234 reaches /dashboard; invalid phone shows bilingual 'si sahihi' toast from 400, wrong password shows 'Invalid credentials' from 401 (400 vs 401 are now correctly differentiated in UI).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter4_phone_pwa.py",
+    "/app/test_reports/pytest/iteration_4.xml",
+    "/app/backend/tests/test_iter3_features.py",
+    "/app/backend/tests/test_iter2_features.py",
+    "/app/backend/tests/test_biz_salama.py"
+  ],
+  "action_items": [
+    "No action items for this iteration. Phone-validation hardening (6X + 7X prefixes, rejection of stray 12-digit like 073661111222), PWA gold icons, manifest v=2, and CORS preflight all verified on preview.",
+    "Reminder (not blocking): production www.biz-salama.co.tz still serves old build — needs redeploy so users actually see the icon + validation fixes (by-design per PRD)."
+  ],
+  "critical_code_review_comments": [
+    "normalize_tz_phone is now strict & correct: only accepts 12-digit +255[67]XXXXXXXX, 10-digit 0[67]XXXXXXXX, or 9-digit [67]XXXXXXXX. No silent-accept fallback. Good.",
+    "login endpoint still has a $regex last-9-digits fallback (server.py:652-655) which is helpful for legacy records but can match unintended users if two accounts share the same last 9 digits across different country codes. Safe because normalize_tz_phone enforces +255 for the primary lookup, and the fallback is bounded by 9-char suffix. Documented for completeness.",
+    "server.py is now 3816 lines — still compounding technical debt; split into routers. No functional issue."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter4_phone_pwa.py"
+  ],
+  "success_rate": {"backend": "100% (30/30 iter4 tests)", "frontend": "100% (login happy-path, invalid-phone 400 toast, wrong-pw 401 toast, gold shield icons rendered)"},
+  "test_credentials": "Primary: +255712345678 / test1234 (still works across all 4 formats including with spaces). Fresh registers created during run with random 07X/06X phones and TestPw1234!/Demo1234!.",
+  "seed_data_creation": "Created ~6 ephemeral test users via /api/auth/register with TEST_ prefix names (Iter4 valid-format users + Norm User). No cleanup because registrations are low-volume and isolated via unique phones.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test_iter4_phone_pwa.py is the regression file for phone-validation + PWA assets. Key checks: (1) TestPWAIcons uses PIL Image.getpixel(center) and asserts gold (r>180,g>130,b<100) and NOT cyan. (2) TestManifest expects '?v=2' on all icon srcs and theme_color='#F59E0B'. (3) TestCORSPreflight uses Origin=https://www.biz-salama.co.tz and expects allow-origin echo or '*'. (4) Legacy migration is only indirectly probed (401 vs 400). If you need DB-level proof of migration, add a motor query via backend/.env MONGO_URL. Marketplace seed test now uses /api/products/public (the /api/products endpoint requires auth and was previously returning 401 hidden by cookie). For the UI register-flow, note the form requires Confirm Password + T&C checkbox (data-testid missing on those) — backend Halotel register is already proven in pytest.",
+  "rca_of_the_issue": "Previous issue: 'sign in still failing' was caused by (a) normalize_tz_phone's silent fallback that accepted 12-digit strings like '073661111222' (11-digit '73661111222' after strip-leading-zero → stored as '+25573661111222' which is a 14-digit phone), so a user who registered with '+255736611112' couldn't log in as '0736611112' because the DB record had the bad variant. (b) Only 7X prefix was accepted so Halotel 6X users were rejected outright. Fix verified: normalize now returns None for both cases and the register/login endpoints raise HTTP 400 with the 'si sahihi' bilingual message instead of silently accepting. Halotel 0688776655 and +255622334455 now register successfully and canonicalise to +255XXXXXXXXX. PWA icon issue: preview's /logo192.png and /logo512.png center pixel is now gold (r>180,g>130,b<100) — not React cyan (97,218,251). Manifest has ?v=2 cache-bust on all icons. Production domain still serves stale build — that's a deploy step, not a code issue."
+}

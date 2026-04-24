@@ -373,11 +373,18 @@ class ThreePartyEscrowRelease(BaseModel):
 # ============== HELPER FUNCTIONS ==============
 
 def normalize_tz_phone(raw: Optional[str]) -> Optional[str]:
-    """Canonicalise a Tanzanian phone number to E.164 (+255XXXXXXXXX).
+    """Canonicalise a Tanzanian mobile number to E.164 (+255XXXXXXXXX).
 
     Accepts any of:
       +255712345678, 255712345678, 0712345678, 712345678,
-      with any mix of spaces/dashes. Returns None for empty/invalid.
+      with any mix of spaces/dashes.
+
+    TZ mobile prefixes (after country code) are 6X or 7X:
+      Vodacom 74/75/76, Tigo 65/67/71, Airtel 68/69/78,
+      Halotel 61/62, Zantel 77, TTCL 73.
+
+    Returns a normalized +255[67]XXXXXXXX OR None for empty/invalid input.
+    Callers are responsible for raising a user-facing error on None.
     """
     if not raw:
         return None
@@ -385,20 +392,22 @@ def normalize_tz_phone(raw: Optional[str]) -> Optional[str]:
     digits = re.sub(r"\D", "", str(raw))
     if not digits:
         return None
-    # Already starts with country code
-    if digits.startswith("255") and len(digits) == 12:
+    # Already E.164 country code + 9-digit mobile
+    if digits.startswith("255") and len(digits) == 12 and digits[3] in ("6", "7"):
         return "+" + digits
-    # Leading 0 national format → strip and prepend +255
-    if digits.startswith("0") and len(digits) == 10:
+    # National format 0[67]XXXXXXXX (10 digits)
+    if len(digits) == 10 and digits[0] == "0" and digits[1] in ("6", "7"):
         return "+255" + digits[1:]
-    # Raw 9-digit local
-    if len(digits) == 9 and digits.startswith("7"):
+    # Raw 9-digit mobile starting with 6 or 7
+    if len(digits) == 9 and digits[0] in ("6", "7"):
         return "+255" + digits
-    # 12+ digit random / already E.164 without + — keep if sane
-    if len(digits) in (11, 12) and digits.startswith("255"):
-        return "+" + digits
-    # Fallback — return E.164-ish best effort (may still 401 but don't crash)
-    return "+" + digits if not raw.startswith("+") else raw.strip()
+    # Not a valid Tanzanian mobile — reject
+    return None
+
+
+def is_valid_tz_phone(raw: Optional[str]) -> bool:
+    """True if raw can be normalized to a valid Tanzanian mobile."""
+    return normalize_tz_phone(raw) is not None
 
 
 
@@ -533,7 +542,13 @@ async def register(user_data: UserCreate, response: Response):
     
     # Normalize phone to canonical +255 format (and lowercase email)
     if user_data.phone:
-        user_data.phone = normalize_tz_phone(user_data.phone)
+        normalized = normalize_tz_phone(user_data.phone)
+        if not normalized:
+            raise HTTPException(
+                status_code=400,
+                detail="Nambari ya simu si sahihi. Tumia fomati: 0712345678 au +255712345678 / Invalid phone number. Use format: 0712345678 or +255712345678",
+            )
+        user_data.phone = normalized
     if user_data.email:
         user_data.email = user_data.email.strip().lower()
     
@@ -619,7 +634,13 @@ async def login(credentials: UserLogin, response: Response):
     
     # Normalize inputs
     if credentials.phone:
-        credentials.phone = normalize_tz_phone(credentials.phone)
+        normalized = normalize_tz_phone(credentials.phone)
+        if not normalized:
+            raise HTTPException(
+                status_code=400,
+                detail="Nambari ya simu si sahihi. Tumia fomati: 0712345678 au +255712345678 / Invalid phone number. Use format: 0712345678 or +255712345678",
+            )
+        credentials.phone = normalized
     if credentials.email:
         credentials.email = credentials.email.strip().lower()
     

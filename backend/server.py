@@ -3797,14 +3797,25 @@ async def seo_render_landing():
 # Include the router
 app.include_router(api_router)
 
-# CORS middleware
+# ═══════════════════════════════════════════════════════════════════════════
+# CORS — custom domain + preview + env-driven extras.
+# The production custom domains are ALWAYS allowed, independent of env var
+# config, so a misset CORS_ORIGINS cannot lock out real users.
+# ═══════════════════════════════════════════════════════════════════════════
+_BASELINE_CORS_ORIGINS = {
+    "https://www.biz-salama.co.tz",
+    "https://biz-salama.co.tz",
+    "http://localhost:3000",
+}
+_env_cors = os.environ.get("CORS_ORIGINS", "").strip()
+_extra_origins = {o.strip() for o in _env_cors.split(",") if o.strip() and o.strip() != "*"}
+_allowed_origins = sorted(_BASELINE_CORS_ORIGINS | _extra_origins)
+logger.info(f"CORS allowed origins: {_allowed_origins} + regex for *.preview.emergentagent.com")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=[o.strip() for o in os.environ.get(
-        "CORS_ORIGINS",
-        "https://www.biz-salama.co.tz,https://biz-salama.co.tz,https://salama-secure.preview.emergentagent.com,http://localhost:3000"
-    ).split(",") if o.strip() and o.strip() != "*"],
+    allow_origins=_allowed_origins,
     allow_origin_regex=r"https://.*\.preview\.emergentagent\.com",
     allow_methods=["*"],
     allow_headers=["*"],

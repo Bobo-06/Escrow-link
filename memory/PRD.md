@@ -138,9 +138,22 @@ ENABLE_HEALTH_CHECK=false
 
 ## ⚠️ CRITICAL — Production vs Preview Discrepancy (Apr 24, 2026)
 When users report "sign in still failing" or "PWA still shows React atom icon", **check which URL they are using before assuming a code bug**:
-- `salama-secure.preview.emergentagent.com` = preview env, has all current fixes (phone normalization, gold shield PWA icon, voice features, buyer order page)
-- `www.biz-salama.co.tz` = production custom domain; only has whatever build was last deployed from Emergent → Deployments. If the user reports issues that are already fixed in preview, **the cause is almost always that production has not been redeployed yet**.
-- Quick sanity check: `curl -s https://www.biz-salama.co.tz/logo192.png | python3 -c "from PIL import Image; import sys, io; px=Image.open(io.BytesIO(sys.stdin.buffer.read())).convert('RGBA').getpixel((96,96)); print('Gold ✓' if px[0]>200 and px[1]>150 and px[2]<100 else 'Stale React atom ✗')"`
+- `salama-secure.preview.emergentagent.com` = preview env, has all current fixes
+- `www.biz-salama.co.tz` = production custom domain; only has whatever build was last deployed from Emergent → Deployments
+- Production backend URL = `https://salama-secure.emergent.host` (different from preview)
+- Quick sanity check (preview): `curl -s https://salama-secure.preview.emergentagent.com/logo192.png | python3 -c "from PIL import Image; import sys, io; px=Image.open(io.BytesIO(sys.stdin.buffer.read())).convert('RGBA').getpixel((96,96)); print('Gold ✓' if px[0]>200 and px[1]>150 and px[2]<100 else 'Stale React atom ✗')"`
+
+## 🔥 CRITICAL — CORS Origin Whitelist (MUST NEVER BREAK)
+**Root cause of "Network Error" when users register/login on `www.biz-salama.co.tz`**:
+Production backend previously had `CORS_ORIGINS="*"` in its env var. Our code filters `*` out (combining `*` with `allow_credentials=True` is invalid per CORS spec) → empty allow-list → every browser request from the custom domain hit `HTTP 400 "Disallowed CORS origin"` and users saw a generic "Network Error" toast.
+
+**Permanent fix (Apr 24, 2026, server.py)**: `_BASELINE_CORS_ORIGINS` is now hardcoded in the backend and ALWAYS includes:
+  - `https://www.biz-salama.co.tz`
+  - `https://biz-salama.co.tz`
+  - `http://localhost:3000`
+Env var `CORS_ORIGINS` is additive on top of these baselines. A misset env var can no longer lock out the custom domain. Verified by `grep "CORS allowed origins" /var/log/supervisor/backend.err.log`.
+
+**For any agent touching CORS**: the baseline set MUST include `www.biz-salama.co.tz` and `biz-salama.co.tz`. Do not remove these. Do not let `allow_origins=["*"]` + `allow_credentials=True` coexist — that combination is invalid CORS and some upstream proxies return 400.
 
 ## Shipped Apr 24, 2026 (post-iter3) — PWA Icon Rebranding
 - [x] **Branded PWA icons** — generated gold shield + white checkmark on dark ink navy via `/app/backend/scripts/generate_icons.py`. Replaces default CRA React atom (RGB cyan `97,218,251`) with brand gold (RGB `251,191,36`). Outputs: `favicon.ico` (multi-res 16/32/48/64), `logo192.png`, `logo512.png`, new `apple-touch-icon.png` (180).

@@ -18,6 +18,7 @@ import random
 import string
 import hashlib
 import hmac
+import re
 import asyncio
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
@@ -368,6 +369,36 @@ class ThreePartyEscrowRelease(BaseModel):
 
 # ============== HELPER FUNCTIONS ==============
 
+def normalize_tz_phone(raw: Optional[str]) -> Optional[str]:
+    """Canonicalise a Tanzanian phone number to E.164 (+255XXXXXXXXX).
+
+    Accepts any of:
+      +255712345678, 255712345678, 0712345678, 712345678,
+      with any mix of spaces/dashes. Returns None for empty/invalid.
+    """
+    if not raw:
+        return None
+    # Strip everything except digits
+    digits = re.sub(r"\D", "", str(raw))
+    if not digits:
+        return None
+    # Already starts with country code
+    if digits.startswith("255") and len(digits) == 12:
+        return "+" + digits
+    # Leading 0 national format → strip and prepend +255
+    if digits.startswith("0") and len(digits) == 10:
+        return "+255" + digits[1:]
+    # Raw 9-digit local
+    if len(digits) == 9 and digits.startswith("7"):
+        return "+255" + digits
+    # 12+ digit random / already E.164 without + — keep if sane
+    if len(digits) in (11, 12) and digits.startswith("255"):
+        return "+" + digits
+    # Fallback — return E.164-ish best effort (may still 401 but don't crash)
+    return "+" + digits if not raw.startswith("+") else raw.strip()
+
+
+
 def generate_payment_link_code():
     """Generate unique 8-character payment link code"""
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
@@ -497,6 +528,12 @@ async def register(user_data: UserCreate, response: Response):
     if not user_data.email and not user_data.phone:
         raise HTTPException(status_code=400, detail="Tafadhali weka barua pepe au nambari ya simu / Please provide email or phone number")
     
+    # Normalize phone to canonical +255 format (and lowercase email)
+    if user_data.phone:
+        user_data.phone = normalize_tz_phone(user_data.phone)
+    if user_data.email:
+        user_data.email = user_data.email.strip().lower()
+    
     # Check for existing user by email or phone
     if user_data.email:
         existing = await db.users.find_one({"email": user_data.email})
@@ -577,11 +614,21 @@ async def login(credentials: UserLogin, response: Response):
     if not credentials.email and not credentials.phone:
         raise HTTPException(status_code=400, detail="Tafadhali weka barua pepe au nambari ya simu / Please provide email or phone number")
     
-    # Find user by email or phone
+    # Normalize inputs
+    if credentials.phone:
+        credentials.phone = normalize_tz_phone(credentials.phone)
+    if credentials.email:
+        credentials.email = credentials.email.strip().lower()
+    
+    # Find user by email or phone (primary: normalized phone; fallback: raw for legacy records)
     if credentials.email:
         user = await db.users.find_one({"email": credentials.email}, {"_id": 0})
     else:
         user = await db.users.find_one({"phone": credentials.phone}, {"_id": 0})
+        if not user and credentials.phone:
+            # Backward-compat: try matching last 9 digits in case legacy records are stored without +255
+            last9 = credentials.phone[-9:]
+            user = await db.users.find_one({"phone": {"$regex": f"{last9}$"}}, {"_id": 0})
     
     if not user:
         raise HTTPException(status_code=401, detail="Taarifa si sahihi / Invalid credentials")
@@ -633,11 +680,20 @@ async def forgot_password(data: ForgotPasswordRequest):
     if not data.email and not data.phone:
         raise HTTPException(status_code=400, detail="Tafadhali weka barua pepe au nambari ya simu / Please provide email or phone")
     
+    # Normalize phone/email
+    if data.phone:
+        data.phone = normalize_tz_phone(data.phone)
+    if data.email:
+        data.email = data.email.strip().lower()
+    
     # Find user
     if data.email:
         user = await db.users.find_one({"email": data.email}, {"_id": 0})
     else:
         user = await db.users.find_one({"phone": data.phone}, {"_id": 0})
+        if not user and data.phone:
+            last9 = data.phone[-9:]
+            user = await db.users.find_one({"phone": {"$regex": f"{last9}$"}}, {"_id": 0})
     
     if not user:
         # Don't reveal if user exists - return success either way

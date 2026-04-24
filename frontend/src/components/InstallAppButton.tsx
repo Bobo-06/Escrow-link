@@ -147,6 +147,14 @@ const InstallAppButton: React.FC<{ className?: string }> = ({ className = '' }) 
                   and sends you real-time notifications when a buyer pays escrow or confirms delivery.
                 </span>
               </div>
+
+              <div className="mt-3 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-200 text-xs flex items-start gap-2">
+                <span className="text-base">⚠️</span>
+                <span>
+                  <strong className="text-amber-100">Seeing "React App" on your home screen?</strong> You have an old version installed.
+                  Long-press the icon → <strong>Remove / Uninstall</strong>, then install again — it will say <strong>"Biz-Salama"</strong> this time.
+                </span>
+              </div>
             </div>
           </div>
         </div>

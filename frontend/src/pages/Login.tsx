@@ -15,6 +15,16 @@ const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Normalize Tanzanian phone → +255XXXXXXXXX (strips spaces, handles 0X/+/255 prefixes)
+  const normalizeTzPhone = (raw: string): string => {
+    const digits = raw.replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.startsWith('255') && digits.length === 12) return '+' + digits;
+    if (digits.startsWith('0') && digits.length === 10) return '+255' + digits.slice(1);
+    if (digits.length === 9 && digits.startsWith('7')) return '+255' + digits;
+    return raw.startsWith('+') ? raw.trim() : '+' + digits;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -23,15 +33,19 @@ const Login: React.FC = () => {
       return;
     }
 
+    const normalizedPhone = normalizeTzPhone(phone);
+
     try {
       setLoading(true);
-      const response = await authAPI.login(phone, password);
+      const response = await authAPI.login(normalizedPhone, password);
       const { session_token, ...user } = response.data;
       setAuth(session_token, user);
-      toast.success('Welcome back!');
+      toast.success('Karibu! / Welcome back!');
       navigate('/dashboard');
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Login failed');
+      const msg = error.response?.data?.detail || error.message || 'Login failed';
+      toast.error(msg);
+      console.error('Login error:', error.response?.status, error.response?.data);
     } finally {
       setLoading(false);
     }
@@ -66,18 +80,24 @@ const Login: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-ink-300 text-sm font-medium mb-2">
-                Phone Number
+                Phone Number (Nambari ya Simu)
               </label>
               <div className="relative">
                 <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-ink-400" />
                 <input
+                  data-testid="login-phone-input"
                   type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="0712 345 678"
+                  placeholder="+255 712 345 678"
                   className="w-full pl-12 pr-4 py-4 bg-ink-700 border border-ink-600 rounded-xl text-white placeholder-ink-400 focus:outline-none focus:border-gold-500 transition-colors"
                 />
               </div>
+              <p className="text-ink-500 text-xs mt-1.5">
+                Any format works: <code className="text-gold-400">0712345678</code>, <code className="text-gold-400">712345678</code>, or <code className="text-gold-400">+255712345678</code>
+              </p>
             </div>
 
             <div>

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Shield, Star, MapPin, CheckCircle, ShoppingCart, Heart, Share2, Scale } from 'lucide-react';
+import { Shield, Star, MapPin, CheckCircle, ShoppingCart, Share2, Scale } from 'lucide-react';
 import api, { productsAPI } from '../lib/api';
 import SEO from '../components/SEO';
+import WatchBell from '../components/WatchBell';
 import { useT } from '../i18n';
 import { useCompareStore } from '../store/compareStore';
 
@@ -229,12 +230,10 @@ const ProductDetail: React.FC = () => {
               >
                 <Scale className="w-6 h-6" />
               </button>
-              <button className="p-4 glass rounded-xl hover:bg-ink-700 transition-colors" aria-label="Save">
-                <Heart className="w-6 h-6 text-ink-400" />
-              </button>
               <button className="p-4 glass rounded-xl hover:bg-ink-700 transition-colors" aria-label="Share">
                 <Share2 className="w-6 h-6 text-ink-400" />
               </button>
+              <WatchBell productId={product.product_id} productName={product.name} variant="pdp" />
             </div>
 
             {/* Trust Badge */}

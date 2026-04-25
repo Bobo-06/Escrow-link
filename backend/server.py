@@ -1057,7 +1057,14 @@ async def create_product(product: ProductCreate, request: Request):
     }
     
     await db.products.insert_one(product_data)
-    
+
+    # Fan out price-drop alerts to anyone watching same-category items at higher prices.
+    # Fire-and-forget — never blocks the product creation response on SMS latency.
+    try:
+        asyncio.create_task(_trigger_price_drop_alerts(product_data))
+    except Exception as e:
+        logger.warning(f"Could not schedule price-drop alerts: {e}")
+
     return {
         "product_id": product_data["product_id"],
         "seller_id": product_data["seller_id"],
@@ -1261,6 +1268,255 @@ async def get_trending_sellers(limit: int = 6):
         })
 
     return {"sellers": out, "count": len(out)}
+
+
+@api_router.get("/sellers/{seller_id}")
+async def get_seller_public(seller_id: str):
+    """Public seller profile — used by /seller/{id} page and the trending strip."""
+    seller = await db.users.find_one(
+        {"user_id": seller_id},
+        {"_id": 0, "user_id": 1, "name": 1, "username": 1, "business_name": 1,
+         "is_verified": 1, "is_women_owned": 1, "average_rating": 1,
+         "total_ratings": 1, "location": 1, "bio": 1, "created_at": 1},
+    )
+    if not seller:
+        raise HTTPException(status_code=404, detail="Seller not found")
+
+    if isinstance(seller.get("created_at"), datetime):
+        seller["created_at"] = seller["created_at"].isoformat()
+
+    # Aggregate counts that are safe to surface publicly
+    products_count = await db.products.count_documents(
+        {"seller_id": seller_id, "is_active": {"$ne": False}}
+    )
+    orders_count = await db.orders.count_documents(
+        {"seller_id": seller_id, "status": {"$in": ["delivered", "completed", "released"]}}
+    )
+
+    products = await db.products.find(
+        {"seller_id": seller_id, "is_active": {"$ne": False}},
+        {"_id": 0, "product_id": 1, "name": 1, "price": 1, "image": 1,
+         "image_b64": 1, "category": 1, "location": 1, "rating": 1,
+         "is_verified": 1, "created_at": 1},
+    ).sort("created_at", -1).to_list(60)
+
+    for p in products:
+        if isinstance(p.get("created_at"), datetime):
+            p["created_at"] = p["created_at"].isoformat()
+
+    return {
+        "seller": {
+            "seller_id": seller["user_id"],
+            "name": seller.get("business_name") or seller.get("name") or seller.get("username") or "Muuzaji",
+            "is_verified": bool(seller.get("is_verified")),
+            "is_women_owned": bool(seller.get("is_women_owned")),
+            "rating": seller.get("average_rating") or 0,
+            "total_ratings": seller.get("total_ratings") or 0,
+            "location": seller.get("location") or "Tanzania",
+            "bio": seller.get("bio") or "",
+            "joined": seller.get("created_at"),
+            "products_count": products_count,
+            "orders_completed": orders_count,
+        },
+        "products": products,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PRODUCT WATCHES — Price-Drop Alerts
+# ═══════════════════════════════════════════════════════════════════════════
+# Buyers can "watch" a product. When any seller subsequently lists a same-category
+# product at a lower price, we record an alert on every matching watch and (best
+# effort) ship a bilingual SMS via Africa's Talking. UI surfaces the alert badge.
+
+class WatchCreate(BaseModel):
+    product_id: str
+
+
+def _watch_public(w: Dict[str, Any]) -> Dict[str, Any]:
+    """Strip Mongo internals + ISO-format datetimes for the API response."""
+    out = {k: v for k, v in w.items() if k != "_id"}
+    for k in ("created_at", "last_alerted_at"):
+        if isinstance(out.get(k), datetime):
+            out[k] = out[k].isoformat()
+    for a in out.get("alerts") or []:
+        if isinstance(a.get("at"), datetime):
+            a["at"] = a["at"].isoformat()
+    return out
+
+
+@api_router.post("/watches")
+async def create_watch(payload: WatchCreate, request: Request):
+    """Authenticated buyer subscribes to price-drop alerts for a product."""
+    user = await get_current_user(request)
+
+    product = await db.products.find_one(
+        {"product_id": payload.product_id},
+        {"_id": 0, "product_id": 1, "name": 1, "price": 1, "category": 1,
+         "image": 1, "image_b64": 1, "seller_id": 1},
+    )
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    # Idempotent — one watch per (user, product)
+    existing = await db.product_watches.find_one(
+        {"user_id": user["user_id"], "product_id": payload.product_id},
+        {"_id": 0},
+    )
+    if existing:
+        return {"watch": _watch_public(existing), "already_watching": True}
+
+    watch_doc = {
+        "watch_id": f"watch_{uuid.uuid4().hex[:12]}",
+        "user_id": user["user_id"],
+        "phone": user.get("phone") or "",
+        "product_id": product["product_id"],
+        "name_at_watch": product.get("name", ""),
+        "price_at_watch": float(product.get("price") or 0),
+        "category": product.get("category") or "general",
+        "image": product.get("image") or product.get("image_b64") or "",
+        "seller_id": product.get("seller_id") or "",
+        "created_at": datetime.now(timezone.utc),
+        "last_alerted_at": None,
+        "alerts": [],
+        "active": True,
+    }
+    await db.product_watches.insert_one(watch_doc)
+    return {"watch": _watch_public(watch_doc), "already_watching": False}
+
+
+@api_router.get("/watches")
+async def list_my_watches(request: Request):
+    """List the current user's watches with the best (lowest) match per category."""
+    user = await get_current_user(request)
+    rows = await db.product_watches.find(
+        {"user_id": user["user_id"], "active": True},
+        {"_id": 0},
+    ).sort("created_at", -1).to_list(100)
+
+    if not rows:
+        return {"watches": [], "count": 0}
+
+    # For each watch, surface the cheapest *currently active* product in the same
+    # category that is strictly cheaper than the watched anchor price.
+    results: List[Dict[str, Any]] = []
+    for w in rows:
+        match = await db.products.find_one(
+            {
+                "category": w.get("category"),
+                "is_active": {"$ne": False},
+                "product_id": {"$ne": w.get("product_id")},
+                "price": {"$lt": float(w.get("price_at_watch") or 0)},
+            },
+            {"_id": 0, "product_id": 1, "name": 1, "price": 1, "image": 1,
+             "image_b64": 1, "seller_id": 1, "seller_name": 1, "location": 1},
+            sort=[("price", 1)],
+        )
+        pub = _watch_public(w)
+        if match:
+            savings = float(w.get("price_at_watch") or 0) - float(match.get("price") or 0)
+            pub["best_match"] = {**match, "savings": round(savings)}
+        else:
+            pub["best_match"] = None
+        results.append(pub)
+
+    return {"watches": results, "count": len(results)}
+
+
+@api_router.delete("/watches/{watch_id}")
+async def delete_watch(watch_id: str, request: Request):
+    """Remove a watch."""
+    user = await get_current_user(request)
+    res = await db.product_watches.delete_one(
+        {"watch_id": watch_id, "user_id": user["user_id"]}
+    )
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Watch not found")
+    return {"deleted": True, "watch_id": watch_id}
+
+
+@api_router.get("/watches/check/{product_id}")
+async def check_watch(product_id: str, request: Request):
+    """Quick check: is the current user already watching this product?"""
+    user = await get_current_user(request)
+    w = await db.product_watches.find_one(
+        {"user_id": user["user_id"], "product_id": product_id, "active": True},
+        {"_id": 0, "watch_id": 1},
+    )
+    return {"watching": bool(w), "watch_id": (w or {}).get("watch_id")}
+
+
+async def _trigger_price_drop_alerts(new_product: Dict[str, Any]) -> int:
+    """Best-effort fan-out: when a new product is listed, notify every watcher
+    in the same category whose anchor price was higher. Returns alert count.
+
+    Failures are swallowed — alerting must never break product creation.
+    """
+    try:
+        category = new_product.get("category") or "general"
+        new_price = float(new_product.get("price") or 0)
+        if new_price <= 0:
+            return 0
+
+        candidates = await db.product_watches.find(
+            {
+                "category": category,
+                "active": True,
+                "product_id": {"$ne": new_product.get("product_id")},
+                "price_at_watch": {"$gt": new_price},
+            },
+            {"_id": 0},
+        ).to_list(500)
+
+        if not candidates:
+            return 0
+
+        now = datetime.now(timezone.utc)
+        sent = 0
+        for w in candidates:
+            savings = float(w.get("price_at_watch") or 0) - new_price
+            alert = {
+                "alert_id": f"alert_{uuid.uuid4().hex[:10]}",
+                "at": now,
+                "matched_product_id": new_product.get("product_id"),
+                "matched_name": new_product.get("name", ""),
+                "matched_price": new_price,
+                "savings": round(savings),
+                "delivery": "pending",
+            }
+
+            # Append alert + bump last_alerted_at — capped to 25 most recent
+            await db.product_watches.update_one(
+                {"watch_id": w["watch_id"]},
+                {
+                    "$push": {"alerts": {"$each": [alert], "$slice": -25}},
+                    "$set": {"last_alerted_at": now},
+                },
+            )
+
+            # Best-effort SMS — falls back to simulated when AT key missing.
+            phone = w.get("phone") or ""
+            if phone:
+                try:
+                    msg_sw = (
+                        f"Biz-Salama: Bei imeshuka! '{w.get('name_at_watch','')}' "
+                        f"sasa inapatikana kwa TZS {int(new_price):,} (umehifadhi TZS {int(savings):,}). "
+                        f"Tazama: biz-salama.co.tz/product/{new_product.get('product_id')}"
+                    )
+                    msg_en = (
+                        f"Biz-Salama: Price drop! '{w.get('name_at_watch','')}' is now "
+                        f"TZS {int(new_price):,} (save TZS {int(savings):,}). "
+                        f"View: biz-salama.co.tz/product/{new_product.get('product_id')}"
+                    )
+                    await send_sms(phone, msg_en, msg_sw)
+                except Exception as sms_err:
+                    logger.warning(f"Watch SMS failed for {w.get('watch_id')}: {sms_err}")
+            sent += 1
+        logger.info(f"Price-drop alerts fanned out: {sent} watcher(s) notified for category={category}")
+        return sent
+    except Exception as e:
+        logger.error(f"Price-drop fan-out failed: {e}")
+        return 0
 
 
 @api_router.get("/products/detail/{product_id}")

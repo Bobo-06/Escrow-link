@@ -6,6 +6,7 @@ import { productsAPI } from '../lib/api';
 import SEO from '../components/SEO';
 import VoiceRecorder from '../components/VoiceRecorder';
 import TrendingSellersStrip from '../components/TrendingSellersStrip';
+import WatchBell from '../components/WatchBell';
 import { useT } from '../i18n';
 import { useCompareStore } from '../store/compareStore';
 
@@ -227,25 +228,28 @@ const Marketplace: React.FC = () => {
                         )}
                       </div>
 
-                      {/* compare toggle */}
-                      <button
-                        type="button"
-                        onClick={(e) => toggleCompare(e, product)}
-                        data-testid={`compare-toggle-${product.product_id}`}
-                        title={t('mkt.compare_add')}
-                        className={`absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-bold border transition-all ${
-                          inCompare
-                            ? 'bg-gold-500 text-ink-900 border-gold-500'
-                            : 'bg-ink-900/80 text-ink-200 border-ink-600 hover:bg-ink-900 hover:border-gold-500/60'
-                        }`}
-                      >
-                        {inCompare ? (
-                          <CheckCircle className="w-3.5 h-3.5" />
-                        ) : (
-                          <Scale className="w-3.5 h-3.5" />
-                        )}
-                        {inCompare ? t('mkt.compare_added') : t('mkt.compare_add')}
-                      </button>
+                      {/* compare toggle + watch bell */}
+                      <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                        <WatchBell productId={product.product_id} productName={product.name} variant="card" />
+                        <button
+                          type="button"
+                          onClick={(e) => toggleCompare(e, product)}
+                          data-testid={`compare-toggle-${product.product_id}`}
+                          title={t('mkt.compare_add')}
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-bold border transition-all ${
+                            inCompare
+                              ? 'bg-gold-500 text-ink-900 border-gold-500'
+                              : 'bg-ink-900/80 text-ink-200 border-ink-600 hover:bg-ink-900 hover:border-gold-500/60'
+                          }`}
+                        >
+                          {inCompare ? (
+                            <CheckCircle className="w-3.5 h-3.5" />
+                          ) : (
+                            <Scale className="w-3.5 h-3.5" />
+                          )}
+                          {inCompare ? t('mkt.compare_added') : t('mkt.compare_add')}
+                        </button>
+                      </div>
                     </div>
 
                     {/* Product Info */}

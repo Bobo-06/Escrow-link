@@ -20,6 +20,7 @@ import HawkerTxEditPage from './pages/HawkerTxEditPage';
 import MyOrderPage from './pages/MyOrderPage';
 import DirectEscrowCreatePage from './pages/DirectEscrowCreatePage';
 import DirectBuyerOfferPage from './pages/DirectBuyerOfferPage';
+import MyWatchesPage from './pages/MyWatchesPage';
 
 // Components
 import Navbar from './components/Navbar';
@@ -50,6 +51,7 @@ function App() {
             <Route path="/my-orders/:orderId" element={<MyOrderPage />} />
             <Route path="/direct/new" element={<DirectEscrowCreatePage />} />
             <Route path="/direct-offer/:txId" element={<DirectBuyerOfferPage />} />
+            <Route path="/my-watches" element={<MyWatchesPage />} />
           </Routes>
         </main>
         <Footer />

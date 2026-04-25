@@ -274,6 +274,49 @@ export const TRANSLATIONS: Dict = {
   "pd.related_sub": { sw: "Bidhaa zingine kama hii kutoka kwa wauzaji waliothibitishwa", en: "More items like this from verified sellers" },
   "pd.loading": { sw: "Inapakia bidhaa…", en: "Loading product…" },
   "pd.not_found": { sw: "Bidhaa haijapatikana.", en: "Product not found." },
+
+  // ─── Watch / price-drop alerts
+  "watch.add": { sw: "Niarifu bei ikishuka", en: "Notify on price drop" },
+  "watch.added": { sw: "Unaifuatilia", en: "Watching" },
+  "watch.login_required": { sw: "Ingia kwanza ili kufuatilia bei.", en: "Sign in to watch this product." },
+  "watch.added_toast": { sw: "Tumeanza kufuatilia. Tutakutumia SMS bei ikishuka.", en: "Watching this product. We'll text you when the price drops." },
+  "watch.removed_toast": { sw: "Umeacha kufuatilia.", en: "No longer watching." },
+  "watch.error": { sw: "Imeshindikana. Jaribu tena.", en: "Something went wrong. Try again." },
+  "nav.watches": { sw: "Ninavyofuatilia", en: "My Watches" },
+  "watches.title": { sw: "Bidhaa Ninazozifuatilia", en: "Watched Products" },
+  "watches.subtitle": {
+    sw: "Tutakuarifu kwa SMS pindi muuzaji yeyote atakapoorodhesha bidhaa kama hizi kwa bei ya chini zaidi.",
+    en: "We'll text you the moment any seller lists a similar product at a lower price.",
+  },
+  "watches.empty_title": { sw: "Hujaanza kufuatilia bidhaa yoyote", en: "You aren't watching anything yet" },
+  "watches.empty_sub": {
+    sw: "Bofya kengele kwenye kadi yoyote kwenye soko ili kuanza kufuatilia bei.",
+    en: "Tap the bell on any marketplace card to start tracking price drops.",
+  },
+  "watches.go_marketplace": { sw: "Vinjari Soko", en: "Browse Marketplace" },
+  "watches.anchor_price": { sw: "Bei Wakati Wa Kufuatilia", en: "Anchor price" },
+  "watches.now_lowest": { sw: "Bei ya Chini Sasa", en: "Lowest now" },
+  "watches.savings": { sw: "Akiba", en: "You'd save" },
+  "watches.no_drop": { sw: "Hakuna bei ya chini bado", en: "No cheaper match yet" },
+  "watches.view_match": { sw: "Tazama Mbadala", en: "View cheaper option" },
+  "watches.view_anchor": { sw: "Tazama Bidhaa", en: "View product" },
+  "watches.alerts_count": { sw: "tahadhari", en: "alerts" },
+  "watches.unwatch": { sw: "Acha Kufuatilia", en: "Stop watching" },
+  "watches.alerts_history": { sw: "Historia ya tahadhari", en: "Recent alerts" },
+
+  // ─── Seller profile
+  "sp.loading": { sw: "Inapakia muuzaji…", en: "Loading seller…" },
+  "sp.not_found": { sw: "Muuzaji hajapatikana.", en: "Seller not found." },
+  "sp.verified": { sw: "Muuzaji Aliyethibitishwa", en: "Verified Seller" },
+  "sp.women_owned": { sw: "Biashara ya Mwanamke", en: "Women-owned business" },
+  "sp.joined": { sw: "Alijiunga", en: "Joined" },
+  "sp.products_by": { sw: "Bidhaa za", en: "Products by" },
+  "sp.products_count": { sw: "bidhaa", en: "products" },
+  "sp.no_products": { sw: "Bado hakuna bidhaa zilizoorodheshwa.", en: "No products listed yet." },
+  "sp.stat.products": { sw: "Bidhaa", en: "Products" },
+  "sp.stat.orders": { sw: "Maagizo Yaliyokamilika", en: "Orders completed" },
+  "sp.stat.reviews": { sw: "tathmini", en: "reviews" },
+  "sp.no_rating": { sw: "Hakuna tathmini bado", en: "No ratings yet" },
 };
 
 type Ctx = { lang: Lang; setLang: (l: Lang) => void; t: (key: string) => string };

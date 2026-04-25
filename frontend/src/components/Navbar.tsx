@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { Shield, Menu, X, ShoppingBag, User, LogOut, LayoutDashboard, Users } from 'lucide-react';
+import { Shield, Menu, X, ShoppingBag, LogOut, LayoutDashboard, Users, BellRing } from 'lucide-react';
 import InstallAppButton from './InstallAppButton';
 import BuildBadge from './BuildBadge';
 import { LangToggle, useT } from '../i18n';
@@ -71,6 +71,14 @@ const Navbar: React.FC = () => {
                   {t("nav.cta_3p")}
                 </Link>
                 <Link
+                  to="/my-watches"
+                  data-testid="desktop-watches-link"
+                  className="flex items-center text-ink-300 hover:text-emerald-300 transition-colors"
+                  title="My watched products"
+                >
+                  <BellRing className="w-5 h-5" />
+                </Link>
+                <Link
                   to="/dashboard"
                   className="flex items-center space-x-2 text-ink-300 hover:text-white transition-colors"
                 >
@@ -106,6 +114,9 @@ const Navbar: React.FC = () => {
           {/* Mobile menu button */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
+            data-testid="navbar-mobile-toggle"
+            aria-label="Toggle menu"
+            aria-expanded={isMenuOpen}
             className="md:hidden text-white p-2"
           >
             {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -168,6 +179,14 @@ const Navbar: React.FC = () => {
                   onClick={() => setIsMenuOpen(false)}
                 >
                   {t("nav.dashboard")}
+                </Link>
+                <Link
+                  to="/my-watches"
+                  data-testid="mobile-watches-link"
+                  className="block text-ink-300 hover:text-emerald-300 py-2"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  {t("nav.watches")}
                 </Link>
                 <button
                   onClick={() => {

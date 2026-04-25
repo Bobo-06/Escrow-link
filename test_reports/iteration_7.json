@@ -1,0 +1,46 @@
+{
+  "summary": "Iter7 — Public Seller Profile endpoint + SellerProfile page rewrite + navbar-mobile-toggle testid all verified. 8/8 new backend tests PASS. 23/23 iter5+iter6 regression tests PASS. All 9 frontend acceptance criteria PASS on preview URL.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/seller/UNKNOWN_ID", "issues": ["PRD copy says 'Browse Marketplace' link but UI renders 'Explore Marketplace' — semantic equivalent, non-blocking. Update PRD or text for parity."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter7_seller_profile.py",
+    "/app/test_reports/pytest/iteration_7.xml",
+    "/app/backend/tests/test_iter6_watches.py",
+    "/app/backend/tests/test_iter5_discovery.py"
+  ],
+  "action_items": [
+    "Optional: align 'Explore Marketplace' vs PRD-stated 'Browse Marketplace' wording on /seller/UNKNOWN page — pick one and lock the i18n key.",
+    "Optional polish: add granular data-testids on SellerProfile (seller-name, seller-verified-badge, seller-stat-rating/orders/products) — current page only exposes seller-profile-page, seller-products-grid, seller-product-{id}. Iter7 PRD did not require these, but they would improve future test stability."
+  ],
+  "critical_code_review_comments": [
+    "Route ordering is correct in server.py: /api/sellers/trending (line 1224) is defined BEFORE /api/sellers/{seller_id} (line 1273). FastAPI matches in declaration order so trending is NOT swallowed — verified empirically by GET /api/sellers/trending?limit=2 returning {sellers,count} shape and NOT {seller,products}.",
+    "GET /api/sellers/{seller_id} correctly excludes Mongo _id via projection ({_id:0, ...}) on both users and products lookups — no ObjectId leakage in JSON.",
+    "Endpoint handles datetime serialization explicitly (joined + product.created_at converted via isoformat) — good defensive code that prevents 500s on JSON encoding.",
+    "is_women_owned is exposed publicly via the seller projection — good, matches the women-owned badge UI in SellerProfile.tsx.",
+    "Naming fallback chain (business_name → name → username → 'Muuzaji') is consistent between /sellers/trending and /sellers/{id} — ensures the trending tile name matches the profile-page H1.",
+    "products_count on the seller profile equals the active product count and matches what the grid renders (verified: 29 == 29 cards rendered for seed_seller_biz_salama).",
+    "orders_completed query filter uses status IN [delivered, completed, released] — correct semantic for 'completed'. Confirmed 0 for the seed seller (no orders in seed data).",
+    "Navbar.tsx hamburger now has data-testid='navbar-mobile-toggle', aria-label='Toggle menu', aria-expanded toggles false→true on click — fully accessible and testable. mobile-watches-link is correctly gated on isAuthenticated and reachable after login (verified manually with +255712345678/test1234).",
+    "i18n: All sp.* keys (sp.verified, sp.women_owned, sp.joined, sp.stat.orders/products/reviews, sp.no_rating, sp.no_products, sp.products_by, sp.products_count) translate correctly between SW and EN — verified empirically (Maagizo/Bidhaa/Imethibitishwa appear after SW toggle, Joined/Orders/Products/Verified after EN).",
+    "server.py is now ~4597 lines — still growing; refactor into routers remains backlog (not blocking)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter7_seller_profile.py (new)"
+  ],
+  "success_rate": {"backend": "100% (8/8 iter7 + 23/23 iter5+iter6 regression)", "frontend": "100% (9/9 acceptance criteria)"},
+  "test_credentials": "Verified login with +255712345678 / test1234 — issues session_token, redirects to /dashboard, gates mobile-watches-link as expected.",
+  "seed_data_creation": "No new seed data required. seed_seller_biz_salama already has 29 active products in DB.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test_iter7_seller_profile.py covers: (a) /api/sellers/{id} happy-path shape with real id from /sellers/trending, (b) seed_seller_biz_salama specific assertions (name contains 'salama', not 'mama biashara', products_count>=1), (c) UNKNOWN_ID → 404 'Seller not found', (d) route-ordering smoke (trending response shape ≠ {seller,products}), (e) regression on /api/products/public, /api/products/related/{id}, /api/auth/login, /api/watches list. Frontend Playwright verified: trending-sellers-strip → trending-seller-{id} → /seller/{id} → seller-profile-page → seller-products-grid → seller-product-{id} → /product/{id}. i18n SW/EN toggle on seller profile flips Maagizo/Bidhaa/Imethibitishwa ⇄ Orders/Products/Verified. Mobile hamburger (navbar-mobile-toggle) opens menu with aria-expanded toggle; mobile-watches-link only renders when authenticated.",
+  "rca_of_the_issue": "N/A — no bugs found. The highest-risk change (route ordering for /api/sellers/{id} after /trending) is correctly implemented — FastAPI in-order matching plus the static '/trending' literal taking precedence over the parameterised '/{seller_id}' is empirically verified by both the iter7 test_route_ordering_trending_still_works and iter6 TestRegression::test_sellers_trending."
+}

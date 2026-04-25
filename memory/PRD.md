@@ -161,5 +161,14 @@ Env var `CORS_ORIGINS` is additive on top of these baselines. A misset env var c
 - [x] **manifest.json** — added `purpose: "any maskable"` for Android adaptive icons, `description`, `categories`, `scope`, `orientation` for better install experience.
 - [x] Verified login on preview works for all 5 phone formats (`+255712345678`, `255712345678`, `0712345678`, `712345678`, spaced) → redirects to `/dashboard`. Issue reported by user was on production domain which still runs a pre-fix build.
 
+## Shipped Apr 25, 2026 (post-iter5) — Bilingual rollout + Discovery UI Layer
+- [x] **i18n expansion** — `TRANSLATIONS` dictionary in `/app/frontend/src/i18n/index.tsx` extended with full keys for Hero card, How It Works, 3-Party showcase, Trust section, CTA, Footer, Login, Register, Marketplace (incl. category labels and sort options), Compare drawer, Trending sellers strip, and Product Detail. `biz_lang` localStorage key is the single source of truth.
+- [x] **Bilingual wiring** — `Footer.tsx`, `Login.tsx`, `Register.tsx`, `Marketplace.tsx`, `ProductDetail.tsx`, plus the LandingPage `How It Works` / `Three-Party showcase` / `Trust` / `CTA` sections all switch between Swahili and English when the navbar pill is toggled.
+- [x] **Discovery — Trending Sellers strip** (`/app/frontend/src/components/TrendingSellersStrip.tsx`) — backed by new `GET /api/sellers/trending?limit=` aggregation endpoint that ranks by active product count. Renders horizontal scroll of seller cards above the marketplace grid; hides gracefully when empty.
+- [x] **Discovery — Lowest Price badge** — `/api/products/public` now tags the cheapest product per category as `is_lowest_price: true` (only when ≥2 items in the category and there's actual price differentiation). Marketplace card surfaces a green pill `Tag · Lowest Price` and recolors the price as emerald.
+- [x] **Discovery — Compare drawer** — new `compareStore.ts` (zustand persisted, max 4 items) + `<CompareDrawer/>` mounted globally in `App.tsx`. Each marketplace card and PDP exposes a `Scale` toggle. A floating Compare FAB appears once any item is queued; opens a side-by-side drawer that auto-highlights the cheapest item.
+- [x] **Discovery — Real ProductDetail + Related Products** — `ProductDetail.tsx` now fetches `/api/products/detail/{id}` (replaces hardcoded "Kitenge Fabric" sample) and renders a Related Products grid powered by new `GET /api/products/related/{id}?limit=` endpoint (same category, sorted by absolute price distance, excludes the original).
+- [x] **Test coverage** — `/app/backend/tests/test_iter5_discovery.py` and `/app/test_reports/iteration_5.json`. 8/8 backend + 11/11 frontend PASS. Zero critical or minor issues.
+
 ---
-*Version 6.3 — PWA icon rebranding + production-vs-preview disambiguation, Apr 24, 2026*
+*Version 6.4 — Bilingual rollout + Discovery UI Layer, Apr 25, 2026*

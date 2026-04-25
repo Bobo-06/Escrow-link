@@ -170,5 +170,20 @@ Env var `CORS_ORIGINS` is additive on top of these baselines. A misset env var c
 - [x] **Discovery — Real ProductDetail + Related Products** — `ProductDetail.tsx` now fetches `/api/products/detail/{id}` (replaces hardcoded "Kitenge Fabric" sample) and renders a Related Products grid powered by new `GET /api/products/related/{id}?limit=` endpoint (same category, sorted by absolute price distance, excludes the original).
 - [x] **Test coverage** — `/app/backend/tests/test_iter5_discovery.py` and `/app/test_reports/iteration_5.json`. 8/8 backend + 11/11 frontend PASS. Zero critical or minor issues.
 
+## Shipped Apr 25, 2026 (post-iter6) — Watch / Price-Drop Alerts
+- [x] **Backend** — new `product_watches` collection + endpoints: `POST /api/watches`, `GET /api/watches`, `GET /api/watches/check/{product_id}`, `DELETE /api/watches/{watch_id}`. Idempotent watch creation (one per user/product).
+- [x] **Price-drop fan-out** — `POST /api/products` schedules `_trigger_price_drop_alerts()` via `asyncio.create_task` (fire-and-forget). When a new product is listed in a watched category at a strictly lower price than the watcher's anchor, an alert is appended to every matching watch (capped to 25 most recent), `last_alerted_at` is bumped, and a bilingual SMS is dispatched via the existing `send_sms()` helper (simulated when `AFRICASTALKING_API_KEY` missing).
+- [x] **`<WatchBell/>`** (`/app/frontend/src/components/WatchBell.tsx`) — bell toggle with two variants (`card` for marketplace tiles, `pdp` for product detail). Anonymous click → bilingual "Sign in to watch" toast.
+- [x] **`/my-watches`** page (`MyWatchesPage.tsx`) — lists every watch with the cheapest current same-category alternative as a green "View cheaper option · You'd save TZS X" CTA, plus a collapsible alerts history. Empty state directs back to marketplace.
+- [x] **Navbar** — desktop bell icon (`desktop-watches-link`) + mobile menu link (`mobile-watches-link`) → `/my-watches`.
+- [x] **i18n** — `watch.*`, `watches.*`, `nav.watches` keys (SW + EN).
+- [x] **Tests** — `/app/backend/tests/test_iter6_watches.py` and `/app/test_reports/iteration_6.json`. 15/15 backend + 10/10 frontend PASS.
+
+## Shipped Apr 25, 2026 (post-iter7) — Public Seller Profile
+- [x] **Backend** — new public `GET /api/sellers/{seller_id}` endpoint returning seller meta (name, badges, location, bio, joined date, products_count, orders_completed) plus the seller's active product list. Route declared *after* `/api/sellers/trending` so FastAPI's literal-first matcher resolves correctly.
+- [x] **`SellerProfile.tsx` rewrite** — replaced hardcoded "Mama Biashara" stub with a real fetcher. Header shows verified + women-owned badges, joined date, real stats grid (rating · orders completed · products count). Products grid (`seller-products-grid`) is interactive with per-card test IDs and links to PDP. Loading + 404 states are i18n-aware.
+- [x] **Hamburger testid** — `data-testid="navbar-mobile-toggle"` + ARIA attributes added to the mobile menu button (test agent feedback from iter6).
+- [x] **Tests** — `/app/test_reports/iteration_7.json`. 8/8 new backend + 23/23 iter5/iter6 regression + 9/9 frontend acceptance criteria PASS. Zero critical or minor issues.
+
 ---
-*Version 6.4 — Bilingual rollout + Discovery UI Layer, Apr 25, 2026*
+*Version 6.6 — Public Seller Profile + hamburger testid, Apr 25, 2026*

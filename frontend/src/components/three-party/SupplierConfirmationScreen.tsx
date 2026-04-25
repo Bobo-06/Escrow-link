@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import toast from "react-hot-toast";
 import { C, fmtTSh, API_URL } from "./constants";
 
 interface Props {
@@ -28,31 +29,52 @@ export default function SupplierConfirmationScreen({ txId, supplierPhone, token,
     })();
   }, [txId, token]);
 
-  const respond = async (body: any) => {
+  /**
+   * One-click supplier response. Surfaces failures to the user instead of
+   * silently flipping the UI to "Accepted!" when the backend rejected the
+   * request — that was a real foot-gun in the old impl.
+   */
+  const respond = async (body: any): Promise<boolean> => {
     setLoading(true);
     try {
-      await fetch(`${API_URL}/api/escrow/three-party/${txId}/supplier-response`, {
+      const res = await fetch(`${API_URL}/api/escrow/three-party/${txId}/supplier-response`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-    } catch { /* noop */ }
-    setLoading(false);
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const j = await res.json();
+          detail = j.detail || j.message || detail;
+        } catch { /* not json — keep status */ }
+        throw new Error(detail);
+      }
+      return true;
+    } catch (e: any) {
+      toast.error(e?.message || "Imeshindikana / Could not save your response. Try again.");
+      return false;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const accept = async () => {
-    await respond({ accepted: true, supplier_phone: supplierPhone, supplier_cost: tx?.supplier_cost });
-    setDecision("accepted");
+    const ok = await respond({ accepted: true, supplier_phone: supplierPhone, supplier_cost: tx?.supplier_cost });
+    if (ok) {
+      toast.success("✅ Umekubali / Accepted");
+      setDecision("accepted");
+    }
   };
   const decline = async () => {
-    await respond({ accepted: false, counter_offer: false, supplier_phone: supplierPhone });
-    setDecision("declined");
+    const ok = await respond({ accepted: false, counter_offer: false, supplier_phone: supplierPhone });
+    if (ok) setDecision("declined");
   };
   const counterOffer = async () => {
     const n = Number(counterCost.replace(/\D/g, ""));
     if (!n || n >= (tx?.buyer_price || 0)) return;
-    await respond({ accepted: false, counter_offer: true, supplier_phone: supplierPhone, supplier_cost: n, note: counterNote });
-    setDecision("counter");
+    const ok = await respond({ accepted: false, counter_offer: true, supplier_phone: supplierPhone, supplier_cost: n, note: counterNote });
+    if (ok) setDecision("counter");
   };
 
   // ── Success screens ─────────────────────────────────────────────────

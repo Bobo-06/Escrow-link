@@ -1,0 +1,53 @@
+{
+  "summary": "Iter8 — 5-area stability/UX audit. 47/48 backend tests PASS (test_iter8_stability + iter5/6/7 regression). 1 backend bug surfaced: GET /api/auth/login with phone matching seed_seller_biz_salama (which has no password_hash) → 500 KeyError instead of 401. All 5 phone formats accepted on register & login. Watch fan-out latency = ~70-300ms (well under 2s). Supplier-response unknown tx returns 404 (no longer silent-swallowed). Buyer-confirm-delivery rejects unsigned and bad token correctly. Frontend register happy/error toasts work; login redirect works; lazy-loading verified (per-route .chunk.js loaded on /seller). Production build artifact: main bundle 157.7 KB gzipped (≤175 KB target ✓), 16 chunks (≥10 target ✓). SupplierConfirmationScreen.tsx code review confirms toast.error+ok flag pattern correctly implemented.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/auth/login",
+        "issue": "When the phone resolves to a user record without a password_hash field (e.g., seed_seller_biz_salama, phone +255700000001, auth_type=null), server.py:663 throws KeyError: 'password_hash' → HTTP 500 instead of 401. Reproducer: curl -X POST /api/auth/login -d '{\"phone\":\"+255700000001\",\"password\":\"x\"}' → 500 'Internal Server Error'. Affects both unknown phones that happen to alias seeded sellers (since the regex fallback at server.py:655 may match them) and any future Google-OAuth-only users without a password.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter8_stability.py",
+    "/app/test_reports/pytest/iteration_8.xml",
+    "/app/backend/tests/test_iter5_discovery.py",
+    "/app/backend/tests/test_iter6_watches.py",
+    "/app/backend/tests/test_iter7_seller_profile.py"
+  ],
+  "action_items": [
+    "FIX server.py:663 — guard `user['password_hash']` access. Suggested patch: `if not user.get('password_hash'): raise HTTPException(401, 'Invalid credentials')` placed before the bcrypt.checkpw call. Re-run test_iter8_stability.py::TestLogin::test_login_unknown_phone_4xx to verify.",
+    "OPTIONAL: tighten the regex fallback at server.py:655 — anchoring `last9 + '$'` allows seeded sellers' phones (e.g. ending 700000001) to match unrelated lookup attempts. Consider exact-match equality on the normalized form only, or include a length guard before falling back.",
+    "OPTIONAL: address the React Router v7 future-flag warnings that surface in every page load — set v7_startTransition + v7_relativeSplatPath flags in the BrowserRouter config to silence them and pre-empt the v7 migration."
+  ],
+  "critical_code_review_comments": [
+    "SupplierConfirmationScreen.tsx (lines 37-78) correctly surfaces backend errors: respond() returns Promise<boolean>; non-2xx responses parse `detail` from JSON, throw, then toast.error in catch. accept/decline/counter only flip decision state on `ok=true`. Silent-swallow bug fix VERIFIED at code level.",
+    "App.tsx React.lazy + <Suspense> code-splitting VERIFIED empirically — first /seller/{id} navigation loads `src_pages_SellerProfile_tsx.chunk.js` lazily. Production build artifact under /app/frontend/build/static/js shows 16 chunks and main.5485111a.js gzipped = 161,468 B (157.7 KB), under the 175 KB target.",
+    "server.py login flow (lines 647-664) has TWO issues: (a) the regex fallback at line 655 can resolve a phone to a seeded seller record by tail-match — combined with (b) the unguarded `user['password_hash']` access on line 663, this produces a 500 instead of 401 for some inputs. Fix is one line.",
+    "Watch fan-out endpoint /api/watches latency consistently <300 ms in test_iter8_stability::TestWatchFanOut — well within the 2 s SLA stated by user.",
+    "Three-party endpoints (/supplier-response, /buyer-confirm-delivery) all return clean 4xx for invalid tx IDs / missing/bad HMAC — no 500s, no silent 200s. ✓",
+    "Phone normalization is robust: +255, 255, 0, 9-digit-only, and spaced variants all succeed for both /register and /login (12/12 parametrized cases pass). Invalid phones (12345, 0123456789, +1234567890) all rejected with 400 + bilingual detail. ✓",
+    "Duplicate registration returns 400 (not 500) — verified in TestRegister::test_register_duplicate_returns_400_not_500. ✓"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter8_stability.py (new — 17 tests)",
+    "/app/test_reports/pytest/iteration_8.xml (new)"
+  ],
+  "success_rate": {
+    "backend": "97.9% (47/48 — 1 fail = login 500 on no-password-hash user)",
+    "frontend": "100% (register 5-format + register error toasts + login + code-splitting + bundle size + iter5/6/7 regression all green; supplier toast.error fix verified at code level)"
+  },
+  "test_credentials": "Primary: +255712345678 / test1234. Created during testing: +255716220676 / Test1234! (registered via UI happy path).",
+  "seed_data_creation": "5 ephemeral users created during register-format test (each with unique +255 7XXXXXXXX phone). One UI user +255716220676. No teardown — these accumulate but don't affect other tests.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test_iter8_stability.py covers register (5 formats accepted + 3 invalid rejected + duplicate=400), login (5 formats + wrong-pw 401 + unknown-phone REGRESSION TEST currently failing on 500), watch fan-out latency, 3P supplier-response unknown-tx returns 4xx, 3P buyer-confirm-delivery unsigned/bad-token rejected. After main agent fixes server.py:663, run `pytest backend/tests/test_iter8_stability.py -v` — expect 48/48. Production bundle assertion is best done against /app/frontend/build/static/js artifacts (preview URL serves react-scripts dev server with bundle.js, not main.[hash].js).",
+  "rca_of_the_issue": "BUG: GET /api/auth/login → 500 for some phones. Reproduction: curl -X POST $BASE/api/auth/login -H 'Content-Type: application/json' -d '{\"phone\":\"+255700000001\",\"password\":\"anything\"}' yields 'Internal Server Error'. Root cause: server.py:663 does `user['password_hash'].encode()` without checking if the key exists. The user `seed_seller_biz_salama` has no password_hash (seeded as a marketplace seller record), and either an exact phone match OR the last-9-digit regex fallback at line 655 retrieves it. Mitigation (one-line fix): `if not user.get('password_hash'): raise HTTPException(status_code=401, detail='Invalid credentials')` placed BEFORE the bcrypt.checkpw call (after the existing google auth_type check on line 660). Optionally also tighten the regex fallback to avoid suffix collisions with seed accounts."
+}

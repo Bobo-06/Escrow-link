@@ -113,7 +113,34 @@ class TestLogin:
     def test_login_unknown_phone_4xx(self, s):
         r = s.post(f"{API}/auth/login",
                    json={"phone": "+255700000001", "password": "Test1234!"}, timeout=20)
-        assert r.status_code in (401, 404), f"unknown phone expected 401/404 got {r.status_code}"
+        assert r.status_code in (401, 404), f"unknown phone expected 401/404 got {r.status_code} {r.text[:200]}"
+        # Iter9: must NOT 500 — guards `user['password_hash']` KeyError
+        assert r.status_code != 500
+
+    def test_login_no_password_hash_user_returns_401_not_500(self, s):
+        """Iter9 retest: phones aliasing seeded sellers (no password_hash field)
+        must surface as 401 'Invalid credentials', never 500."""
+        # The regex fallback (server.py:655) tail-matches on last 9 digits.
+        # Try multiple seed-style phones to maximize coverage of the path.
+        candidates = ["+255700000001", "+255700000002", "+255755222333", "700000001"]
+        for phone in candidates:
+            r = s.post(f"{API}/auth/login",
+                       json={"phone": phone, "password": "anything"}, timeout=20)
+            assert r.status_code != 500, (
+                f"phone {phone} produced 500 (KeyError on password_hash regression): {r.text[:200]}"
+            )
+            assert r.status_code in (400, 401, 404), (
+                f"phone {phone} expected 401/404/400, got {r.status_code}: {r.text[:200]}"
+            )
+
+    def test_login_response_uses_get_defaults(self, s):
+        """Iter9 retest: response builder no longer crashes if email/auth_type/created_at missing."""
+        r = s.post(f"{API}/auth/login", json=TEST_USER, timeout=20)
+        assert r.status_code == 200, r.text
+        data = r.json()
+        # Must have these keys even if values default to None / 'password'
+        for k in ("session_token", "user_id", "auth_type", "is_verified"):
+            assert k in data, f"key {k} missing from login response"
 
 
 # ============ 3. NOTIFICATIONS / WATCH FAN-OUT LATENCY ============

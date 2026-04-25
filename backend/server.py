@@ -659,8 +659,14 @@ async def login(credentials: UserLogin, response: Response):
     
     if user.get('auth_type') == 'google':
         raise HTTPException(status_code=400, detail="Please login with Google")
-    
-    if not bcrypt.checkpw(credentials.password.encode(), user['password_hash'].encode()):
+
+    # Guard against records with no password_hash (e.g. seeded sellers, OAuth-only
+    # accounts, or legacy rows). Surface as 401 instead of 500 KeyError.
+    pw_hash = user.get('password_hash')
+    if not pw_hash:
+        raise HTTPException(status_code=401, detail="Taarifa si sahihi / Invalid credentials")
+
+    if not bcrypt.checkpw(credentials.password.encode(), pw_hash.encode()):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
     session_token = f"session_{uuid.uuid4().hex}"
@@ -684,8 +690,8 @@ async def login(credentials: UserLogin, response: Response):
     
     return {
         "user_id": user['user_id'],
-        "email": user['email'],
-        "name": user['name'],
+        "email": user.get('email'),
+        "name": user.get('name'),
         "phone": user.get('phone'),
         "business_name": user.get('business_name'),
         "picture": user.get('picture'),
@@ -693,8 +699,8 @@ async def login(credentials: UserLogin, response: Response):
         "is_women_owned": user.get('is_women_owned', True),
         "business_type": user.get('business_type'),
         "export_enabled": user.get('export_enabled', False),
-        "auth_type": user['auth_type'],
-        "created_at": user['created_at'].isoformat() if isinstance(user['created_at'], datetime) else user['created_at'],
+        "auth_type": user.get('auth_type', 'password'),
+        "created_at": user['created_at'].isoformat() if isinstance(user.get('created_at'), datetime) else user.get('created_at'),
         "session_token": session_token
     }
 

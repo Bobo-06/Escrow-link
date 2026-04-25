@@ -39,7 +39,7 @@ const RouteFallback: React.FC = () => (
 
 function App() {
   return (
-    <Router>
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <div className="min-h-screen bg-ink-900 flex flex-col">
         <Navbar />
         <main className="flex-grow">

@@ -1,0 +1,39 @@
+{
+  "summary": "Iter9 retest VERIFIED. The iter8 HIGH bug (login 500 KeyError on user without password_hash) is FIXED — server.py:660-670 now uses user.get('password_hash') and raises 401 if missing. Added 2 new explicit regression tests (test_login_no_password_hash_user_returns_401_not_500, test_login_response_uses_get_defaults). Full backend suite: 50/50 pass (19 iter8 + 31 iter5/6/7 regression). Frontend smoke: /, /marketplace, /login load with ZERO console errors and ZERO React Router v7 future-flag warnings (App.tsx:42 future={v7_startTransition,v7_relativeSplatPath} confirmed). Login flow with +255712345678/test1234 redirects to /dashboard successfully.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter8_stability.py",
+    "/app/test_reports/pytest/iteration_9.xml",
+    "/app/backend/tests/test_iter5_discovery.py",
+    "/app/backend/tests/test_iter6_watches.py",
+    "/app/backend/tests/test_iter7_seller_profile.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:660-670 — login password_hash guard correctly placed AFTER the auth_type=='google' check and BEFORE bcrypt.checkpw. Surfaces 401 with bilingual 'Taarifa si sahihi / Invalid credentials' for both seeded sellers (no password_hash) and OAuth-only accounts. Confirmed via 4 candidate phones (+255700000001, +255700000002, +255755222333, 700000001) — all return 401, never 500.",
+    "server.py:691-704 — login response builder hardened with .get() defaults for email, business_name, picture, business_type, auth_type, and isoformat() fallback for created_at. New test_login_response_uses_get_defaults asserts session_token/user_id/auth_type/is_verified always present.",
+    "App.tsx:42 — Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }} silences both v7 deprecation warnings. Verified empirically: 0 console warnings on /, /marketplace, /login.",
+    "OPTIONAL (carried from iter8, not blocking): The regex fallback at server.py:655 (last9 + '$') still allows phone-suffix collision with seeded sellers. With the password_hash guard in place this is no longer a 500-risk, but consider tightening to exact equality on normalized form to avoid surprising 401s on legitimate-looking unknown phones."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter8_stability.py (added test_login_no_password_hash_user_returns_401_not_500 + test_login_response_uses_get_defaults; tightened test_login_unknown_phone_4xx with !=500 assertion)"
+  ],
+  "success_rate": {
+    "backend": "100% (50/50 — iter8: 19/19, iter5: 8/8, iter6: 11/11, iter7: 8/8 + 4 regression embedded; iter9 specifically: 2/2 new tests pass + iter8 regression all pass)",
+    "frontend": "100% (3 routes load clean, 0 console errors, 0 v7 router warnings, login→dashboard redirect works)"
+  },
+  "test_credentials": "Primary: +255712345678 / test1234 (verified UI + API). 5 ephemeral users created during register-format test (from iter8 reuse).",
+  "seed_data_creation": "5 ephemeral register users (each with unique +255 7XXXXXXXX phone) — same pattern as iter8, no teardown needed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter8 HIGH bug (login 500 KeyError on no-password-hash records) is FIXED and protected by 2 new regression tests in test_iter8_stability.py::TestLogin. The full suite is now 19 tests covering register/login/watch-fanout/3P-supplier-response/3P-buyer-confirm. Combined with iter5/6/7 regression suites = 50 tests total, 100% pass. Bundle size from iter8 still applies (157.7 KB gzipped, 16 chunks). React Router v7 future flags are configured in App.tsx:42 — no action needed there.",
+  "rca_of_the_issue": "Iter8 HIGH bug VERIFIED FIXED. server.py:665-667 now does `pw_hash = user.get('password_hash'); if not pw_hash: raise HTTPException(401, ...)` BEFORE bcrypt.checkpw — placed correctly after the existing auth_type=='google' guard. Reproducer that previously returned 500: `curl -X POST $BASE/api/auth/login -d '{\"phone\":\"+255700000001\",\"password\":\"x\"}'` now returns 401 with detail 'Taarifa si sahihi / Invalid credentials'. Confirmed via test_login_no_password_hash_user_returns_401_not_500 across 4 candidate phones."
+}

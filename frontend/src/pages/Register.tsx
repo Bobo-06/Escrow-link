@@ -6,10 +6,12 @@ import { authAPI } from '../lib/api';
 import { useAuthStore } from '../store/authStore';
 import toast from 'react-hot-toast';
 import SEO from '../components/SEO';
+import { useT } from '../i18n';
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
   const { setAuth } = useAuthStore();
+  const { t } = useT();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -32,17 +34,17 @@ const Register: React.FC = () => {
     e.preventDefault();
     
     if (!name || !phone || !password) {
-      toast.error('Please fill in all fields');
+      toast.error(t("reg.error_fill"));
       return;
     }
 
     if (password !== confirmPassword) {
-      toast.error('Passwords do not match');
+      toast.error(t("reg.error_match"));
       return;
     }
 
     if (!acceptTerms) {
-      toast.error('Please accept the terms and conditions');
+      toast.error(t("reg.error_terms"));
       return;
     }
 
@@ -53,10 +55,10 @@ const Register: React.FC = () => {
       const response = await authAPI.register({ name, phone: normalizedPhone, password });
       const { session_token, ...user } = response.data;
       setAuth(session_token, user);
-      toast.success('Karibu! / Account created successfully!');
+      toast.success(t("reg.success"));
       navigate('/dashboard');
     } catch (error: any) {
-      const msg = error.response?.data?.detail || error.message || 'Registration failed';
+      const msg = error.response?.data?.detail || error.message || t("reg.failed");
       toast.error(msg);
       console.error('Register error:', error.response?.status, error.response?.data);
     } finally {
@@ -65,10 +67,10 @@ const Register: React.FC = () => {
   };
 
   const benefits = [
-    'Escrow protection on all transactions',
-    'Access to verified buyers',
-    'Mobile money payments',
-    'Free to start selling',
+    t("reg.benefit1"),
+    t("reg.benefit2"),
+    t("reg.benefit3"),
+    t("reg.benefit4"),
   ];
 
   return (
@@ -87,11 +89,11 @@ const Register: React.FC = () => {
             className="hidden lg:block"
           >
             <h1 className="text-4xl font-display font-bold text-white mb-6">
-              Start Selling with{' '}
-              <span className="gradient-text">Confidence</span>
+              {t("reg.title")}{' '}
+              <span className="gradient-text">{t("reg.title_b")}</span>
             </h1>
             <p className="text-ink-400 text-lg mb-8">
-              Join thousands of successful sellers on Tanzania's most trusted marketplace.
+              {t("reg.subtitle")}
             </p>
 
             <div className="space-y-4">
@@ -118,11 +120,11 @@ const Register: React.FC = () => {
                 </div>
                 <div className="ml-4">
                   <p className="text-white font-semibold">Mama Biashara</p>
-                  <p className="text-ink-400 text-sm">Fashion Seller</p>
+                  <p className="text-ink-400 text-sm">{t("reg.testimonial_role")}</p>
                 </div>
               </div>
               <p className="text-ink-300 italic">
-                "Biz-Salama changed my business. Customers trust me more because they know their money is protected. My sales doubled in 3 months!"
+                {t("reg.testimonial_quote")}
               </p>
             </div>
           </motion.div>
@@ -137,22 +139,22 @@ const Register: React.FC = () => {
                 <Shield className="w-8 h-8 text-ink-900" />
               </div>
               <h1 className="text-3xl font-display font-bold text-white mb-2">
-                Create Account
+                {t("reg.create")}
               </h1>
               <p className="text-ink-400">
-                Join Biz-Salama today
+                {t("reg.join")}
               </p>
             </div>
 
             <div className="glass rounded-2xl p-8">
               <div className="hidden lg:block text-center mb-6">
-                <h2 className="text-2xl font-display font-bold text-white">Create Your Account</h2>
+                <h2 className="text-2xl font-display font-bold text-white">{t("reg.create_long")}</h2>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
                   <label className="block text-ink-300 text-sm font-medium mb-2">
-                    Full Name
+                    {t("reg.full_name")}
                   </label>
                   <div className="relative">
                     <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-ink-400" />
@@ -160,7 +162,7 @@ const Register: React.FC = () => {
                       type="text"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder="Enter your full name"
+                      placeholder={t("reg.full_name_ph")}
                       className="w-full pl-12 pr-4 py-4 bg-ink-700 border border-ink-600 rounded-xl text-white placeholder-ink-400 focus:outline-none focus:border-gold-500 transition-colors"
                     />
                   </div>
@@ -168,7 +170,7 @@ const Register: React.FC = () => {
 
                 <div>
                   <label className="block text-ink-300 text-sm font-medium mb-2">
-                    Phone Number
+                    {t("login.phone_label")}
                   </label>
                   <div className="relative">
                     <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-ink-400" />
@@ -184,7 +186,7 @@ const Register: React.FC = () => {
 
                 <div>
                   <label className="block text-ink-300 text-sm font-medium mb-2">
-                    Password
+                    {t("login.password_label")}
                   </label>
                   <div className="relative">
                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-ink-400" />
@@ -192,7 +194,7 @@ const Register: React.FC = () => {
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Create a password"
+                      placeholder={t("reg.password_ph")}
                       className="w-full pl-12 pr-12 py-4 bg-ink-700 border border-ink-600 rounded-xl text-white placeholder-ink-400 focus:outline-none focus:border-gold-500 transition-colors"
                     />
                     <button
@@ -207,7 +209,7 @@ const Register: React.FC = () => {
 
                 <div>
                   <label className="block text-ink-300 text-sm font-medium mb-2">
-                    Confirm Password
+                    {t("reg.confirm_password")}
                   </label>
                   <div className="relative">
                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-ink-400" />
@@ -215,7 +217,7 @@ const Register: React.FC = () => {
                       type={showPassword ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Confirm your password"
+                      placeholder={t("reg.confirm_password_ph")}
                       className="w-full pl-12 pr-4 py-4 bg-ink-700 border border-ink-600 rounded-xl text-white placeholder-ink-400 focus:outline-none focus:border-gold-500 transition-colors"
                     />
                   </div>
@@ -229,10 +231,10 @@ const Register: React.FC = () => {
                     className="w-5 h-5 rounded border-ink-600 text-gold-500 focus:ring-gold-500 bg-ink-700 mt-0.5"
                   />
                   <span className="ml-3 text-ink-400 text-sm">
-                    I agree to the{' '}
-                    <a href="#" className="text-gold-400 hover:underline">Terms of Service</a>
-                    {' '}and{' '}
-                    <a href="#" className="text-gold-400 hover:underline">Privacy Policy</a>
+                    {t("reg.agree")}{' '}
+                    <a href="#" className="text-gold-400 hover:underline">{t("reg.terms")}</a>
+                    {' '}{t("reg.and")}{' '}
+                    <a href="#" className="text-gold-400 hover:underline">{t("reg.privacy")}</a>
                   </span>
                 </label>
 
@@ -245,7 +247,7 @@ const Register: React.FC = () => {
                     <div className="w-6 h-6 border-2 border-ink-900 border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <>
-                      Create Account
+                      {t("reg.create")}
                       <ArrowRight className="w-5 h-5 ml-2" />
                     </>
                   )}
@@ -254,9 +256,9 @@ const Register: React.FC = () => {
 
               <div className="mt-6 text-center">
                 <p className="text-ink-400">
-                  Already have an account?{' '}
+                  {t("reg.have_account")}{' '}
                   <Link to="/login" className="text-gold-400 font-medium hover:underline">
-                    Sign in
+                    {t("reg.login_link")}
                   </Link>
                 </p>
               </div>

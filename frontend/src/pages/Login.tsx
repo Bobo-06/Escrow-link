@@ -6,10 +6,12 @@ import { authAPI } from '../lib/api';
 import { useAuthStore } from '../store/authStore';
 import toast from 'react-hot-toast';
 import SEO from '../components/SEO';
+import { useT } from '../i18n';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
   const { setAuth } = useAuthStore();
+  const { t } = useT();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -29,7 +31,7 @@ const Login: React.FC = () => {
     e.preventDefault();
     
     if (!phone || !password) {
-      toast.error('Please fill in all fields');
+      toast.error(t("login.error_fill"));
       return;
     }
 
@@ -40,10 +42,10 @@ const Login: React.FC = () => {
       const response = await authAPI.login(normalizedPhone, password);
       const { session_token, ...user } = response.data;
       setAuth(session_token, user);
-      toast.success('Karibu! / Welcome back!');
+      toast.success(t("login.success"));
       navigate('/dashboard');
     } catch (error: any) {
-      const msg = error.response?.data?.detail || error.message || 'Login failed';
+      const msg = error.response?.data?.detail || error.message || t("login.failed");
       toast.error(msg);
       console.error('Login error:', error.response?.status, error.response?.data);
     } finally {
@@ -69,10 +71,10 @@ const Login: React.FC = () => {
             <Shield className="w-8 h-8 text-ink-900" />
           </div>
           <h1 className="text-3xl font-display font-bold text-white mb-2">
-            Welcome Back
+            {t("login.welcome")}
           </h1>
           <p className="text-ink-400">
-            Sign in to your Biz-Salama account
+            {t("login.subtitle")}
           </p>
         </div>
 
@@ -80,7 +82,7 @@ const Login: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-ink-300 text-sm font-medium mb-2">
-                Phone Number (Nambari ya Simu)
+                {t("login.phone_label")}
               </label>
               <div className="relative">
                 <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-ink-400" />
@@ -96,13 +98,13 @@ const Login: React.FC = () => {
                 />
               </div>
               <p className="text-ink-500 text-xs mt-1.5">
-                Any format works: <code className="text-gold-400">0712345678</code>, <code className="text-gold-400">712345678</code>, or <code className="text-gold-400">+255712345678</code>
+                {t("login.phone_hint")} <code className="text-gold-400">0712345678</code>, <code className="text-gold-400">712345678</code>, <code className="text-gold-400">+255712345678</code>
               </p>
             </div>
 
             <div>
               <label className="block text-ink-300 text-sm font-medium mb-2">
-                Password
+                {t("login.password_label")}
               </label>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-ink-400" />
@@ -110,7 +112,7 @@ const Login: React.FC = () => {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
+                  placeholder={t("login.password_placeholder")}
                   className="w-full pl-12 pr-12 py-4 bg-ink-700 border border-ink-600 rounded-xl text-white placeholder-ink-400 focus:outline-none focus:border-gold-500 transition-colors"
                 />
                 <button
@@ -126,10 +128,10 @@ const Login: React.FC = () => {
             <div className="flex items-center justify-between">
               <label className="flex items-center">
                 <input type="checkbox" className="w-4 h-4 rounded border-ink-600 text-gold-500 focus:ring-gold-500 bg-ink-700" />
-                <span className="ml-2 text-ink-400 text-sm">Remember me</span>
+                <span className="ml-2 text-ink-400 text-sm">{t("login.remember")}</span>
               </label>
               <Link to="/forgot-password" className="text-gold-400 text-sm hover:underline">
-                Forgot password?
+                {t("login.forgot")}
               </Link>
             </div>
 
@@ -142,7 +144,7 @@ const Login: React.FC = () => {
                 <div className="w-6 h-6 border-2 border-ink-900 border-t-transparent rounded-full animate-spin" />
               ) : (
                 <>
-                  Sign In
+                  {t("login.submit")}
                   <ArrowRight className="w-5 h-5 ml-2" />
                 </>
               )}
@@ -151,9 +153,9 @@ const Login: React.FC = () => {
 
           <div className="mt-6 text-center">
             <p className="text-ink-400">
-              Don't have an account?{' '}
+              {t("login.no_account")}{' '}
               <Link to="/register" className="text-gold-400 font-medium hover:underline">
-                Sign up
+                {t("login.signup_link")}
               </Link>
             </p>
           </div>

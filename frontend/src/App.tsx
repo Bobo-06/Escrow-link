@@ -24,6 +24,7 @@ import DirectBuyerOfferPage from './pages/DirectBuyerOfferPage';
 // Components
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import CompareDrawer from './components/CompareDrawer';
 
 function App() {
   return (
@@ -52,6 +53,7 @@ function App() {
           </Routes>
         </main>
         <Footer />
+        <CompareDrawer />
         <Toaster 
           position="top-center"
           toastOptions={{

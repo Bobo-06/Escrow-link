@@ -1129,7 +1129,22 @@ async def get_public_products(
         if p.get('seller_id') and p['seller_id'] in seller_map:
             seller = seller_map[p['seller_id']]
             p['seller_name'] = seller.get('name') or seller.get('username', 'Seller')
-    
+
+    # Discovery: tag the lowest-priced product per category as `is_lowest_price`.
+    # Helps buyers spot best-value listings at a glance in the marketplace grid.
+    by_cat: Dict[str, List[Dict[str, Any]]] = {}
+    for p in products:
+        cat = p.get('category') or 'general'
+        by_cat.setdefault(cat, []).append(p)
+    for items in by_cat.values():
+        if len(items) < 2:
+            continue
+        cheapest = min(items, key=lambda x: x.get('price') or float('inf'))
+        # Only flag if there's actual price differentiation
+        max_price = max((it.get('price') or 0) for it in items)
+        if (cheapest.get('price') or 0) < max_price:
+            cheapest['is_lowest_price'] = True
+
     return {"products": products, "count": len(products)}
 
 @api_router.get("/products/voice-listed")
@@ -1147,6 +1162,105 @@ async def get_voice_listed_products(limit: int = 3):
         if isinstance(p.get("created_at"), datetime):
             p["created_at"] = p["created_at"].isoformat()
     return {"products": products, "count": len(products)}
+
+
+@api_router.get("/products/related/{product_id}")
+async def get_related_products(product_id: str, limit: int = 6):
+    """Public — products related to the given one.
+    Strategy: same category, different product, ordered by closest price."""
+    limit = max(1, min(limit, 12))
+    base = await db.products.find_one(
+        {"product_id": product_id},
+        {"_id": 0, "category": 1, "price": 1, "seller_id": 1},
+    )
+    if not base:
+        return {"products": [], "count": 0}
+
+    cat = base.get("category") or "general"
+    base_price = float(base.get("price") or 0)
+
+    # Pull a wider set, then sort by absolute price distance in Python (cheap, small N)
+    candidates = await db.products.find(
+        {
+            "category": cat,
+            "product_id": {"$ne": product_id},
+            "is_active": {"$ne": False},
+        },
+        {"_id": 0, "product_id": 1, "name": 1, "price": 1, "image": 1,
+         "image_b64": 1, "seller_id": 1, "seller_name": 1, "category": 1,
+         "location": 1, "rating": 1, "is_verified": 1},
+    ).limit(40).to_list(40)
+
+    candidates.sort(key=lambda p: abs(float(p.get("price") or 0) - base_price))
+    out = candidates[:limit]
+
+    # Hydrate seller names in batch
+    seller_ids = list({p.get("seller_id") for p in out if p.get("seller_id")})
+    if seller_ids:
+        sellers = await db.users.find(
+            {"user_id": {"$in": seller_ids}},
+            {"_id": 0, "user_id": 1, "name": 1, "username": 1, "is_verified": 1},
+        ).to_list(len(seller_ids))
+        smap = {s["user_id"]: s for s in sellers}
+        for p in out:
+            sid = p.get("seller_id")
+            if sid and sid in smap:
+                s = smap[sid]
+                p["seller_name"] = p.get("seller_name") or s.get("name") or s.get("username", "Seller")
+                # surface seller verification for badge
+                if "is_verified" not in p:
+                    p["is_verified"] = bool(s.get("is_verified"))
+
+    return {"products": out, "count": len(out)}
+
+
+@api_router.get("/sellers/trending")
+async def get_trending_sellers(limit: int = 6):
+    """Public — top sellers ranked by active product count.
+    Used by Marketplace 'Trending Sellers' strip."""
+    limit = max(1, min(limit, 20))
+
+    pipeline = [
+        {"$match": {"is_active": {"$ne": False}, "seller_id": {"$exists": True, "$ne": None}}},
+        {"$group": {
+            "_id": "$seller_id",
+            "product_count": {"$sum": 1},
+            "min_price": {"$min": "$price"},
+            "categories": {"$addToSet": "$category"},
+        }},
+        {"$sort": {"product_count": -1}},
+        {"$limit": limit},
+    ]
+    rows = await db.products.aggregate(pipeline).to_list(limit)
+    if not rows:
+        return {"sellers": [], "count": 0}
+
+    seller_ids = [r["_id"] for r in rows if r.get("_id")]
+    sellers = await db.users.find(
+        {"user_id": {"$in": seller_ids}},
+        {"_id": 0, "user_id": 1, "name": 1, "username": 1, "business_name": 1,
+         "is_verified": 1, "average_rating": 1, "total_ratings": 1, "location": 1},
+    ).to_list(len(seller_ids))
+    smap = {s["user_id"]: s for s in sellers}
+
+    out = []
+    for r in rows:
+        sid = r["_id"]
+        s = smap.get(sid) or {}
+        name = s.get("business_name") or s.get("name") or s.get("username") or "Muuzaji"
+        out.append({
+            "seller_id": sid,
+            "name": name,
+            "is_verified": bool(s.get("is_verified")),
+            "rating": s.get("average_rating") or 0,
+            "total_ratings": s.get("total_ratings") or 0,
+            "location": s.get("location") or "Tanzania",
+            "product_count": r.get("product_count", 0),
+            "min_price": r.get("min_price") or 0,
+            "categories": [c for c in (r.get("categories") or []) if c],
+        })
+
+    return {"sellers": out, "count": len(out)}
 
 
 @api_router.get("/products/detail/{product_id}")

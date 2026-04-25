@@ -91,7 +91,7 @@ const LandingPage: React.FC = () => {
                     ))}
                   </div>
                   <span className="ml-4 text-ink-300">
-                    <span className="text-white font-bold">2,000+</span> Happy Customers
+                    <span className="text-white font-bold">2,000+</span> {t("hero.happy_customers")}
                   </span>
                 </div>
               </div>
@@ -107,13 +107,13 @@ const LandingPage: React.FC = () => {
               <div className="relative glass rounded-3xl p-8 glow-gold">
                 <div className="absolute -top-4 -right-4 bg-emerald-500 text-white px-4 py-2 rounded-full text-sm font-bold flex items-center">
                   <Lock className="w-4 h-4 mr-1" />
-                  Escrow Protected
+                  {t("hero.card.escrow_protected")}
                 </div>
                 
                 <div className="space-y-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-ink-400 text-sm">Transaction Amount</p>
+                      <p className="text-ink-400 text-sm">{t("hero.card.amount")}</p>
                       <p className="text-3xl font-bold text-white">TZS 150,000</p>
                     </div>
                     <div className="w-16 h-16 bg-gradient-to-br from-gold-400 to-gold-600 rounded-2xl flex items-center justify-center">
@@ -123,21 +123,21 @@ const LandingPage: React.FC = () => {
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between py-3 border-b border-ink-700">
-                      <span className="text-ink-400">Seller</span>
+                      <span className="text-ink-400">{t("hero.card.seller")}</span>
                       <span className="text-white font-medium flex items-center">
                         Mama Biashara
                         <CheckCircle className="w-4 h-4 text-emerald-400 ml-2" />
                       </span>
                     </div>
                     <div className="flex items-center justify-between py-3 border-b border-ink-700">
-                      <span className="text-ink-400">Product</span>
+                      <span className="text-ink-400">{t("hero.card.product")}</span>
                       <span className="text-white font-medium">Kitenge Fabric (5m)</span>
                     </div>
                     <div className="flex items-center justify-between py-3">
-                      <span className="text-ink-400">Status</span>
+                      <span className="text-ink-400">{t("hero.card.status")}</span>
                       <span className="text-emerald-400 font-medium flex items-center">
                         <span className="w-2 h-2 bg-emerald-400 rounded-full mr-2 animate-pulse" />
-                        Funds Secured
+                        {t("hero.card.funds_secured")}
                       </span>
                     </div>
                   </div>
@@ -145,7 +145,7 @@ const LandingPage: React.FC = () => {
                   <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-start">
                     <CheckCircle className="w-5 h-5 text-emerald-400 mr-3 flex-shrink-0 mt-0.5" />
                     <p className="text-emerald-300 text-sm">
-                      Your payment is held securely until delivery is confirmed
+                      {t("hero.card.assurance")}
                     </p>
                   </div>
                 </div>
@@ -160,10 +160,10 @@ const LandingPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-display font-bold text-white mb-4">
-              How Biz-Salama Works
+              {t("how.title")}
             </h2>
             <p className="text-ink-400 text-lg max-w-2xl mx-auto">
-              Simple, secure, and transparent. Here's how we protect every transaction.
+              {t("how.subtitle")}
             </p>
           </div>
 
@@ -171,20 +171,20 @@ const LandingPage: React.FC = () => {
             {[
               {
                 icon: ShoppingBag,
-                title: 'Browse & Order',
-                description: 'Find products from verified sellers across Tanzania. Place your order with confidence.',
+                title: t("how.step1.title"),
+                description: t("how.step1.desc"),
                 step: '01'
               },
               {
                 icon: Lock,
-                title: 'Secure Payment',
-                description: 'Pay via M-Pesa, Airtel Money, or Tigo Pesa. Your money is held safely in escrow.',
+                title: t("how.step2.title"),
+                description: t("how.step2.desc"),
                 step: '02'
               },
               {
                 icon: CheckCircle,
-                title: 'Confirm & Release',
-                description: 'Receive your goods, confirm delivery, and the seller gets paid. Simple!',
+                title: t("how.step3.title"),
+                description: t("how.step3.desc"),
                 step: '03'
               }
             ].map((item, index) => (
@@ -221,15 +221,13 @@ const LandingPage: React.FC = () => {
           <div className="text-center mb-14">
             <div className="inline-flex items-center px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-full mb-5">
               <Users className="w-4 h-4 text-emerald-400 mr-2" />
-              <span className="text-emerald-300 text-sm font-medium">Three-Party Escrow · Hawker ↔ Shop ↔ Buyer</span>
+              <span className="text-emerald-300 text-sm font-medium">{t("tp.eyebrow")}</span>
             </div>
             <h2 className="text-3xl sm:text-4xl font-display font-bold text-white mb-4">
-              Sell stock you <span className="gradient-text">don't own yet</span>
+              {t("tp.title_a")} <span className="gradient-text">{t("tp.title_b")}</span>
             </h2>
             <p className="text-ink-300 text-lg max-w-2xl mx-auto">
-              For <strong className="text-white">Wachuuzi</strong> (street hawkers): list items from Kariakoo shop owners,
-              share an escrow link, and earn commission the moment delivery is confirmed —
-              without paying a single shilling upfront.
+              {t("tp.subtitle")}
             </p>
           </div>
 
@@ -282,8 +280,8 @@ const LandingPage: React.FC = () => {
                   <TrendingUp className="w-5 h-5 text-gold-400" />
                 </div>
                 <div>
-                  <h3 className="text-white font-bold text-lg">Transparent Split</h3>
-                  <p className="text-ink-400 text-xs">Everyone sees every shilling</p>
+                  <h3 className="text-white font-bold text-lg">{t("tp.transparent_split")}</h3>
+                  <p className="text-ink-400 text-xs">{t("tp.split_sub")}</p>
                 </div>
               </div>
 
@@ -292,7 +290,7 @@ const LandingPage: React.FC = () => {
                 <p className="text-ink-400 text-xs mb-1">EXAMPLE · Samsung Galaxy S24</p>
                 <div className="flex items-baseline justify-between mb-4">
                   <span className="text-white text-2xl font-bold">TSh 1,850,000</span>
-                  <span className="text-emerald-400 text-xs font-medium">Buyer pays</span>
+                  <span className="text-emerald-400 text-xs font-medium">{t("tp.example_buyer_pays")}</span>
                 </div>
 
                 <div className="space-y-0">
@@ -320,8 +318,7 @@ const LandingPage: React.FC = () => {
               <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-start gap-3">
                 <Lock className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
                 <p className="text-emerald-200 text-xs leading-relaxed">
-                  Split happens <strong>automatically</strong> the moment the buyer taps "Confirm Delivery".
-                  Supplier's share goes to their M-Pesa · Hawker's commission goes to theirs.
+                  {t("tp.split_note")}
                 </p>
               </div>
             </motion.div>
@@ -339,8 +336,8 @@ const LandingPage: React.FC = () => {
                     <Shield className="w-5 h-5 text-emerald-400" />
                   </div>
                   <div>
-                    <h3 className="text-white font-bold text-lg">Letter of Comfort</h3>
-                    <p className="text-ink-400 text-xs">What the shop owner gets</p>
+                    <h3 className="text-white font-bold text-lg">{t("tp.letter_title")}</h3>
+                    <p className="text-ink-400 text-xs">{t("tp.letter_sub")}</p>
                   </div>
                 </div>
 
@@ -417,7 +414,7 @@ const LandingPage: React.FC = () => {
               className="inline-flex items-center justify-center px-8 py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-full font-bold hover:from-emerald-400 hover:to-emerald-500 transition-all shadow-lg hover:shadow-emerald-500/25"
             >
               <Users className="w-5 h-5 mr-2" />
-              Try 3-Party Escrow Now
+              {t("tp.cta_try")}
               <ArrowRight className="w-5 h-5 ml-2" />
             </Link>
             <Link
@@ -426,7 +423,7 @@ const LandingPage: React.FC = () => {
               className="inline-flex items-center justify-center px-8 py-4 border-2 border-ink-600 text-white rounded-full font-bold hover:bg-ink-800 hover:border-gold-500/40 transition-all"
             >
               <Shield className="w-5 h-5 mr-2" />
-              I'm a Shop Owner (Supplier)
+              {t("tp.cta_supplier")}
             </Link>
           </div>
         </div>
@@ -438,35 +435,34 @@ const LandingPage: React.FC = () => {
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div>
               <h2 className="text-3xl sm:text-4xl font-display font-bold text-white mb-6">
-                Why Tanzanians Trust{' '}
+                {t("trust.title_a")}{' '}
                 <span className="gradient-text">Biz-Salama</span>
               </h2>
               <p className="text-ink-400 text-lg mb-8">
-                We've built the most secure marketplace in East Africa, 
-                specifically designed for social sellers and their customers.
+                {t("trust.subtitle")}
               </p>
 
               <div className="space-y-6">
                 {[
                   {
                     icon: Shield,
-                    title: 'Escrow Protection',
-                    description: 'Every transaction is protected. Sellers only get paid when you confirm delivery.'
+                    title: t("trust.f1.title"),
+                    description: t("trust.f1.desc"),
                   },
                   {
                     icon: Users,
-                    title: 'Verified Sellers',
-                    description: 'All sellers go through KYC verification. Shop from people you can trust.'
+                    title: t("trust.f2.title"),
+                    description: t("trust.f2.desc"),
                   },
                   {
                     icon: Smartphone,
-                    title: 'Mobile Money First',
-                    description: 'Pay with M-Pesa, Airtel Money, or Tigo Pesa. No bank account needed.'
+                    title: t("trust.f3.title"),
+                    description: t("trust.f3.desc"),
                   },
                   {
                     icon: TrendingUp,
-                    title: 'Fair for Everyone',
-                    description: 'Low fees split between buyer and seller. Everyone wins.'
+                    title: t("trust.f4.title"),
+                    description: t("trust.f4.desc"),
                   }
                 ].map((item, index) => (
                   <div key={index} className="flex items-start">
@@ -488,15 +484,15 @@ const LandingPage: React.FC = () => {
                   <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-gold-400 to-gold-600 rounded-full mb-4">
                     <Star className="w-10 h-10 text-ink-900" />
                   </div>
-                  <h3 className="text-2xl font-bold text-white">Trusted by Thousands</h3>
+                  <h3 className="text-2xl font-bold text-white">{t("trust.stats_title")}</h3>
                 </div>
 
                 <div className="grid grid-cols-2 gap-6">
                   {[
-                    { value: '5,000+', label: 'Transactions' },
-                    { value: '98%', label: 'Success Rate' },
-                    { value: 'TZS 500M+', label: 'Protected' },
-                    { value: '1,200+', label: 'Sellers' }
+                    { value: '5,000+', label: t("trust.stat.tx") },
+                    { value: '98%', label: t("trust.stat.rate") },
+                    { value: 'TZS 500M+', label: t("trust.stat.protected") },
+                    { value: '1,200+', label: t("trust.stat.sellers") }
                   ].map((stat, index) => (
                     <div key={index} className="text-center p-4 bg-ink-800 rounded-xl">
                       <p className="text-2xl font-bold gradient-text">{stat.value}</p>
@@ -517,11 +513,10 @@ const LandingPage: React.FC = () => {
       <section className="py-20 bg-gradient-to-r from-gold-600 to-gold-500">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl sm:text-4xl font-display font-bold text-ink-900 mb-6">
-            Ready to Shop or Sell Safely?
+            {t("cta.ready")}
           </h2>
           <p className="text-ink-700 text-lg mb-8 max-w-2xl mx-auto">
-            Join thousands of Tanzanians who trust Biz-Salama for secure transactions.
-            Start today - it's free!
+            {t("cta.ready_sub")}
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
@@ -529,14 +524,14 @@ const LandingPage: React.FC = () => {
               className="inline-flex items-center justify-center px-8 py-4 bg-ink-900 text-white rounded-full font-bold text-lg hover:bg-ink-800 transition-all"
             >
               <ShoppingBag className="w-5 h-5 mr-2" />
-              Explore Marketplace
+              {t("cta.explore")}
             </Link>
             <Link
               to="/register"
               className="inline-flex items-center justify-center px-8 py-4 bg-white text-ink-900 rounded-full font-bold text-lg hover:bg-ink-100 transition-all"
             >
               <CreditCard className="w-5 h-5 mr-2" />
-              Start Selling Free
+              {t("cta.start_selling")}
             </Link>
           </div>
         </div>

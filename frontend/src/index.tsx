@@ -4,13 +4,16 @@ import { HelmetProvider } from 'react-helmet-async';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
+import { LangProvider } from './i18n';
 
 const rootEl = document.getElementById('root') as HTMLElement;
 
 ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
     <HelmetProvider>
-      <App />
+      <LangProvider>
+        <App />
+      </LangProvider>
     </HelmetProvider>
   </React.StrictMode>
 );

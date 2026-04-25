@@ -15,8 +15,10 @@ import {
 } from 'lucide-react';
 import SEO from '../components/SEO';
 import VoiceListedStrip from '../components/VoiceListedStrip';
+import { useT } from '../i18n';
 
 const LandingPage: React.FC = () => {
+  const { t } = useT();
   const fadeInUp = {
     initial: { opacity: 0, y: 20 },
     animate: { opacity: 1, y: 0 },
@@ -35,7 +37,12 @@ const LandingPage: React.FC = () => {
         {/* Background gradient */}
         <div className="absolute inset-0 bg-gradient-to-br from-ink-900 via-ink-800 to-ink-900" />
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiMyMDI1MmYiIGZpbGwtb3BhY2l0eT0iMC40Ij48cGF0aCBkPSJNMzYgMzRjMC0yIDItNCAyLTRzLTItMi00LTItNCAwLTQgMiAwIDQgMiA0IDQgMCA0LTJzLTItMi0yLTR6Ii8+PC9nPjwvZz48L3N2Zz4=')] opacity-30" />
-        
+
+        {/* Radial glow — fills hero empty space and centers attention */}
+        <div className="absolute inset-0 pointer-events-none" style={{
+          background: 'radial-gradient(ellipse 60% 50% at 50% 30%, rgba(245,158,11,0.12), transparent 60%)'
+        }} />
+
         {/* Glowing orbs */}
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-gold-500/10 rounded-full blur-3xl animate-pulse-slow" />
         <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl animate-pulse-slow" />
@@ -45,17 +52,16 @@ const LandingPage: React.FC = () => {
             <motion.div {...fadeInUp}>
               <div className="inline-flex items-center px-4 py-2 bg-gold-500/10 border border-gold-500/30 rounded-full mb-6">
                 <Shield className="w-4 h-4 text-gold-400 mr-2" />
-                <span className="text-gold-400 text-sm font-medium">Tanzania's #1 Secure Marketplace</span>
+                <span className="text-gold-400 text-sm font-medium">{t("hero.eyebrow")}</span>
               </div>
-              
+
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-display font-bold text-white leading-tight mb-6">
-                Shop Safely with{' '}
-                <span className="gradient-text">Escrow Protection</span>
+                {t("hero.title_a")}{' '}
+                <span className="gradient-text">{t("hero.title_b")}</span>
               </h1>
-              
+
               <p className="text-xl text-ink-300 mb-8 max-w-lg">
-                Your money stays protected until you receive your goods. 
-                Buy from verified sellers across Tanzania with complete peace of mind.
+                {t("hero.subtitle")}
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4">
@@ -63,14 +69,14 @@ const LandingPage: React.FC = () => {
                   to="/marketplace"
                   className="inline-flex items-center justify-center px-8 py-4 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-900 rounded-full font-bold text-lg hover:from-gold-400 hover:to-gold-500 transition-all shadow-lg hover:shadow-gold-500/25 group"
                 >
-                  Browse Products
+                  {t("hero.cta_browse")}
                   <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
                 </Link>
                 <Link
                   to="/register"
                   className="inline-flex items-center justify-center px-8 py-4 border-2 border-ink-600 text-white rounded-full font-bold text-lg hover:bg-ink-800 transition-all"
                 >
-                  Start Selling
+                  {t("hero.cta_sell")}
                 </Link>
               </div>
 

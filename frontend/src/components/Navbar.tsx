@@ -4,11 +4,13 @@ import { useAuthStore } from '../store/authStore';
 import { Shield, Menu, X, ShoppingBag, User, LogOut, LayoutDashboard, Users } from 'lucide-react';
 import InstallAppButton from './InstallAppButton';
 import BuildBadge from './BuildBadge';
+import { LangToggle, useT } from '../i18n';
 
 const Navbar: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { isAuthenticated, user, logout } = useAuthStore();
   const navigate = useNavigate();
+  const { t } = useT();
 
   const handleLogout = () => {
     logout();
@@ -30,21 +32,22 @@ const Navbar: React.FC = () => {
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">
             <Link to="/marketplace" className="text-ink-300 hover:text-white transition-colors font-medium">
-              Marketplace
+              {t("nav.marketplace")}
             </Link>
             <Link to="/#three-party" className="text-ink-300 hover:text-white transition-colors font-medium">
-              3-Party Escrow
+              {t("nav.three_party")}
             </Link>
             <Link to="/#how-it-works" className="text-ink-300 hover:text-white transition-colors font-medium">
-              How It Works
+              {t("nav.how")}
             </Link>
             <Link to="/#trust" className="text-ink-300 hover:text-white transition-colors font-medium">
-              Trust & Safety
+              {t("nav.trust")}
             </Link>
           </div>
 
           {/* Auth Buttons */}
           <div className="hidden md:flex items-center space-x-3">
+            <LangToggle />
             <BuildBadge />
             <InstallAppButton />
             {isAuthenticated ? (
@@ -56,7 +59,7 @@ const Navbar: React.FC = () => {
                   title="Direct Escrow — seller to buyer, no middleman"
                 >
                   <ShoppingBag className="w-4 h-4" />
-                  + Direct
+                  {t("nav.cta_direct")}
                 </Link>
                 <Link
                   to="/hawker/new"
@@ -65,21 +68,21 @@ const Navbar: React.FC = () => {
                   title="3-Party Escrow — hawker ↔ supplier ↔ buyer"
                 >
                   <Users className="w-4 h-4" />
-                  + 3-Party
+                  {t("nav.cta_3p")}
                 </Link>
                 <Link
                   to="/dashboard"
                   className="flex items-center space-x-2 text-ink-300 hover:text-white transition-colors"
                 >
                   <LayoutDashboard className="w-5 h-5" />
-                  <span className="hidden lg:inline">Dashboard</span>
+                  <span className="hidden lg:inline">{t("nav.dashboard")}</span>
                 </Link>
                 <button
                   onClick={handleLogout}
                   className="flex items-center space-x-2 text-ink-300 hover:text-white transition-colors"
                 >
                   <LogOut className="w-5 h-5" />
-                  <span className="hidden lg:inline">Logout</span>
+                  <span className="hidden lg:inline">{t("nav.logout")}</span>
                 </button>
               </div>
             ) : (
@@ -88,13 +91,13 @@ const Navbar: React.FC = () => {
                   to="/login"
                   className="text-ink-300 hover:text-white transition-colors font-medium"
                 >
-                  Sign In
+                  {t("nav.login")}
                 </Link>
                 <Link
                   to="/register"
                   className="bg-gradient-to-r from-gold-500 to-gold-600 text-ink-900 px-6 py-2 rounded-full font-semibold hover:from-gold-400 hover:to-gold-500 transition-all shadow-lg hover:shadow-gold-500/25"
                 >
-                  Start Selling
+                  {t("nav.signup")}
                 </Link>
               </>
             )}
@@ -114,6 +117,10 @@ const Navbar: React.FC = () => {
       {isMenuOpen && (
         <div className="md:hidden glass border-t border-ink-700">
           <div className="px-4 py-4 space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-ink-700">
+              <span className="text-ink-400 text-xs font-mono uppercase tracking-wider">Lugha / Language</span>
+              <LangToggle />
+            </div>
             {isAuthenticated && (
               <>
                 <Link
@@ -123,7 +130,7 @@ const Navbar: React.FC = () => {
                   className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-gold-500 to-gold-600 text-ink-900 px-4 py-3 rounded-xl font-bold shadow-lg shadow-gold-500/30 hover:from-gold-400 hover:to-gold-500"
                 >
                   <Users className="w-5 h-5" />
-                  + New 3-Party Transaction
+                  {t("nav.cta_3p_full")}
                 </Link>
                 <Link
                   to="/direct/new"
@@ -132,7 +139,7 @@ const Navbar: React.FC = () => {
                   className="flex items-center justify-center gap-2 w-full bg-emerald-500/10 border border-emerald-500/40 text-emerald-300 px-4 py-3 rounded-xl font-bold hover:bg-emerald-500/20"
                 >
                   <ShoppingBag className="w-5 h-5" />
-                  + Direct Escrow (no middleman)
+                  {t("nav.cta_direct_full")}
                 </Link>
               </>
             )}
@@ -144,14 +151,14 @@ const Navbar: React.FC = () => {
               className="block text-ink-300 hover:text-white py-2"
               onClick={() => setIsMenuOpen(false)}
             >
-              Marketplace
+              {t("nav.marketplace")}
             </Link>
             <Link
               to="/#three-party"
               className="block text-ink-300 hover:text-white py-2"
               onClick={() => setIsMenuOpen(false)}
             >
-              About 3-Party Escrow
+              {t("nav.about_3p")}
             </Link>
             {isAuthenticated ? (
               <>
@@ -160,7 +167,7 @@ const Navbar: React.FC = () => {
                   className="block text-ink-300 hover:text-white py-2"
                   onClick={() => setIsMenuOpen(false)}
                 >
-                  Dashboard
+                  {t("nav.dashboard")}
                 </Link>
                 <button
                   onClick={() => {
@@ -169,7 +176,7 @@ const Navbar: React.FC = () => {
                   }}
                   className="block text-ink-300 hover:text-white py-2 w-full text-left"
                 >
-                  Logout
+                  {t("nav.logout")}
                 </button>
               </>
             ) : (
@@ -179,14 +186,14 @@ const Navbar: React.FC = () => {
                   className="block text-ink-300 hover:text-white py-2"
                   onClick={() => setIsMenuOpen(false)}
                 >
-                  Sign In
+                  {t("nav.login")}
                 </Link>
                 <Link
                   to="/register"
                   className="block bg-gradient-to-r from-gold-500 to-gold-600 text-ink-900 px-6 py-3 rounded-full font-semibold text-center"
                   onClick={() => setIsMenuOpen(false)}
                 >
-                  Start Selling
+                  {t("nav.signup")}
                 </Link>
               </>
             )}

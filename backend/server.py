@@ -22,6 +22,22 @@ import re
 import asyncio
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
+# Financial ledger module — double-entry bookkeeping on top of Mongo.
+from ledger import (
+    seed_chart_of_accounts,
+    calculate_split as ledger_calculate_split,
+    post_funds_received as ledger_post_funds_received,
+    post_release as ledger_post_release,
+    post_refund as ledger_post_refund,
+    post_payout_paid as ledger_post_payout_paid,
+    order_financials as ledger_order_financials,
+    webhook_already_processed as ledger_webhook_already_processed,
+    mark_webhook_processed as ledger_mark_webhook_processed,
+    find_auto_resolvable_disputes,
+    DISPUTE_AUTO_RESOLVE_DAYS,
+    ACCOUNTS as LEDGER_ACCOUNTS,
+)
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -4570,6 +4586,415 @@ async def admin_seed_marketplace(x_admin_secret: str = Header(default="")):
     return {"ok": True, "inserted": inserted, "updated": updated, "total_active_products": total}
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# FINANCIAL LEDGER — double-entry bookkeeping endpoints
+# ═══════════════════════════════════════════════════════════════════════════
+# All money-movement endpoints. The actual posting logic lives in `ledger.py`
+# (immutable entries, balanced batches, idempotent webhooks). These endpoints
+# expose them via the API for admin reconciliation, payout disbursement, and
+# dispute resolution.
+
+class FeeQuoteRequest(BaseModel):
+    mode: str = Field(..., description="'direct' or 'three_party'")
+    deal_value: float
+    supplier_cost: Optional[float] = None
+
+
+class DisputeOpenRequest(BaseModel):
+    order_id: str
+    reason: str
+
+
+class DisputeResolveRequest(BaseModel):
+    resolution: str  # 'release_to_seller' | 'refund_to_buyer'
+    resolution_note: Optional[str] = None
+
+
+class DisputeAgreeRequest(BaseModel):
+    role: str  # 'buyer' | 'seller'
+    decision: str  # 'release_to_seller' | 'refund_to_buyer'
+
+
+class GatewayWebhookPayload(BaseModel):
+    provider: str  # 'azampay' | 'selcom' | 'mock'
+    event_id: str
+    order_id: str
+    provider_txn_id: str
+    amount: float
+    status: str = "paid"  # 'paid' | 'failed' | 'reversed'
+
+
+@api_router.get("/ledger/accounts")
+async def get_ledger_accounts():
+    """Public chart of accounts. Useful for admin dashboards."""
+    return {"accounts": LEDGER_ACCOUNTS}
+
+
+@api_router.post("/ledger/quote")
+async def quote_fees(payload: FeeQuoteRequest):
+    """
+    Stateless fee-split calculator.
+
+    Quoting before order creation lets the UI show the buyer the exact amount
+    they'll pay, the seller their net, and the platform its take — all from
+    a single canonical source of truth (`ledger.calculate_split`).
+    """
+    try:
+        split = ledger_calculate_split(
+            mode=payload.mode,
+            deal_value=payload.deal_value,
+            supplier_cost=payload.supplier_cost,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"mode": payload.mode, **split}
+
+
+@api_router.get("/ledger/order/{order_id}")
+async def get_order_financials(order_id: str, request: Request):
+    """Reconciliation view for a single order. Auth-required."""
+    await get_current_user(request)
+    fin = await ledger_order_financials(db, order_id)
+    if not fin.get("found"):
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    entries = await db.ledger_entries.find(
+        {"order_id": order_id}, {"_id": 0}
+    ).sort("created_at", 1).to_list(500)
+    for e in entries:
+        if isinstance(e.get("created_at"), datetime):
+            e["created_at"] = e["created_at"].isoformat()
+    fin["entries"] = entries
+    return fin
+
+
+@api_router.post("/payments/webhook")
+async def handle_payment_webhook(payload: GatewayWebhookPayload):
+    """
+    Gateway webhook entrypoint (AzamPay / Selcom / mock).
+
+    Idempotent on (provider, event_id). Posts the funds-received double-entry
+    and flips the order to `funded`. We never trust client-supplied amount as
+    final — we cross-check against the order's stored `gross_amount`.
+    """
+    if await ledger_webhook_already_processed(db, provider=payload.provider, event_id=payload.event_id):
+        return {"ok": True, "duplicate": True}
+
+    order = await db.orders.find_one({"order_id": payload.order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if abs(float(order.get("gross_amount", 0)) - float(payload.amount)) > 0.01:
+        raise HTTPException(status_code=400, detail="Amount mismatch with order")
+
+    if payload.status == "paid":
+        await ledger_post_funds_received(
+            db,
+            order_id=payload.order_id,
+            gross_amount=payload.amount,
+            provider=payload.provider,
+            provider_txn_id=payload.provider_txn_id,
+            raw_payload=payload.dict(),
+        )
+        await db.orders.update_one(
+            {"order_id": payload.order_id},
+            {"$set": {"status": "funded", "funded_at": datetime.now(timezone.utc)}},
+        )
+
+    await ledger_mark_webhook_processed(db, provider=payload.provider, event_id=payload.event_id)
+    return {"ok": True, "duplicate": False}
+
+
+@api_router.post("/orders/{order_id}/release")
+async def release_order_funds(order_id: str, request: Request):
+    """
+    Buyer confirms delivery → release escrow.
+
+    Posts the release double-entry (escrow_liability → seller_payable +
+    agent_payable + platform_revenue) and queues the payout(s).
+    """
+    user = await get_current_user(request)
+    order = await db.orders.find_one({"order_id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.get("buyer_id") and order["buyer_id"] != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Only the buyer can release this order")
+    if order.get("status") != "funded":
+        raise HTTPException(status_code=400, detail=f"Order is in '{order.get('status')}' — only 'funded' orders can be released")
+
+    await ledger_post_release(db, order=order)
+
+    # Queue payouts (mock disbursement until AzamPay/Selcom keys are wired)
+    payouts: List[Dict[str, Any]] = []
+    seller_amt = float(order.get("seller_amount") or 0)
+    agent_amt = float(order.get("agent_commission") or 0)
+    if seller_amt > 0 and order.get("seller_id"):
+        payouts.append({
+            "payout_id": f"pay_{uuid.uuid4().hex[:14]}",
+            "order_id": order_id,
+            "beneficiary_user_id": order["seller_id"],
+            "beneficiary_role": "seller",
+            "provider": order.get("payout_provider", "mock"),
+            "destination": order.get("seller_phone", ""),
+            "amount": seller_amt,
+            "status": "queued",
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        })
+    if agent_amt > 0 and order.get("agent_id"):
+        payouts.append({
+            "payout_id": f"pay_{uuid.uuid4().hex[:14]}",
+            "order_id": order_id,
+            "beneficiary_user_id": order["agent_id"],
+            "beneficiary_role": "agent",
+            "provider": order.get("payout_provider", "mock"),
+            "destination": order.get("agent_phone", ""),
+            "amount": agent_amt,
+            "status": "queued",
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        })
+    if payouts:
+        await db.payouts.insert_many(payouts)
+
+    await db.orders.update_one(
+        {"order_id": order_id},
+        {"$set": {"status": "settled", "released_at": datetime.now(timezone.utc)}},
+    )
+    return {"ok": True, "order_id": order_id, "payouts_queued": len(payouts)}
+
+
+@api_router.get("/payouts")
+async def list_payouts(request: Request, status: Optional[str] = None):
+    """List payouts (admin / seller / agent — scoped by user)."""
+    user = await get_current_user(request)
+    q: Dict[str, Any] = {}
+    if status:
+        q["status"] = status
+    # Non-admin users only see their own payouts
+    if user.get("role") != "admin":
+        q["beneficiary_user_id"] = user["user_id"]
+    rows = await db.payouts.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
+    for p in rows:
+        for f in ("created_at", "updated_at"):
+            if isinstance(p.get(f), datetime):
+                p[f] = p[f].isoformat()
+    return {"payouts": rows, "count": len(rows)}
+
+
+@api_router.post("/payouts/{payout_id}/disburse")
+async def disburse_payout(payout_id: str, request: Request):
+    """
+    MOCKED disbursement — flips queued → paid and posts the ledger entry.
+    Real AzamPay / Selcom integration will replace the mock with an HTTP call
+    to their disburse endpoint. Behaviour from the ledger's perspective is
+    identical — the success path always ends with `post_payout_paid`.
+    """
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    payout = await db.payouts.find_one({"payout_id": payout_id}, {"_id": 0})
+    if not payout:
+        raise HTTPException(status_code=404, detail="Payout not found")
+    if payout.get("status") != "queued":
+        raise HTTPException(status_code=400, detail=f"Payout is '{payout.get('status')}', not queued")
+
+    # MOCK gateway response — replace with httpx call to AzamPay/Selcom when keys exist.
+    provider_ref = f"MOCK_{uuid.uuid4().hex[:10].upper()}"
+
+    await ledger_post_payout_paid(db, payout=payout)
+    await db.payouts.update_one(
+        {"payout_id": payout_id},
+        {"$set": {
+            "status": "paid",
+            "provider_ref": provider_ref,
+            "updated_at": datetime.now(timezone.utc),
+        }},
+    )
+    return {"ok": True, "payout_id": payout_id, "provider_ref": provider_ref, "mocked": True}
+
+
+@api_router.post("/disputes")
+async def open_dispute(payload: DisputeOpenRequest, request: Request):
+    """Open a dispute on a funded order. Auto-resolves after DISPUTE_AUTO_RESOLVE_DAYS."""
+    user = await get_current_user(request)
+    order = await db.orders.find_one({"order_id": payload.order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if user["user_id"] not in (order.get("buyer_id"), order.get("seller_id")):
+        raise HTTPException(status_code=403, detail="Only buyer or seller can dispute")
+    if order.get("status") not in {"funded", "shipped", "delivered"}:
+        raise HTTPException(status_code=400, detail=f"Cannot dispute order in status '{order.get('status')}'")
+
+    # One open dispute per order
+    existing = await db.disputes.find_one({"order_id": payload.order_id, "status": {"$in": ["open", "review"]}})
+    if existing:
+        raise HTTPException(status_code=400, detail="Dispute already open for this order")
+
+    now = datetime.now(timezone.utc)
+    dispute_id = f"disp_{uuid.uuid4().hex[:12]}"
+    await db.disputes.insert_one({
+        "dispute_id": dispute_id,
+        "order_id": payload.order_id,
+        "opened_by": user["user_id"],
+        "reason": payload.reason,
+        "status": "open",
+        "auto_resolve_at": now + timedelta(days=DISPUTE_AUTO_RESOLVE_DAYS),
+        "buyer_decision": None,
+        "seller_decision": None,
+        "resolution": None,
+        "resolution_note": None,
+        "created_at": now,
+        "resolved_at": None,
+    })
+    await db.orders.update_one(
+        {"order_id": payload.order_id},
+        {"$set": {"status": "dispute"}},
+    )
+    return {"ok": True, "dispute_id": dispute_id, "auto_resolves_in_days": DISPUTE_AUTO_RESOLVE_DAYS}
+
+
+async def _apply_dispute_resolution(dispute: Dict[str, Any], *, resolution: str, note: str = "", resolved_by: str = "system") -> Dict[str, Any]:
+    """Shared finalizer for admin / agreement / auto-resolve paths."""
+    order = await db.orders.find_one({"order_id": dispute["order_id"]}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if resolution == "release_to_seller":
+        await ledger_post_release(db, order=order)
+        await db.orders.update_one(
+            {"order_id": dispute["order_id"]},
+            {"$set": {"status": "settled", "released_at": datetime.now(timezone.utc)}},
+        )
+    elif resolution == "refund_to_buyer":
+        await ledger_post_refund(db, order_id=dispute["order_id"], amount=order["gross_amount"])
+        await db.orders.update_one(
+            {"order_id": dispute["order_id"]},
+            {"$set": {"status": "refunded", "refunded_at": datetime.now(timezone.utc)}},
+        )
+    else:
+        raise HTTPException(status_code=400, detail="Unknown resolution")
+
+    await db.disputes.update_one(
+        {"dispute_id": dispute["dispute_id"]},
+        {"$set": {
+            "status": "resolved",
+            "resolution": resolution,
+            "resolution_note": note,
+            "resolved_by": resolved_by,
+            "resolved_at": datetime.now(timezone.utc),
+        }},
+    )
+    return {"ok": True, "dispute_id": dispute["dispute_id"], "resolution": resolution, "resolved_by": resolved_by}
+
+
+@api_router.post("/disputes/{dispute_id}/resolve")
+async def resolve_dispute_admin(dispute_id: str, payload: DisputeResolveRequest, request: Request):
+    """Admin override — resolves a dispute either way."""
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    dispute = await db.disputes.find_one({"dispute_id": dispute_id}, {"_id": 0})
+    if not dispute:
+        raise HTTPException(status_code=404, detail="Dispute not found")
+    if dispute.get("status") != "open":
+        raise HTTPException(status_code=400, detail=f"Dispute is '{dispute.get('status')}'")
+    return await _apply_dispute_resolution(
+        dispute, resolution=payload.resolution, note=payload.resolution_note or "", resolved_by=f"admin:{user['user_id']}",
+    )
+
+
+@api_router.post("/disputes/{dispute_id}/agree")
+async def dispute_party_agree(dispute_id: str, payload: DisputeAgreeRequest, request: Request):
+    """
+    Buyer or seller agrees to a resolution. When BOTH parties agree on the same
+    decision, the dispute auto-finalizes — no admin needed.
+    """
+    user = await get_current_user(request)
+    dispute = await db.disputes.find_one({"dispute_id": dispute_id}, {"_id": 0})
+    if not dispute:
+        raise HTTPException(status_code=404, detail="Dispute not found")
+    if dispute.get("status") != "open":
+        raise HTTPException(status_code=400, detail=f"Dispute is '{dispute.get('status')}'")
+
+    order = await db.orders.find_one({"order_id": dispute["order_id"]}, {"_id": 0})
+    if payload.role == "buyer" and order.get("buyer_id") != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Not the buyer of this order")
+    if payload.role == "seller" and order.get("seller_id") != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Not the seller of this order")
+
+    field = "buyer_decision" if payload.role == "buyer" else "seller_decision"
+    await db.disputes.update_one(
+        {"dispute_id": dispute_id},
+        {"$set": {field: payload.decision, f"{field}_at": datetime.now(timezone.utc)}},
+    )
+
+    refreshed = await db.disputes.find_one({"dispute_id": dispute_id}, {"_id": 0})
+    bd, sd = refreshed.get("buyer_decision"), refreshed.get("seller_decision")
+    if bd and sd and bd == sd:
+        # Mutual agreement — finalize immediately.
+        return await _apply_dispute_resolution(
+            refreshed, resolution=bd, note="Both parties agreed", resolved_by="mutual",
+        )
+
+    return {"ok": True, "dispute_id": dispute_id, "status": "open", "buyer_decision": bd, "seller_decision": sd}
+
+
+@api_router.get("/disputes")
+async def list_disputes(request: Request, status: Optional[str] = None):
+    """List disputes the user is involved in (or all, if admin)."""
+    user = await get_current_user(request)
+    q: Dict[str, Any] = {}
+    if status:
+        q["status"] = status
+
+    if user.get("role") == "admin":
+        rows = await db.disputes.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
+    else:
+        # Disputes for orders where the user is buyer or seller
+        my_orders = await db.orders.find(
+            {"$or": [{"buyer_id": user["user_id"]}, {"seller_id": user["user_id"]}]},
+            {"_id": 0, "order_id": 1},
+        ).to_list(500)
+        order_ids = [o["order_id"] for o in my_orders]
+        q["order_id"] = {"$in": order_ids}
+        rows = await db.disputes.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
+
+    for d in rows:
+        for f in ("created_at", "resolved_at", "auto_resolve_at",
+                  "buyer_decision_at", "seller_decision_at"):
+            if isinstance(d.get(f), datetime):
+                d[f] = d[f].isoformat()
+    return {"disputes": rows, "count": len(rows)}
+
+
+# ─── Background task: auto-resolve stale disputes ─────────────────────────
+async def _dispute_auto_resolver_loop():
+    """
+    Wakes every hour, finds open disputes older than DISPUTE_AUTO_RESOLVE_DAYS,
+    and auto-resolves them in the BUYER's favour (refund). The default
+    pro-buyer resolution is the safer policy — it nudges sellers to engage
+    with the dispute rather than ignore it.
+    """
+    while True:
+        try:
+            stale = await find_auto_resolvable_disputes(db)
+            for dispute in stale:
+                try:
+                    await _apply_dispute_resolution(
+                        dispute,
+                        resolution="refund_to_buyer",
+                        note=f"Auto-resolved after {DISPUTE_AUTO_RESOLVE_DAYS} days no response",
+                        resolved_by="system:auto",
+                    )
+                    logger.info(f"Auto-resolved dispute {dispute.get('dispute_id')} → refund_to_buyer")
+                except Exception as e:
+                    logger.error(f"Auto-resolve failed for {dispute.get('dispute_id')}: {e}")
+        except Exception as e:
+            logger.error(f"Dispute auto-resolver loop error: {e}")
+        await asyncio.sleep(60 * 60)  # 1 hour cadence
+
+
 # Include the router
 app.include_router(api_router)
 
@@ -4596,6 +5021,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+async def _startup_ledger_init():
+    """Seed the chart of accounts and kick off the dispute auto-resolver."""
+    try:
+        inserted = await seed_chart_of_accounts(db)
+        logger.info(f"Ledger boot: seeded {inserted} new account(s); chart of accounts ready.")
+    except Exception as e:
+        logger.error(f"Ledger seed failed at startup: {e}")
+    # Fire the auto-resolver loop in the background
+    asyncio.create_task(_dispute_auto_resolver_loop())
+
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

@@ -185,5 +185,43 @@ Env var `CORS_ORIGINS` is additive on top of these baselines. A misset env var c
 - [x] **Hamburger testid** — `data-testid="navbar-mobile-toggle"` + ARIA attributes added to the mobile menu button (test agent feedback from iter6).
 - [x] **Tests** — `/app/test_reports/iteration_7.json`. 8/8 new backend + 23/23 iter5/iter6 regression + 9/9 frontend acceptance criteria PASS. Zero critical or minor issues.
 
+## Shipped Apr 29, 2026 (post-iter10) — Financial Ledger (Double-Entry on Mongo)
+User shared a PostgreSQL ledger schema and asked us to implement it. Decision: refactor on Mongo with **1:1 schema mapping**, keep all guarantees (immutable entries, idempotent webhooks, double-entry invariants enforced in code).
+
+- [x] **`/app/backend/ledger.py` — new module**:
+  - `calculate_split(mode, deal_value, supplier_cost?)` — canonical fee math. Locked-in fee model: **2% supply + 2% hawker + 3% buyer**. For deal=100k direct → gross=103k, seller=98k, platform=5k. For 3-party deal=100k / supplier=80k → gross=103k, seller=78.4k, agent=19.6k, platform=5k. Invariant `gross == seller + agent + platform` asserted in code (and in tests, across 5 cases including pennies).
+  - `post_funds_received` (debit cash_clearing / credit escrow_liability) — idempotent on `(provider, provider_txn_id)`.
+  - `post_release` (debit escrow_liability / credit seller_payable + agent_payable + platform_revenue).
+  - `post_refund` (reverse of funds_received, for dispute → refund_to_buyer).
+  - `post_payout_paid` (debit payable / credit cash_clearing).
+  - `assert_balanced(order_id)` — called after every batch; `_post_entries` rejects unbalanced batches before write.
+  - Chart of accounts seeded on every startup (idempotent upsert): `cash_clearing`, `escrow_liability`, `seller_payable`, `agent_payable`, `platform_revenue`.
+  - Auto-resolve helpers — find disputes older than `DISPUTE_AUTO_RESOLVE_DAYS=3`.
+
+- [x] **HTTP API surface (in `server.py`)**:
+  - `GET /api/ledger/accounts` (public) — chart of accounts.
+  - `POST /api/ledger/quote` (public) — stateless fee calculator. Validates inputs and returns the canonical split.
+  - `GET /api/ledger/order/{id}` (auth) — reconciliation view: order status, ledger position, paid_out, full entries list.
+  - `POST /api/payments/webhook` — gateway webhook handler. Idempotent on `(provider, event_id)`. Cross-checks amount against order.gross_amount. Posts funds-received and flips order to `funded`.
+  - `POST /api/orders/{id}/release` — buyer-only. Posts release entries, queues payouts.
+  - `GET /api/payouts` — scoped by user role (non-admin sees own).
+  - `POST /api/payouts/{id}/disburse` — admin-only. **MOCKED** until AzamPay/Selcom keys are wired. Returns `provider_ref="MOCK_xxx"` and posts the payout-paid double-entry.
+  - `POST /api/disputes` — open. One open dispute per order.
+  - `POST /api/disputes/{id}/resolve` — admin override (release_to_seller | refund_to_buyer).
+  - `POST /api/disputes/{id}/agree` — buyer or seller agrees; mutual agreement auto-finalizes.
+  - `GET /api/disputes` — scoped.
+
+- [x] **Background task** — `_dispute_auto_resolver_loop()` runs hourly, refunds buyers on disputes older than 3 days that haven't been resolved (pro-buyer default policy nudges sellers to engage).
+
+- [x] **Mongo collections (auto-created)**: `ledger_accounts`, `ledger_entries`, `payment_transactions`, `payouts`, `disputes`, `processed_webhooks`. All include `created_at`/`updated_at` ISO timestamps and `_id` excluded from API responses.
+
+- [x] **Frontend admin page** — `LedgerAdminPage.tsx` at `/admin/ledger`. Reactive Fee Calculator + tabbed Payouts / Disputes / Accounts views. All bilingual (`ledger.*` keys).
+
+- [x] **Tests** — `/app/backend/tests/test_ledger_e2e.py` (direct + 3p + refund + idempotency, all balanced) + `/app/test_reports/iteration_10.json` (22/22 new + 42/42 regression backend, 5/5 frontend, zero issues).
+
+### Mock-only / Deferred
+- ⚠️ **Real AzamPay / Selcom disbursement** — will replace the mock `/payouts/{id}/disburse` once the user provides API credentials. From the ledger's perspective, behaviour is identical — success path always ends with `post_payout_paid`.
+- ⏭ **Refactor existing `/api/escrow/three-party/*` and `/api/escrow/direct/*` flows to use the new ledger** — deferred to a follow-up iteration. Today's ledger handles fresh orders coming in via `/api/payments/webhook`. Existing escrow flows still use the old direct-write code path.
+
 ---
-*Version 6.6 — Public Seller Profile + hamburger testid, Apr 25, 2026*
+*Version 6.7 — Financial Ledger (double-entry on Mongo), Apr 29, 2026*

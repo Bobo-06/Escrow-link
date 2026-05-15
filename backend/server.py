@@ -37,6 +37,18 @@ from ledger import (
     DISPUTE_AUTO_RESOLVE_DAYS,
     ACCOUNTS as LEDGER_ACCOUNTS,
 )
+from kyc import (
+    submit_kyc as kyc_submit,
+    review_kyc as kyc_review,
+    list_pending as kyc_list_pending,
+    get_user_kyc_status as kyc_get_status,
+)
+from fraud import (
+    score_order as fraud_score_order,
+    list_flagged as fraud_list_flagged,
+    add_to_watchlist as fraud_add_to_watchlist,
+    mark_reviewed as fraud_mark_reviewed,
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -4669,14 +4681,22 @@ async def get_order_financials(order_id: str, request: Request):
 
 
 @api_router.post("/payments/webhook")
-async def handle_payment_webhook(payload: GatewayWebhookPayload):
+async def handle_payment_webhook(payload: GatewayWebhookPayload, request: Request):
     """
     Gateway webhook entrypoint (AzamPay / Selcom / mock).
 
-    Idempotent on (provider, event_id). Posts the funds-received double-entry
-    and flips the order to `funded`. We never trust client-supplied amount as
-    final — we cross-check against the order's stored `gross_amount`.
+    Idempotent on (provider, event_id). When `AZAMPAY_WEBHOOK_SECRET` /
+    `SELCOM_WEBHOOK_SECRET` env vars are set, verifies HMAC-SHA256 from the
+    `X-Signature` header. Posts the funds-received double-entry and flips
+    the order to `funded`. We never trust client-supplied amount as final
+    — we cross-check against the order's stored `gross_amount`.
     """
+    if payload.provider in {"azampay", "selcom"}:
+        body = await request.body()
+        sig = request.headers.get("X-Signature", "")
+        if not _verify_webhook_signature(payload.provider, body, sig):
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
     if await ledger_webhook_already_processed(db, provider=payload.provider, event_id=payload.event_id):
         return {"ok": True, "duplicate": True}
 
@@ -4995,6 +5015,423 @@ async def _dispute_auto_resolver_loop():
         await asyncio.sleep(60 * 60)  # 1 hour cadence
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# CHECKOUT API
+# ═══════════════════════════════════════════════════════════════════════════
+# Buyer-facing entrypoint. Quote → create order → return payment instructions
+# the FE can show ("Pay TZS X via *150*00#"). Real gateway init (AzamPay/Selcom)
+# can be plugged in here when keys are provided.
+
+class CheckoutStartRequest(BaseModel):
+    product_id: str
+    quantity: int = 1
+    delivery_address: Optional[str] = None
+    delivery_phone: Optional[str] = None
+    payment_method: str = "mpesa"  # 'mpesa' | 'airtel' | 'tigo' | 'card' | 'mock'
+
+
+@api_router.post("/checkout/start")
+async def checkout_start(payload: CheckoutStartRequest, request: Request):
+    """
+    Create a `pending_payment` order and return payment instructions.
+    Posts a fraud signal and stamps the order with the score.
+    """
+    user = await get_current_user(request)
+
+    product = await db.products.find_one({"product_id": payload.product_id}, {"_id": 0})
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    if not product.get("is_active", True):
+        raise HTTPException(status_code=400, detail="Product not available")
+    qty = max(1, int(payload.quantity or 1))
+
+    deal_value = float(product["price"]) * qty
+    split = ledger_calculate_split(mode="direct", deal_value=deal_value)
+
+    order_id = f"ord_{uuid.uuid4().hex[:14]}"
+    now = datetime.now(timezone.utc)
+    order_doc = {
+        "order_id": order_id,
+        "mode": "direct",
+        "buyer_id": user["user_id"],
+        "buyer_phone": user.get("phone", ""),
+        "seller_id": product.get("seller_id"),
+        "seller_phone": product.get("seller_phone", ""),
+        "agent_id": None,
+        "product_id": product["product_id"],
+        "product_name": product.get("name", ""),
+        "quantity": qty,
+        "currency": "TZS",
+        "deal_value": deal_value,
+        **split,
+        "status": "pending_payment",
+        "delivery_address": payload.delivery_address or "",
+        "delivery_phone": payload.delivery_phone or user.get("phone", ""),
+        "payment_method": payload.payment_method,
+        "payout_provider": "azampay",
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.orders.insert_one(order_doc)
+    # Mongo mutates the dict and adds _id — strip it so the doc is JSON-safe
+    # for downstream consumers (fraud scoring response, etc.)
+    order_doc.pop("_id", None)
+
+    # Fraud scoring (best-effort, never blocks checkout)
+    try:
+        signal = await fraud_score_order(db, order=order_doc)
+    except Exception as e:
+        logger.warning(f"Fraud scoring failed for {order_id}: {e}")
+        signal = {"score": 0, "flags": [], "requires_review": False}
+
+    # MOCK payment instruction — real flow would init the gateway and return a tokenized URL
+    instructions = {
+        "method": payload.payment_method,
+        "amount": split["gross_amount"],
+        "ussd_demo": f"*150*00*1*{int(split['gross_amount'])}#",
+        "expires_in_minutes": 30,
+        # In production these come from AzamPay/Selcom init responses
+        "checkout_url": None,
+        "provider_txn_id": f"PEND_{uuid.uuid4().hex[:10].upper()}",
+    }
+
+    return {
+        "ok": True,
+        "order_id": order_id,
+        "split": split,
+        "instructions": instructions,
+        "fraud": {"score": signal.get("score"), "review_required": signal.get("requires_review")},
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# WEBHOOK SIGNATURE VERIFICATION
+# ═══════════════════════════════════════════════════════════════════════════
+# Real AzamPay / Selcom webhooks must be signed. We expose a hook that, when
+# AZAMPAY_WEBHOOK_SECRET / SELCOM_WEBHOOK_SECRET env vars are set, enforces
+# HMAC-SHA256 verification. When the secret is missing we accept unsigned
+# requests (mock/test mode) and log a warning.
+
+AZAMPAY_WEBHOOK_SECRET = os.environ.get("AZAMPAY_WEBHOOK_SECRET", "")
+SELCOM_WEBHOOK_SECRET = os.environ.get("SELCOM_WEBHOOK_SECRET", "")
+
+
+def _verify_webhook_signature(provider: str, body: bytes, header_sig: str) -> bool:
+    """HMAC-SHA256 verification keyed on the provider's webhook secret.
+    Returns True in 'permissive' mode (no secret configured) so dev/preview
+    don't need to wire up real signing — production should set the env vars."""
+    secret = ""
+    if provider == "azampay":
+        secret = AZAMPAY_WEBHOOK_SECRET
+    elif provider == "selcom":
+        secret = SELCOM_WEBHOOK_SECRET
+    if not secret:
+        logger.warning(f"Webhook for {provider} accepted WITHOUT signature (no secret configured)")
+        return True
+    if not header_sig:
+        return False
+    expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, header_sig)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# RECONCILIATION DASHBOARD (admin)
+# ═══════════════════════════════════════════════════════════════════════════
+@api_router.get("/admin/reconciliation")
+async def admin_reconciliation(request: Request):
+    """
+    System-wide totals from the ledger. Each account balance is computed by
+    summing debits/credits for that code. The trial balance MUST sum to zero
+    across all accounts — the endpoint asserts and surfaces drift if not.
+    """
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    pipeline = [
+        {"$group": {
+            "_id": {"code": "$account_code", "type": "$entry_type"},
+            "amount": {"$sum": "$amount"},
+        }},
+    ]
+    rows = await db.ledger_entries.aggregate(pipeline).to_list(100)
+
+    balances: Dict[str, Dict[str, float]] = {}
+    for r in rows:
+        code = r["_id"]["code"]
+        et = r["_id"]["type"]
+        balances.setdefault(code, {"debit": 0.0, "credit": 0.0})
+        balances[code][et] = float(r["amount"] or 0)
+
+    # Compute net per account: assets/expenses are debit-positive,
+    # liabilities/revenue are credit-positive.
+    code_to_type = {a["code"]: a["type"] for a in LEDGER_ACCOUNTS}
+    net: List[Dict[str, Any]] = []
+    total_debit = 0.0
+    total_credit = 0.0
+    for code, ttype in code_to_type.items():
+        b = balances.get(code, {"debit": 0.0, "credit": 0.0})
+        total_debit += b["debit"]
+        total_credit += b["credit"]
+        if ttype in ("asset", "expense"):
+            balance = b["debit"] - b["credit"]
+        else:
+            balance = b["credit"] - b["debit"]
+        net.append({
+            "code": code,
+            "type": ttype,
+            "debit_total": round(b["debit"], 2),
+            "credit_total": round(b["credit"], 2),
+            "balance": round(balance, 2),
+        })
+
+    # Order counts by status — quick health signals
+    status_pipeline = [{"$group": {"_id": "$status", "n": {"$sum": 1}}}]
+    statuses = await db.orders.aggregate(status_pipeline).to_list(50)
+    status_counts = {(s["_id"] or "unknown"): s["n"] for s in statuses}
+
+    # Pending payouts amount
+    pp = await db.payouts.aggregate([
+        {"$match": {"status": "queued"}},
+        {"$group": {"_id": None, "total": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+    ]).to_list(1)
+    pending_payouts = pp[0] if pp else {"total": 0, "count": 0}
+
+    # Open disputes count
+    open_disputes = await db.disputes.count_documents({"status": "open"})
+
+    drift = round(total_debit - total_credit, 2)
+    return {
+        "balances": net,
+        "totals": {
+            "debit": round(total_debit, 2),
+            "credit": round(total_credit, 2),
+            "trial_balance_drift": drift,
+            "balanced": abs(drift) < 0.01,
+        },
+        "orders_by_status": status_counts,
+        "pending_payouts": {
+            "count": pending_payouts.get("count", 0),
+            "amount": round(float(pending_payouts.get("total", 0) or 0), 2),
+        },
+        "open_disputes": open_disputes,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# KYC
+# ═══════════════════════════════════════════════════════════════════════════
+class KycSubmitRequest(BaseModel):
+    document_type: str
+    document_number: str
+    full_name: str
+    selfie_b64: Optional[str] = ""
+    document_b64: Optional[str] = ""
+
+
+class KycReviewRequest(BaseModel):
+    decision: str  # 'verified' | 'rejected'
+    rejection_reason: Optional[str] = None
+
+
+@api_router.post("/kyc/submit")
+async def kyc_submit_endpoint(payload: KycSubmitRequest, request: Request):
+    user = await get_current_user(request)
+    try:
+        sub = await kyc_submit(db, user_id=user["user_id"], payload=payload.dict())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if isinstance(sub.get("created_at"), datetime):
+        sub["created_at"] = sub["created_at"].isoformat()
+    # Trim heavy fields from the response
+    sub["selfie_b64"] = "[stored]" if sub.get("selfie_b64") else ""
+    sub["document_b64"] = "[stored]" if sub.get("document_b64") else ""
+    return {"ok": True, "submission": sub}
+
+
+@api_router.get("/kyc/me")
+async def kyc_me(request: Request):
+    user = await get_current_user(request)
+    return await kyc_get_status(db, user["user_id"])
+
+
+@api_router.get("/admin/kyc/queue")
+async def admin_kyc_queue(request: Request, limit: int = 50):
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    return {"submissions": await kyc_list_pending(db, limit=limit)}
+
+
+@api_router.post("/admin/kyc/{submission_id}/review")
+async def admin_kyc_review_endpoint(submission_id: str, payload: KycReviewRequest, request: Request):
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    try:
+        sub = await kyc_review(
+            db,
+            submission_id=submission_id,
+            decision=payload.decision,
+            reviewer_id=user["user_id"],
+            reason=payload.rejection_reason or "",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    for f in ("created_at", "reviewed_at"):
+        if isinstance(sub.get(f), datetime):
+            sub[f] = sub[f].isoformat()
+    sub["selfie_b64"] = "[stored]" if sub.get("selfie_b64") else ""
+    sub["document_b64"] = "[stored]" if sub.get("document_b64") else ""
+    return {"ok": True, "submission": sub}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# FRAUD MONITORING (admin)
+# ═══════════════════════════════════════════════════════════════════════════
+class FraudWatchRequest(BaseModel):
+    user_id: str
+    reason: str
+
+
+class FraudReviewRequest(BaseModel):
+    action: str  # 'clear' | 'block_order'
+    note: Optional[str] = ""
+
+
+@api_router.get("/admin/fraud/signals")
+async def admin_fraud_signals(request: Request, status: str = "pending", limit: int = 100):
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    return {"signals": await fraud_list_flagged(db, status=status, limit=limit)}
+
+
+@api_router.post("/admin/fraud/watchlist")
+async def admin_fraud_watchlist(payload: FraudWatchRequest, request: Request):
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    doc = await fraud_add_to_watchlist(
+        db, user_id=payload.user_id, reason=payload.reason, added_by=user["user_id"],
+    )
+    if isinstance(doc.get("created_at"), datetime):
+        doc["created_at"] = doc["created_at"].isoformat()
+    return {"ok": True, "watch": doc}
+
+
+@api_router.post("/admin/fraud/signals/{signal_id}/review")
+async def admin_fraud_review(signal_id: str, payload: FraudReviewRequest, request: Request):
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    try:
+        sig = await fraud_mark_reviewed(
+            db, signal_id=signal_id, reviewer_id=user["user_id"],
+            action=payload.action, note=payload.note or "",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if isinstance(sig.get("created_at"), datetime):
+        sig["created_at"] = sig["created_at"].isoformat()
+    return {"ok": True, "signal": sig}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ESCROW RELEASE ENGINE — auto-release after delivery confirmation
+# ═══════════════════════════════════════════════════════════════════════════
+# Once a buyer marks an order `delivered`, they have a 7-day window to dispute.
+# If they don't, the engine auto-releases funds to the seller. Mirrors the
+# 3-day dispute auto-resolve loop but for the happy path.
+AUTO_RELEASE_DAYS = int(os.environ.get("AUTO_RELEASE_DAYS", "7"))
+
+
+async def _auto_release_engine_loop():
+    """Hourly sweep of delivered+expired orders → release funds."""
+    while True:
+        try:
+            cutoff = datetime.now(timezone.utc) - timedelta(days=AUTO_RELEASE_DAYS)
+            stale = await db.orders.find(
+                {"status": "delivered", "delivered_at": {"$lt": cutoff}},
+                {"_id": 0},
+            ).to_list(200)
+            for order in stale:
+                try:
+                    await ledger_post_release(db, order=order)
+                    await db.orders.update_one(
+                        {"order_id": order["order_id"]},
+                        {"$set": {
+                            "status": "settled",
+                            "released_at": datetime.now(timezone.utc),
+                            "released_by": "system:auto",
+                        }},
+                    )
+                    # Queue payouts (mock destination falls back to seller's stored phone)
+                    payouts: List[Dict[str, Any]] = []
+                    seller_amt = float(order.get("seller_amount") or 0)
+                    agent_amt = float(order.get("agent_commission") or 0)
+                    if seller_amt > 0 and order.get("seller_id"):
+                        payouts.append({
+                            "payout_id": f"pay_{uuid.uuid4().hex[:14]}",
+                            "order_id": order["order_id"],
+                            "beneficiary_user_id": order["seller_id"],
+                            "beneficiary_role": "seller",
+                            "provider": order.get("payout_provider", "mock"),
+                            "destination": order.get("seller_phone", ""),
+                            "amount": seller_amt,
+                            "status": "queued",
+                            "created_at": datetime.now(timezone.utc),
+                            "updated_at": datetime.now(timezone.utc),
+                        })
+                    if agent_amt > 0 and order.get("agent_id"):
+                        payouts.append({
+                            "payout_id": f"pay_{uuid.uuid4().hex[:14]}",
+                            "order_id": order["order_id"],
+                            "beneficiary_user_id": order["agent_id"],
+                            "beneficiary_role": "agent",
+                            "provider": order.get("payout_provider", "mock"),
+                            "destination": order.get("agent_phone", ""),
+                            "amount": agent_amt,
+                            "status": "queued",
+                            "created_at": datetime.now(timezone.utc),
+                            "updated_at": datetime.now(timezone.utc),
+                        })
+                    if payouts:
+                        await db.payouts.insert_many(payouts)
+                    logger.info(f"Auto-released order {order['order_id']} (delivered>{AUTO_RELEASE_DAYS}d)")
+                except Exception as e:
+                    logger.error(f"Auto-release failed for {order.get('order_id')}: {e}")
+        except Exception as e:
+            logger.error(f"Auto-release engine loop error: {e}")
+        await asyncio.sleep(60 * 60)
+
+
+# Mark an order as delivered (buyer-initiated). Triggers the auto-release window.
+class DeliveryConfirmRequest(BaseModel):
+    order_id: str
+
+
+@api_router.post("/orders/{order_id}/mark-delivered")
+async def mark_order_delivered(order_id: str, request: Request):
+    user = await get_current_user(request)
+    order = await db.orders.find_one({"order_id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.get("buyer_id") != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Only the buyer can mark delivered")
+    if order.get("status") not in {"funded", "shipped"}:
+        raise HTTPException(status_code=400, detail=f"Cannot mark delivered from status '{order.get('status')}'")
+    await db.orders.update_one(
+        {"order_id": order_id},
+        {"$set": {"status": "delivered", "delivered_at": datetime.now(timezone.utc)}},
+    )
+    return {
+        "ok": True,
+        "order_id": order_id,
+        "auto_release_in_days": AUTO_RELEASE_DAYS,
+    }
+
+
 # Include the router
 app.include_router(api_router)
 
@@ -5030,8 +5467,9 @@ async def _startup_ledger_init():
         logger.info(f"Ledger boot: seeded {inserted} new account(s); chart of accounts ready.")
     except Exception as e:
         logger.error(f"Ledger seed failed at startup: {e}")
-    # Fire the auto-resolver loop in the background
+    # Fire the background loops (dispute auto-resolve + escrow auto-release)
     asyncio.create_task(_dispute_auto_resolver_loop())
+    asyncio.create_task(_auto_release_engine_loop())
 
 
 @app.on_event("shutdown")

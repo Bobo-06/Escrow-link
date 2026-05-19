@@ -15,6 +15,7 @@ import bcrypt
 import jwt
 import base64
 import random
+import secrets
 import string
 import hashlib
 import hmac
@@ -451,8 +452,11 @@ def is_valid_tz_phone(raw: Optional[str]) -> bool:
 
 
 def generate_payment_link_code():
-    """Generate unique 8-character payment link code"""
-    return ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+    """Generate unique 8-character payment link code.
+    Uses `secrets` (not `random`) for cryptographic strength — the code is
+    treated as a bearer credential when shared via WhatsApp/SMS."""
+    alphabet = string.ascii_lowercase + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(8))
 
 def convert_currency(amount: float, from_currency: str, to_currency: str) -> Dict:
     """Convert between currencies with tracking"""
@@ -771,8 +775,10 @@ async def forgot_password(data: ForgotPasswordRequest):
     if user.get('auth_type') == 'google':
         raise HTTPException(status_code=400, detail="Tafadhali ingia kwa kutumia Google / Please login with Google instead")
     
-    # Generate 6-digit OTP
-    otp = ''.join(random.choices('0123456789', k=6))
+    # Generate 6-digit OTP using `secrets` for cryptographic strength.
+    # An OTP IS a credential — brute-forcing the 10^6 keyspace is feasible
+    # without rate limiting, so the entropy source MUST be CSPRNG, not Mersenne.
+    otp = ''.join(str(secrets.randbelow(10)) for _ in range(6))
     
     # Store OTP with expiry (10 minutes)
     await db.password_resets.update_one(

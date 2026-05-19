@@ -35,8 +35,12 @@ const WatchBell: React.FC<WatchBellProps> = ({
       try {
         const r = await api.get<{ watching: boolean }>(`/watches/check/${productId}`);
         if (alive) setWatching(!!r.data?.watching);
-      } catch {
-        // 401/network errors are silently ignored — bell just stays "off".
+      } catch (err: any) {
+        // 401/network errors leave the bell in its default "off" state — but
+        // we still log unexpected non-auth failures so they surface in Sentry.
+        if (err?.response?.status && err.response.status !== 401) {
+          console.warn('[WatchBell] check failed:', err.response.status, err.message);
+        }
       }
     })();
     return () => {

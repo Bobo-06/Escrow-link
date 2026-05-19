@@ -350,6 +350,49 @@ export const TRANSLATIONS: Dict = {
   "sp.stat.orders": { sw: "Maagizo Yaliyokamilika", en: "Orders completed" },
   "sp.stat.reviews": { sw: "tathmini", en: "reviews" },
   "sp.no_rating": { sw: "Hakuna tathmini bado", en: "No ratings yet" },
+
+  // ─── Seller Onboarding wizard
+  "onb.title": { sw: "Sajili Muuzaji Mpya", en: "Register New Seller" },
+  "onb.subtitle": {
+    sw: "Tumia simu yako kupiga picha za nyaraka 5 zinazohitajika. Hatua moja kwa wakati.",
+    en: "Use your phone to capture all 5 required documents. One step at a time.",
+  },
+  "onb.step": { sw: "Hatua", en: "Step" },
+  "onb.of": { sw: "ya", en: "of" },
+  "onb.start.title": { sw: "Taarifa za Biashara", en: "Business Information" },
+  "onb.start.business_name": { sw: "Jina la Biashara", en: "Business name" },
+  "onb.start.owner_name": { sw: "Jina la Mmiliki", en: "Owner's full name" },
+  "onb.start.phone": { sw: "Nambari ya Simu", en: "Phone number" },
+  "onb.start.tin": { sw: "Nambari ya TIN (hiari)", en: "TIN (optional, recommended)" },
+  "onb.start.location": { sw: "Mahali (Mji/Mtaa)", en: "Location (city/area)" },
+  "onb.start.email": { sw: "Barua pepe ya Biashara (hiari)", en: "Business email (optional)" },
+  "onb.start.next": { sw: "Endelea", en: "Continue" },
+  "onb.cam.title": { sw: "Piga Picha ya Hati", en: "Capture document photo" },
+  "onb.cam.hint": {
+    sw: "Hakikisha taa nzuri na nyaraka inaonekana wazi.",
+    en: "Make sure lighting is good and the whole document fits in the frame.",
+  },
+  "onb.cam.take": { sw: "Piga Picha", en: "Take photo" },
+  "onb.cam.retake": { sw: "Piga Tena", en: "Retake" },
+  "onb.cam.upload_existing": { sw: "Au pakia faili", en: "Or upload file" },
+  "onb.cam.uploading": { sw: "Inapakia…", en: "Uploading…" },
+  "onb.cam.uploaded": { sw: "Imepakiwa", en: "Captured" },
+  "onb.cam.continue": { sw: "Endelea", en: "Continue" },
+  "onb.review.title": { sw: "Hakiki na Wasilisha", en: "Review & Submit" },
+  "onb.review.docs_captured": { sw: "Nyaraka zilizopigwa", en: "Documents captured" },
+  "onb.review.submit": { sw: "Wasilisha kwa Uhakiki", en: "Submit for review" },
+  "onb.review.submitting": { sw: "Inawasilisha…", en: "Submitting…" },
+  "onb.success.title": { sw: "Imewasilishwa!", en: "Submitted!" },
+  "onb.success.body": {
+    sw: "Tutathibitisha nyaraka ndani ya saa 24-48. Muuzaji atapokea SMS akiidhinishwa.",
+    en: "We'll verify the documents within 24-48 hours. The seller will get an SMS once approved.",
+  },
+  "onb.success.new": { sw: "Sajili Muuzaji Mwingine", en: "Onboard another seller" },
+  "onb.error.duplicate": {
+    sw: "Muuzaji tayari amesajiliwa kwa simu hii / TIN hii.",
+    en: "A seller is already registered with that phone / TIN.",
+  },
+  "onb.error.required": { sw: "Tafadhali jaza sehemu zote.", en: "Please fill in all required fields." },
 };
 
 type Ctx = { lang: Lang; setLang: (l: Lang) => void; t: (key: string) => string };

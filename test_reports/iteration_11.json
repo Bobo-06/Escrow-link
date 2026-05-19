@@ -1,0 +1,43 @@
+{
+  "summary": "Iter11 — Seller Onboarding (5-doc mobile capture flow) tested end-to-end. Backend: 18/18 new tests pass + 45/45 regression (iter5/6/10) still green. All 7 endpoints covered: required-docs (public), start (auth+validation+409 dedup by phone & TIN + phone-normalization across 0712/255/+255/712 formats), doc upload (valid + invalid_doc 400 + empty b64 400), submit (gated by 5-doc completeness), GET (base64 trimmed), admin queue (403 for non-admin, 200 for admin), admin doc-image fetch, admin review (verified→creates seller user; rejected→rejection_reason persisted, resubmit allowed). Frontend mobile (390x844): /onboard/seller renders with seller-onboarding-page testid, all 6 input testids present, tap target=48px (>44px), step advances to onb-step-national_id after submitting business info, upload-national_id button correctly disabled until a file is selected, duplicate-phone start returns 409 and the user stays on step-info. Progress indicator is implemented (line 222 of SellerOnboardingPage.tsx) — uses framer-motion width animation without role=progressbar, so a more semantic role attribute would help testability but visual progress UI is there.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/onboard/seller progress bar", "issues": ["The progress container div has no role=\"progressbar\" or aria-valuenow/aria-valuemax — purely visual. Add role+aria for a11y and easier selector targeting in tests."]},
+      {"screen": "/onboard/seller step 0", "issues": ["progressPct=0 at step 0 so the gold fill is invisible at the first screen (only the '{step} of {total}' label shows). Consider rendering a minimal sliver (e.g. 5%) at step 1 so users see motion immediately."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter11_seller_onboarding.py",
+    "/app/test_reports/pytest/iteration_11.xml"
+  ],
+  "action_items": [
+    "(Optional, non-blocking) Add role=\"progressbar\" + aria-valuenow on the progress bar in SellerOnboardingPage.tsx (~line 222) for a11y + automated test targeting.",
+    "(Optional) Consider adding a unique index on db.seller_onboarding.phone (sparse, partial filter status in [draft,submitted]) — currently the dedup is a read-then-write that is racy under bursty rep traffic.",
+    "(Optional) On /admin/onboarding/{id}/review, after verified, consider auto-firing an SMS via the existing Africa's Talking helper to text the new seller their password-reset link. Currently the seller record has password_hash=None+auth_type=password_pending, but nothing pings them."
+  ],
+  "critical_code_review_comments": [
+    "seller_onboarding.py is a clean ~350-line module — well-sized. Good separation from server.py.",
+    "server.py is now ~5,630 lines (up from 5,040 in iter10) — past iter10's already-flagged 700-line guideline. The onboarding HTTP layer (~110 lines, 7 endpoints) should be extracted into /app/backend/routers/onboarding.py alongside the ledger extraction recommended in iter10.",
+    "Duplicate-prevention in seller_onboarding.start_onboarding is read-then-write — two simultaneous reps onboarding the same phone in the same second could both pass the find_one check. Recommend converting to a unique partial index on seller_onboarding.phone for status in {draft, submitted} OR using insert_one with a unique compound index and catching DuplicateKeyError.",
+    "review_onboarding promotes existing user→seller but does NOT regenerate their password or force a reset for the EXISTING user path (only the freshly-created user path sets auth_type=password_pending). The buyer being promoted keeps their existing buyer password. Whether that's desired depends on product intent — if a rep onboards 'someone else' who already has a buyer account, they shouldn't gain that buyer's password access. Worth a product call.",
+    "Photos are stored as base64 inside the seller_onboarding mongo doc — up to ~30MB per onboarding (5 docs × 6MB). Approaching the 16MB Mongo doc limit. Either (a) move to GridFS or (b) store each doc in its own collection keyed by onboarding_id. The MVP guard (6MB per doc) lets a single doc exceed half the limit; uploading 3+ full-sized docs will hit the doc cap.",
+    "admin_onboarding_doc_image returns the raw base64 with no caching headers and no Content-Type=image/jpeg — the admin UI must decode client-side. Consider /api/admin/onboarding/{id}/doc/{type}.jpg that streams bytes for native <img src>.",
+    "frontend SellerOnboardingPage.tsx duplicate-error toast uses i18n key 'onb.error.duplicate' on 409 — good. But the generic fallback shows the raw FastAPI 'detail' string which is English-only ('Onboarding already in progress for phone +255...'); for SW users this leaks English. Wrap server error mapping in a switch on status_code + known error patterns."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter11_seller_onboarding.py"
+  ],
+  "success_rate": {"backend": "100% (18/18 new + 45/45 regression)", "frontend": "100% (6/6 critical flows: render, fields, mobile tap target, advance step, upload disabled gate, duplicate 409)"},
+  "test_credentials": "+255712345678 / test1234 (per /app/memory/test_credentials.md). Tests temporarily promote this user to role='admin' for the admin-only endpoints, then revert.",
+  "seed_data_creation": "Each onboarding test uses a random phone in the +25571599NNNN band (TEST_ prefix on business_name). Session-scoped autouse cleanup deletes TEST_ onboardings and synthetic +25571599 / +255713000 users before & after the run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: pytest /app/backend/tests/test_iter11_seller_onboarding.py -v. The session-scoped cleanup fixture clears TEST_ onboardings + synthetic phones from mongo on entry & exit, so the suite is idempotent. Admin tests temporarily flip +255712345678 to role='admin' then revert. If a future iter wires Africa's Talking SMS on verified-review, mock the SMS in the verified-flow test instead of relying on AFRICASTALKING_API_KEY being unset. Frontend: progress bar lacks role=progressbar — if you need to assert visual progress in tests, use the '{step} of {total}' text or the framer-motion div's parent class '.bg-gold-500/30' selector.",
+  "rca of the issue": "No bugs found in iter11 scope. The single test failure encountered (test_regression_ledger_quote) was a test-side payload mismatch (used 'gross_amount' instead of 'deal_value' field name from FeeQuoteRequest model) — fixed in the test, not application code. All 18 onboarding + 45 regression tests green; all 6 critical frontend flows pass on a 390×844 mobile viewport."
+}

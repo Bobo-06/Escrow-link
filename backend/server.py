@@ -49,6 +49,17 @@ from fraud import (
     add_to_watchlist as fraud_add_to_watchlist,
     mark_reviewed as fraud_mark_reviewed,
 )
+from seller_onboarding import (
+    start_onboarding as onb_start,
+    upload_document as onb_upload,
+    submit_for_review as onb_submit,
+    get_onboarding as onb_get,
+    get_document_image as onb_get_image,
+    list_for_admin as onb_list_admin,
+    review_onboarding as onb_review,
+    REQUIRED_DOCS as ONB_REQUIRED_DOCS,
+    REQUIRED_DOC_LABELS as ONB_DOC_LABELS,
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -5430,6 +5441,146 @@ async def mark_order_delivered(order_id: str, request: Request):
         "order_id": order_id,
         "auto_release_in_days": AUTO_RELEASE_DAYS,
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SELLER ONBOARDING (mobile-first, rep-driven)
+# ═══════════════════════════════════════════════════════════════════════════
+# Captures 5 regulatory docs per seller. Designed to be driven from a phone
+# camera — one document per HTTP request, so a flaky cellular connection
+# only loses a single snap (the rest of the wizard state lives server-side).
+
+class OnboardingStartRequest(BaseModel):
+    business_name: str
+    owner_name: str
+    phone: str
+    tin: Optional[str] = None
+    business_email: Optional[str] = None
+    location: Optional[str] = None
+    category: Optional[str] = "general"
+
+
+class OnboardingDocRequest(BaseModel):
+    doc_type: str
+    image_b64: str
+    note: Optional[str] = ""
+
+
+class OnboardingReviewRequest(BaseModel):
+    decision: str          # 'verified' | 'rejected'
+    rejection_reason: Optional[str] = None
+
+
+@api_router.get("/onboarding/seller/required-docs")
+async def onboarding_required_docs():
+    """Public — the wizard fetches this list to render the right steps in SW/EN."""
+    return {
+        "required": ONB_REQUIRED_DOCS,
+        "labels": ONB_DOC_LABELS,
+        "count": len(ONB_REQUIRED_DOCS),
+    }
+
+
+@api_router.post("/onboarding/seller/start")
+async def onboarding_start(payload: OnboardingStartRequest, request: Request):
+    """The rep (any authenticated user) initiates a new seller onboarding."""
+    user = await get_current_user(request)
+    body = payload.dict()
+    # Normalize phone the same way auth does — so duplicates are caught no
+    # matter how the rep typed it (07.., +255.., or with spaces).
+    body["phone"] = normalize_tz_phone(body["phone"])
+    try:
+        onb = await onb_start(db, rep_user_id=user["user_id"], payload=body)
+    except PermissionError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True, "onboarding": onb}
+
+
+@api_router.post("/onboarding/seller/{onboarding_id}/doc")
+async def onboarding_doc(onboarding_id: str, payload: OnboardingDocRequest, request: Request):
+    """Upload ONE camera-captured document. Wizard calls this 5 times."""
+    user = await get_current_user(request)
+    try:
+        onb = await onb_upload(
+            db,
+            onboarding_id=onboarding_id,
+            doc_type=payload.doc_type,
+            image_b64=payload.image_b64,
+            note=payload.note or "",
+            rep_user_id=user["user_id"],
+        )
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True, "onboarding": onb}
+
+
+@api_router.post("/onboarding/seller/{onboarding_id}/submit")
+async def onboarding_submit(onboarding_id: str, request: Request):
+    """Finalize — all 5 docs must already be captured."""
+    await get_current_user(request)
+    try:
+        onb = await onb_submit(db, onboarding_id=onboarding_id)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True, "onboarding": onb}
+
+
+@api_router.get("/onboarding/seller/{onboarding_id}")
+async def onboarding_progress(onboarding_id: str, request: Request):
+    """Used by the wizard to reconcile UI state on reopen / reload."""
+    await get_current_user(request)
+    try:
+        return await onb_get(db, onboarding_id=onboarding_id)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@api_router.get("/admin/onboarding/queue")
+async def admin_onboarding_queue(request: Request, status: str = "submitted", limit: int = 50):
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    return {"submissions": await onb_list_admin(db, status=status, limit=limit)}
+
+
+@api_router.get("/admin/onboarding/{onboarding_id}/doc/{doc_type}")
+async def admin_onboarding_doc_image(onboarding_id: str, doc_type: str, request: Request):
+    """Admin only — fetch the raw base64 image for one document so the reviewer can inspect it."""
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    if doc_type not in ONB_REQUIRED_DOCS:
+        raise HTTPException(status_code=400, detail="Unknown doc_type")
+    img = await onb_get_image(db, onboarding_id=onboarding_id, doc_type=doc_type)
+    if img is None:
+        raise HTTPException(status_code=404, detail="Document not captured")
+    return {"doc_type": doc_type, "image_b64": img}
+
+
+@api_router.post("/admin/onboarding/{onboarding_id}/review")
+async def admin_onboarding_review(onboarding_id: str, payload: OnboardingReviewRequest, request: Request):
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    try:
+        onb = await onb_review(
+            db,
+            onboarding_id=onboarding_id,
+            decision=payload.decision,
+            reviewer_id=user["user_id"],
+            reason=payload.rejection_reason or "",
+        )
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True, "onboarding": onb}
 
 
 # Include the router

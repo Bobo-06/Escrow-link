@@ -261,3 +261,26 @@ User asked: "How do I capture certificate of registration, Memart extract, TIN, 
   - `DirectEscrowCreatePage.tsx` & `VoiceProductListingModal.tsx` read JWT from Zustand-persisted `auth-storage`; this is an app-wide architectural choice. Migration to HttpOnly cookies remains a P2 task (would require backend cookie-session refactor).
 - [x] Previously in this session: `random` → `secrets` for OTPs / payment links; empty catch in `WatchBell.tsx`.
 - Smoke: frontend compiles cleanly, landing page renders in preview ✅
+
+
+### Observability — Self-hosted Client-Error Collector (Feb 19, 2026)
+- **Why**: After replacing silent `catch {}` blocks with `console.debug`, those signals were still invisible to operators. Built a tiny Sentry-lite so we can see real failures hitting Tanzanian users on flaky 3G — without paying a SaaS bill.
+- **Backend** (`/app/backend/client_errors.py` — new module, ~220 lines):
+  - `POST /api/client-errors` — public ingest. Returns 202 always (fire-and-forget). Rate-limited per IP to 30 events / minute. Hard size caps (4KB message, 4KB stack, 2KB meta). Unknown levels coerce to `info`.
+  - `GET /api/admin/client-errors?level=&since=&q=&limit=` — admin-only filtered listing (substring search on message + URL).
+  - `GET /api/admin/client-errors/stats` — totals + last-24h + last-7d + per-level breakdown.
+  - `DELETE /api/admin/client-errors?older_than_days=N` — admin purge (no arg = wipe all).
+  - Mongo collection `client_errors` with TTL index on `expire_at` (30-day retention) + compound `(level, created_at)` index. Indexes idempotent at startup.
+- **Frontend reporter** (`/app/frontend/src/lib/clientErrorReporter.ts`):
+  - Installs `window.onerror` + `unhandledrejection` handlers on app boot (from `index.tsx`).
+  - Public helper `reportClientError(level, message, meta)` — wired into the 3 catch blocks fixed earlier so debug events ship to the backend.
+  - Throttle: max 20 events / minute, dedupe identical signatures within 30s. Uses `navigator.sendBeacon` first (survives page unload), `fetch({keepalive:true})` fallback.
+  - Reads `user_id` from Zustand persist key `biz-salama-auth` (no store-import cycle).
+- **Admin UI** (`/app/frontend/src/pages/ClientErrorsAdminPage.tsx` → `/admin/client-errors`):
+  - Stats cards (24h / 7d / all-time / level breakdown), filters (level, search, limit), purge buttons (>7d & all), expandable detail row (URL, UA, viewport, online status, app version, stack, meta).
+  - Gated on the server's 401/403 — no client-side `role` check needed. Linked from `/admin/ledger` header.
+- **Verified via curl + screenshot**:
+  - Ingest accepts, dedupes, rate-limits.
+  - Stats return `{total, last_24h, last_7d, by_level_7d, retention_days}`.
+  - Unauthenticated admin endpoints return 401.
+  - Admin user `+255700000001 / AdminPass123!` (added to `test_credentials.md`) loads the page and sees all 4 captured events with expandable detail.

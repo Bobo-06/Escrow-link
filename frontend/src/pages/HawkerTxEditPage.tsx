@@ -33,6 +33,13 @@ export default function HawkerTxEditPage() {
     } catch (err) {
       // Network / parse error — UI remains in pre-load state. Logged for debuggability.
       console.debug('[HawkerTxEditPage] Failed to load transaction:', err);
+      void import('../lib/clientErrorReporter').then(({ reportClientError }) =>
+        reportClientError('warn', 'Failed to load 3-party tx', {
+          source: 'HawkerTxEditPage.load',
+          tx_id: txId,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
     }
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps

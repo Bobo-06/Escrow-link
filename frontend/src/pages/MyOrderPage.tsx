@@ -163,6 +163,12 @@ const MyOrderPage: React.FC = () => {
     } catch (err) {
       // User cancelled or Web Share API unsupported — fall through to WhatsApp link.
       console.debug('[MyOrderPage] Web Share unavailable, falling back to WhatsApp:', err);
+      void import('../lib/clientErrorReporter').then(({ reportClientError }) =>
+        reportClientError('debug', 'Web Share fell through to WhatsApp', {
+          source: 'MyOrderPage.shareOrder',
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
     }
     const waUrl = `https://wa.me/?text=${encodeURIComponent(message + '\n\n' + orderUrl)}`;
     window.open(waUrl, '_blank', 'noopener,noreferrer');

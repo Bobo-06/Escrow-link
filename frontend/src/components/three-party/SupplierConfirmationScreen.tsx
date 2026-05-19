@@ -28,6 +28,13 @@ export default function SupplierConfirmationScreen({ txId, supplierPhone, token,
       } catch (err) {
         // Verify-link fetch failed — tx stays null, screen shows fallback. Logged for debuggability.
         console.debug('[SupplierConfirmationScreen] Failed to verify tx:', err);
+        void import('../../lib/clientErrorReporter').then(({ reportClientError }) =>
+          reportClientError('warn', 'Supplier verify-link fetch failed', {
+            source: 'SupplierConfirmationScreen.verify',
+            tx_id: txId,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
       }
     })();
   }, [txId, token]);

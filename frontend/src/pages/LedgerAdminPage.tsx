@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Wallet, Scale, BookOpen, Calculator, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Wallet, Scale, BookOpen, Calculator, ShieldCheck, AlertTriangle, Activity } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../lib/api';
 import SEO from '../components/SEO';
+import { Link } from 'react-router-dom';
 import { useT } from '../i18n';
 import { useAuthStore } from '../store/authStore';
 
@@ -363,6 +364,14 @@ const LedgerAdminPage: React.FC = () => {
         <div className="flex items-center gap-3 mb-2">
           <ShieldCheck className="w-6 h-6 text-gold-400" />
           <h1 className="text-2xl sm:text-3xl font-display font-bold text-white">{t('ledger.title')}</h1>
+          <Link
+            to="/admin/client-errors"
+            data-testid="ledger-to-client-errors-link"
+            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full bg-ink-800 border border-ink-700 text-ink-300 hover:text-white hover:border-gold-500/40 transition"
+          >
+            <Activity className="w-3.5 h-3.5" />
+            Client errors
+          </Link>
         </div>
         <p className="text-ink-400 text-sm mb-6">{t('ledger.subtitle')}</p>
 

@@ -5,6 +5,11 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { LangProvider } from './i18n';
+import { installGlobalErrorReporter } from './lib/clientErrorReporter';
+
+// Wire window.onerror + unhandledrejection → POST /api/client-errors so we can
+// see failures hitting real Tanzanian users on flaky 3G without paying for Sentry.
+installGlobalErrorReporter();
 
 const rootEl = document.getElementById('root') as HTMLElement;
 

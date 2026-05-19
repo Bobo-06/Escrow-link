@@ -32,6 +32,7 @@ const DirectBuyerOfferPage = lazy(() => import('./pages/DirectBuyerOfferPage'));
 const MyWatchesPage = lazy(() => import('./pages/MyWatchesPage'));
 const LedgerAdminPage = lazy(() => import('./pages/LedgerAdminPage'));
 const SellerOnboardingPage = lazy(() => import('./pages/SellerOnboardingPage'));
+const ClientErrorsAdminPage = lazy(() => import('./pages/ClientErrorsAdminPage'));
 
 const RouteFallback: React.FC = () => (
   <div className="min-h-[60vh] flex items-center justify-center" data-testid="route-suspense-fallback">
@@ -66,6 +67,7 @@ function App() {
               <Route path="/direct-offer/:txId" element={<DirectBuyerOfferPage />} />
               <Route path="/my-watches" element={<MyWatchesPage />} />
               <Route path="/admin/ledger" element={<LedgerAdminPage />} />
+              <Route path="/admin/client-errors" element={<ClientErrorsAdminPage />} />
               <Route path="/onboard/seller" element={<SellerOnboardingPage />} />
             </Routes>
           </Suspense>

@@ -8,6 +8,7 @@ interface User {
   email?: string;
   kyc_tier?: number;
   is_verified?: boolean;
+  role?: string;
 }
 
 interface AuthState {

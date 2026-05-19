@@ -62,6 +62,9 @@ from seller_onboarding import (
     REQUIRED_DOC_LABELS as ONB_DOC_LABELS,
 )
 
+# Browser-side error / debug-log collector — self-hosted Sentry-lite.
+import client_errors as ce_module
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -5610,6 +5613,68 @@ async def admin_onboarding_review(onboarding_id: str, payload: OnboardingReviewR
     return {"ok": True, "onboarding": onb}
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Browser-side error / debug-log collector
+# ───────────────────────────────────────────────────────────────────────────
+# Endpoints under `/api/client-errors[/...]`:
+#   • POST `/api/client-errors`              — public ingest (rate-limited)
+#   • GET  `/api/admin/client-errors`        — admin read with filters
+#   • GET  `/api/admin/client-errors/stats`  — operator dashboard summary
+#   • DELETE `/api/admin/client-errors`      — admin purge
+#
+# This is intentionally minimal: a self-hosted alternative to Sentry. The
+# implementation lives in `client_errors.py` so this file doesn't keep growing.
+# ═══════════════════════════════════════════════════════════════════════════
+
+@api_router.post("/client-errors")
+async def post_client_error(request: Request):
+    """
+    Public ingest. Always returns 202 — the browser never retries, even on
+    rate-limit or validation failure, because this is a fire-and-forget debug
+    channel, not a transactional endpoint.
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    if not isinstance(payload, dict):
+        return JSONResponse(status_code=202, content={"accepted": False, "status": "bad_payload"})
+    accepted, status = await ce_module.ingest(db, request=request, payload=payload)
+    return JSONResponse(status_code=202, content={"accepted": accepted, "status": status})
+
+
+@api_router.get("/admin/client-errors")
+async def admin_list_client_errors(
+    request: Request,
+    level: Optional[str] = None,
+    since: Optional[str] = None,
+    q: Optional[str] = None,
+    limit: int = 100,
+):
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    events = await ce_module.list_events(db, level=level, since_iso=since, q=q, limit=limit)
+    return {"events": events, "count": len(events)}
+
+
+@api_router.get("/admin/client-errors/stats")
+async def admin_client_error_stats(request: Request):
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    return await ce_module.stats(db)
+
+
+@api_router.delete("/admin/client-errors")
+async def admin_purge_client_errors(request: Request, older_than_days: Optional[int] = None):
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    deleted = await ce_module.purge(db, older_than_days=older_than_days)
+    return {"ok": True, "deleted": deleted}
+
+
 # Include the router
 app.include_router(api_router)
 
@@ -5645,6 +5710,12 @@ async def _startup_ledger_init():
         logger.info(f"Ledger boot: seeded {inserted} new account(s); chart of accounts ready.")
     except Exception as e:
         logger.error(f"Ledger seed failed at startup: {e}")
+    # Browser-error collector: idempotent TTL index. Safe to call every boot.
+    try:
+        await ce_module.ensure_indexes(db)
+        logger.info("Client-error collector: TTL indexes ready.")
+    except Exception as e:
+        logger.error(f"Client-error index init failed: {e}")
     # Fire the background loops (dispute auto-resolve + escrow auto-release)
     asyncio.create_task(_dispute_auto_resolver_loop())
     asyncio.create_task(_auto_release_engine_loop())

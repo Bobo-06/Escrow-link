@@ -248,3 +248,16 @@ User asked: "How do I capture certificate of registration, Memart extract, TIN, 
 
 ---
 *Version 6.8 — Mobile-first 5-doc seller onboarding, May 19, 2026*
+
+
+### Code Quality Hardening (Feb 19, 2026)
+- [x] Replaced empty/silent `catch {}` blocks across frontend with `console.debug` calls preserving intent comments:
+  - `src/pages/MyOrderPage.tsx:163` (Web Share API fallback)
+  - `src/pages/HawkerTxEditPage.tsx:33` (tx load failure)
+  - `src/components/three-party/SupplierConfirmationScreen.tsx:28, 50` (verify-link & non-JSON error body)
+- [x] Moved inline `// eslint-disable-next-line react-hooks/exhaustive-deps` in `HawkerTxEditPage.tsx` to preceding-line position so eslint now respects it (clears recurring warning).
+- [x] Reviewed `localStorage` usages — confirmed false positives:
+  - `i18n/index.tsx` stores only language preference (non-sensitive)
+  - `DirectEscrowCreatePage.tsx` & `VoiceProductListingModal.tsx` read JWT from Zustand-persisted `auth-storage`; this is an app-wide architectural choice. Migration to HttpOnly cookies remains a P2 task (would require backend cookie-session refactor).
+- [x] Previously in this session: `random` → `secrets` for OTPs / payment links; empty catch in `WatchBell.tsx`.
+- Smoke: frontend compiles cleanly, landing page renders in preview ✅

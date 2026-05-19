@@ -30,9 +30,13 @@ export default function HawkerTxEditPage() {
         setBuyerPrice(String(data.buyer_price || ""));
         setSupplierCost(String(data.supplier_cost || ""));
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      // Network / parse error — UI remains in pre-load state. Logged for debuggability.
+      console.debug('[HawkerTxEditPage] Failed to load transaction:', err);
+    }
   };
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [txId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [txId]);
 
   if (!isAuthenticated) {
     return (

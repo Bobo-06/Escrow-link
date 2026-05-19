@@ -160,8 +160,9 @@ const MyOrderPage: React.FC = () => {
         });
         return;
       }
-    } catch {
-      /* user cancelled or unsupported — fall through */
+    } catch (err) {
+      // User cancelled or Web Share API unsupported — fall through to WhatsApp link.
+      console.debug('[MyOrderPage] Web Share unavailable, falling back to WhatsApp:', err);
     }
     const waUrl = `https://wa.me/?text=${encodeURIComponent(message + '\n\n' + orderUrl)}`;
     window.open(waUrl, '_blank', 'noopener,noreferrer');

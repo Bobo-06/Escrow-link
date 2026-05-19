@@ -25,7 +25,10 @@ export default function SupplierConfirmationScreen({ txId, supplierPhone, token,
         const qs = token ? `?token=${token}&role=supplier` : "";
         const res = await fetch(`${API_URL}/api/escrow/verify/${txId}${qs}`);
         if (res.ok) setTx(await res.json());
-      } catch { /* ignore */ }
+      } catch (err) {
+        // Verify-link fetch failed — tx stays null, screen shows fallback. Logged for debuggability.
+        console.debug('[SupplierConfirmationScreen] Failed to verify tx:', err);
+      }
     })();
   }, [txId, token]);
 
@@ -47,7 +50,10 @@ export default function SupplierConfirmationScreen({ txId, supplierPhone, token,
         try {
           const j = await res.json();
           detail = j.detail || j.message || detail;
-        } catch { /* not json — keep status */ }
+        } catch (err) {
+          // Response body wasn't JSON — keep HTTP status as detail. Logged for debuggability.
+          console.debug('[SupplierConfirmationScreen] Non-JSON error body:', err);
+        }
         throw new Error(detail);
       }
       return true;

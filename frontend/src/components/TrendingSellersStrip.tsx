@@ -27,8 +27,9 @@ const TrendingSellersStrip: React.FC<{ limit?: number }> = ({ limit = 6 }) => {
       try {
         const res = await api.get<{ sellers: TrendingSeller[] }>(`/sellers/trending?limit=${limit}`);
         if (alive) setSellers(res.data.sellers || []);
-      } catch {
-        // Silent — strip just hides on failure; nothing actionable for the user.
+      } catch (err) {
+        // Strip just hides on failure; nothing actionable for the user.
+        if (typeof console !== 'undefined') console.debug('[TrendingSellersStrip] fetch failed:', err);
       } finally {
         if (alive) setLoaded(true);
       }

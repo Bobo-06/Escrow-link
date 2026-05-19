@@ -111,8 +111,10 @@ function send(payload: Record<string, unknown>): void {
       const queued = navigator.sendBeacon(url, blob);
       if (queued) return;
     }
-  } catch {
-    // Fall through to fetch.
+  } catch (beaconErr) {
+    // Beacon API rejected (e.g. CSP). Fall through to fetch. Logged at debug
+    // level so devs can investigate without users seeing anything.
+    if (typeof console !== 'undefined') console.debug('[clientErrorReporter] beacon failed:', beaconErr);
   }
   try {
     void fetch(url, {
@@ -121,9 +123,10 @@ function send(payload: Record<string, unknown>): void {
       body,
       keepalive: true,
     });
-  } catch {
-    // Network down — swallow. The whole point of this module is to be invisible
-    // when it fails. We never want the reporter itself to spam errors.
+  } catch (fetchErr) {
+    // Network down — swallow. The reporter must be invisible when it fails,
+    // otherwise it could spam errors about its own failure to report errors.
+    if (typeof console !== 'undefined') console.debug('[clientErrorReporter] fetch failed:', fetchErr);
   }
 }
 

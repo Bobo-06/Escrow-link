@@ -1146,53 +1146,12 @@ async def create_product(product: ProductCreate, request: Request):
         "created_at": product_data["created_at"].isoformat()
     }
 
-@api_router.get("/products/public")
-async def get_public_products(
-    category: Optional[str] = None,
-    search: Optional[str] = None,
-    sort: str = "newest"
-):
-    """Get all public products for marketplace (no auth required)"""
-    query = {}
-    
-    if category and category != 'all':
-        query["category"] = category
-    
-    if search:
-        query["$or"] = [
-            {"name": {"$regex": search, "$options": "i"}},
-            {"description": {"$regex": search, "$options": "i"}}
-        ]
-    
-    # Define sort order
-    sort_order = -1 if sort in ["newest", "price_high"] else 1
-    sort_field = "created_at" if sort == "newest" else "price" if sort in ["price_low", "price_high"] else "rating"
-    
-    products = await db.products.find(
-        query,
-        {"_id": 0}
-    ).sort(sort_field, sort_order).to_list(50)
-    
-    # Batch fetch all seller info to avoid N+1 queries
-    seller_ids = list(set(p.get('seller_id') for p in products if p.get('seller_id')))
-    sellers = await db.users.find(
-        {"user_id": {"$in": seller_ids}}, 
-        {"_id": 0, "user_id": 1, "name": 1, "username": 1}
-    ).to_list(len(seller_ids)) if seller_ids else []
-    seller_map = {s['user_id']: s for s in sellers}
-    
-    # Process products with seller info
-    for p in products:
-        if isinstance(p.get('created_at'), datetime):
-            p['created_at'] = p['created_at'].isoformat()
-        
-        # Get seller name from map
-        if p.get('seller_id') and p['seller_id'] in seller_map:
-            seller = seller_map[p['seller_id']]
-            p['seller_name'] = seller.get('name') or seller.get('username', 'Seller')
-
-    # Discovery: tag the lowest-priced product per category as `is_lowest_price`.
-    # Helps buyers spot best-value listings at a glance in the marketplace grid.
+def _tag_lowest_price_per_category(products: List[Dict[str, Any]]) -> None:
+    """
+    Mutate `products` in-place, stamping `is_lowest_price=True` on the cheapest
+    product within each category that has price variation. Discovery UX helper —
+    keeps the marketplace handler readable.
+    """
     by_cat: Dict[str, List[Dict[str, Any]]] = {}
     for p in products:
         cat = p.get('category') or 'general'
@@ -1201,10 +1160,50 @@ async def get_public_products(
         if len(items) < 2:
             continue
         cheapest = min(items, key=lambda x: x.get('price') or float('inf'))
-        # Only flag if there's actual price differentiation
         max_price = max((it.get('price') or 0) for it in items)
+        # Only flag if there's actual price differentiation
         if (cheapest.get('price') or 0) < max_price:
             cheapest['is_lowest_price'] = True
+
+
+@api_router.get("/products/public")
+async def get_public_products(
+    category: Optional[str] = None,
+    search: Optional[str] = None,
+    sort: str = "newest"
+):
+    """Get all public products for marketplace (no auth required)"""
+    query: Dict[str, Any] = {}
+    if category and category != 'all':
+        query["category"] = category
+    if search:
+        query["$or"] = [
+            {"name": {"$regex": search, "$options": "i"}},
+            {"description": {"$regex": search, "$options": "i"}}
+        ]
+
+    # Define sort order
+    sort_order = -1 if sort in ["newest", "price_high"] else 1
+    sort_field = "created_at" if sort == "newest" else "price" if sort in ["price_low", "price_high"] else "rating"
+
+    products = await db.products.find(query, {"_id": 0}).sort(sort_field, sort_order).to_list(50)
+
+    # Batch fetch all seller info to avoid N+1 queries
+    seller_ids = list(set(p.get('seller_id') for p in products if p.get('seller_id')))
+    sellers = await db.users.find(
+        {"user_id": {"$in": seller_ids}},
+        {"_id": 0, "user_id": 1, "name": 1, "username": 1}
+    ).to_list(len(seller_ids)) if seller_ids else []
+    seller_map = {s['user_id']: s for s in sellers}
+
+    for p in products:
+        if isinstance(p.get('created_at'), datetime):
+            p['created_at'] = p['created_at'].isoformat()
+        if p.get('seller_id') and p['seller_id'] in seller_map:
+            seller = seller_map[p['seller_id']]
+            p['seller_name'] = seller.get('name') or seller.get('username', 'Seller')
+
+    _tag_lowest_price_per_category(products)
 
     return {"products": products, "count": len(products)}
 

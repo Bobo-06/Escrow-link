@@ -13,6 +13,7 @@ Covers:
 - CORS preflight from production origin.
 """
 import io
+import secrets
 import os
 import random
 import time
@@ -33,14 +34,14 @@ def client():
 
 def _rand_phone_7x():
     # Random TZ Vodacom 74/75/76 phone - 6 trailing digits
-    prefix = random.choice(["74", "75", "76"])
-    return f"0{prefix}{random.randint(1000000, 9999999)}"
+    prefix = secrets.choice(["74", "75", "76"])
+    return f"0{prefix}{(secrets.randbelow(9999999 - 1000000 + 1) + 1000000)}"
 
 
 def _rand_phone_6x():
     # Random Halotel 61/62 or Airtel 68/69
-    prefix = random.choice(["61", "62", "68", "69"])
-    return f"0{prefix}{random.randint(1000000, 9999999)}"
+    prefix = secrets.choice(["61", "62", "68", "69"])
+    return f"0{prefix}{(secrets.randbelow(9999999 - 1000000 + 1) + 1000000)}"
 
 
 # ---------- Auth register: valid TZ formats ----------
@@ -55,7 +56,7 @@ class TestRegisterValidFormats:
     def test_register_valid_formats_canonicalise(self, client, phone_fmt):
         input_phone, expected = phone_fmt
         # Use random suffix to avoid collisions with Primary Test User
-        suffix = random.randint(100, 999)
+        suffix = (secrets.randbelow(999 - 100 + 1) + 100)
         # Substitute the last 3 digits so each test is unique yet uses same prefix
         phone = input_phone[:-3] + str(suffix)
         # Recompute the expected canonical with substituted suffix
@@ -71,7 +72,7 @@ class TestRegisterValidFormats:
         r = client.post(f"{BASE_URL}/api/auth/register", json=payload)
         # May be 400 if same phone pre-exists; in that case re-generate
         if r.status_code == 400 and "tayari" in r.text:
-            phone = phone[:-2] + str(random.randint(10, 99))
+            phone = phone[:-2] + str((secrets.randbelow(99 - 10 + 1) + 10))
             payload["phone"] = phone
             digits = "".join(c for c in phone if c.isdigit())
             if digits.startswith("255"):

@@ -418,8 +418,9 @@ export const LangProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLangState(l);
     try {
       window.localStorage.setItem(STORAGE_KEY, l);
-    } catch {
-      /* private mode — ignore */
+    } catch (err) {
+      // Private-browsing mode or storage quota — language still works in-memory.
+      if (typeof console !== 'undefined') console.debug('[i18n] localStorage write failed:', err);
     }
   }, []);
 

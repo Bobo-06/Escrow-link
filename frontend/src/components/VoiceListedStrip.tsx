@@ -37,8 +37,9 @@ const VoiceListedStrip: React.FC = () => {
           const data = await res.json();
           setProducts(data.products || []);
         }
-      } catch {
-        /* silent */
+      } catch (err) {
+        // Strip just hides on failure; nothing actionable for the user.
+        if (typeof console !== 'undefined') console.debug('[VoiceListedStrip] fetch failed:', err);
       } finally {
         setLoaded(true);
       }

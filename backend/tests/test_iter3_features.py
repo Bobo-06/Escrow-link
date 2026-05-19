@@ -10,6 +10,7 @@ Covers:
 - GET /api/orders/{non_existent} -> 404 regression
 """
 import hmac as _hmac
+import secrets
 import hashlib
 import os
 import random
@@ -88,7 +89,9 @@ class TestVoiceListedProducts:
             d = requests.get(f"{API}/products/detail/{pid}", timeout=10)
             if d.status_code == 200:
                 body = d.json()
-                assert body.get("listed_via_voice", False) is True, f"Product {pid} returned by voice-listed but flag is False: {body.get('listed_via_voice')}"
+                assert body.get("listed_via_voice", False), (
+                    f"Product {pid} returned by voice-listed but flag is False: {body.get('listed_via_voice')}"
+                )
 
     def test_create_product_with_listed_via_voice_persists(self, session, auth_token):
         suffix = uuid.uuid4().hex[:8]
@@ -109,7 +112,7 @@ class TestVoiceListedProducts:
         assert r.status_code in (200, 201), r.text[:300]
         body = r.json()
         assert "product_id" in body, body
-        assert body.get("listed_via_voice") is True, f"listed_via_voice not echoed: {body}"
+        assert body.get("listed_via_voice"), f"listed_via_voice not echoed: {body}"
         product_id = body["product_id"]
 
         # Now fetch /products/voice-listed?limit=10 and verify new product appears
@@ -132,7 +135,7 @@ class TestBuyerConfirmDelivery:
         buyer_user_id = r.json()["user_id"]
 
         # Register fresh supplier
-        sup_suffix = str(random.randint(10000000, 99999999))
+        sup_suffix = str((secrets.randbelow(99999999 - 10000000 + 1) + 10000000))
         supplier_phone = f"+2557557{sup_suffix[:5]}"
         supplier_pw = "SupPw1234!"
         reg = requests.post(
@@ -240,7 +243,7 @@ class TestBuyerConfirmDelivery:
         )
         assert r.status_code == 200, f"Expected 200 confirm, got {r.status_code} {r.text[:300]}"
         body = r.json()
-        assert body["ok"] is True
+        assert body["ok"]
         assert body["status"] == "completed"
         assert body["tx_id"] == tx_id
         assert "message_sw" in body and body["message_sw"].strip()

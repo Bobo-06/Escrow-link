@@ -26,8 +26,9 @@ const BuildBadge: React.FC = () => {
     if (qs.get('debug') === '1') return true;
     try {
       if (localStorage.getItem('biz_debug') === '1') return true;
-    } catch {
-      /* ignore */
+    } catch (err) {
+      // Private mode / storage disabled — fall back to host-based gating.
+      if (typeof console !== 'undefined') console.debug('[BuildBadge] localStorage read failed:', err);
     }
     const host = window.location.hostname;
     return (

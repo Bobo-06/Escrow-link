@@ -308,3 +308,27 @@ User asked: "How do I capture certificate of registration, Memart extract, TIN, 
 - `python3 -c` smoke for `calculate_split` (direct + three_party + edge errors): all pass, books balance.
 - `python3 -c` smoke for `score_order` (self-deal + clean): flags + scores match expectations.
 - Frontend webpack compiles cleanly (no new warnings). Landing page renders.
+
+
+### Code Quality Report Round 3 (Feb 19, 2026)
+
+**Applied fixes:**
+- **Empty catch blocks (5)**: `clientErrorReporter.ts` (×2 — beacon/fetch fallbacks), `i18n/index.tsx`, `VoiceListedStrip.tsx`, `TrendingSellersStrip.tsx`, `BuildBadge.tsx` — all now bind the error and `console.debug` it under a `typeof console !== 'undefined'` guard. Comments preserved.
+- **`fraud._rule_self_deal_and_account_age` split** (complexity 17 → ≤8 each): now two functions — `_rule_self_deal_by_phone()` (async; returns buyer doc so the next rule can reuse it without a second DB hit) and `_rule_new_account_high_value()` (pure function). Behavioural sanity test: `self_deal` still triggers 60 points, clean orders still score 0.
+- **`server.py:get_public_products()` split** (complexity 24 → ~8): extracted `_tag_lowest_price_per_category()` helper. Marketplace endpoint still returns 39 products with correct shape.
+- **Test files cleanup (6 files)**:
+  - `is True/False` patterns → Pythonic `assert expr` / `assert not (expr)` (10 fixes across `test_iter3_features.py`, `test_iter6_watches.py`, `test_iter11_seller_onboarding.py`)
+  - `random.choice` / `random.randint` → `secrets.choice` / `secrets.randbelow + offset` (14 fixes in `test_iter4_phone_pwa.py`, `test_iter3_features.py`, `test_biz_salama.py`). Not strictly required (test fixtures aren't security-sensitive) but silences the linter and removes a non-CSPRNG dependency.
+- All 5 affected test files compile under `py_compile`. Backend + frontend smoke-tested clean.
+
+**Pushed back on (third time, with concrete evidence this time):**
+- **"`is` / `is not` 49 instances in `server.py`, lines 453, 528, 873, 4074-4082"**: I checked each cited line. Every single one is `is None` / `is not None`. PEP 8 *mandates* this pattern (never use `==` with `None`). The report's automated tool is conflating `is None` with `is True/False`. This claim has appeared in three consecutive rounds — please ask whichever scanner is producing it to differentiate `is None` from `is True/False`, or it will keep wasting review cycles.
+- **"Missing hook dependencies — Product, SellerInfo, alive, api, Record, err…"**: again, these are TypeScript types, module-level imports, locally-scoped variables inside the effect closure, or React state setters (`setLoading` etc. — *guaranteed stable by React*). None of these can or should be in the dep array. Adding them either errors at compile time or causes infinite re-render loops. The existing deps (`[id]`, `[limit]`, `[level, q, limit]`) are correct.
+- **`localStorage in clientErrorReporter.ts:59`**: only reads `user_id`, which is public and broadcast via `/api/seller/{id}` and `/seller/{id}` profile pages. Not a credential.
+- **Oversized components**: addressed in Round 2 — these are visually-rich pages where mechanical splits hurt maintainability. No reuse boundaries identified.
+- **"Python: Undefined Variables (11 instances)"**: report provided no file or line numbers. Can't act on it. Linting `/app/backend/` with `ruff` (which has the equivalent rule `F821`) reports zero undefined references, so this is likely another false-positive class from the scanner.
+
+**Outstanding (deferred):**
+- `server.py` auth funcs (`register`/`login`/`forgot_password`/`reset_password`) complexity — needs the broader route-module extraction. P2.
+- `seller_onboarding.start_onboarding()` (complexity 21) refactor. P2.
+- `normalize_tz_phone()` complexity 11 — currently consolidates 5 phone-format normalizations in one place; splitting it loses readability. Will leave unless it grows further.

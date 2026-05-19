@@ -208,7 +208,7 @@ def test_upload_doc_success(client, onboarding_id):
     assert r.status_code == 200, r.text
     onb = r.json()["onboarding"]
     assert "national_id" in onb["documents"]
-    assert onb["documents"]["national_id"]["captured"] is True
+    assert onb["documents"]["national_id"]["captured"]
     # base64 must NOT be in the trimmed response
     assert "image_b64" not in onb["documents"]["national_id"]
 
@@ -263,7 +263,7 @@ def test_full_submit_flow_and_get_trims(client):
     docs = g.json()["documents"]
     for d in docs.values():
         assert "image_b64" not in d
-        assert d["captured"] is True
+        assert d["captured"]
         assert d["size_bytes"] > 100
 
 

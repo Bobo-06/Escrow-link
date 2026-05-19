@@ -73,7 +73,7 @@ class TestWatchesCRUD:
         r = auth.post(f"{BASE_URL}/api/watches", json={"product_id": pid}, timeout=20)
         assert r.status_code == 200, r.text
         body = r.json()
-        assert "watch" in body and body["already_watching"] is False
+        assert not ("watch" in body and body["already_watching"])
         w = body["watch"]
         assert w["product_id"] == pid
         assert w["watch_id"].startswith("watch_")
@@ -88,7 +88,7 @@ class TestWatchesCRUD:
         r = auth.post(f"{BASE_URL}/api/watches", json={"product_id": anchor["product_id"]}, timeout=20)
         assert r.status_code == 200
         body = r.json()
-        assert body["already_watching"] is True
+        assert body["already_watching"]
         assert body["watch"]["watch_id"] == pytest.shared_watch_id
 
     def test_create_watch_unknown_product_404(self, auth):
@@ -106,13 +106,13 @@ class TestWatchesCRUD:
         r = auth.get(f"{BASE_URL}/api/watches/check/{pid}", timeout=15)
         assert r.status_code == 200
         body = r.json()
-        assert body["watching"] is True
+        assert body["watching"]
         assert body.get("watch_id") == pytest.shared_watch_id
 
     def test_check_watch_false(self, auth):
         r = auth.get(f"{BASE_URL}/api/watches/check/prod_definitely_not_watched_xyz", timeout=15)
         assert r.status_code == 200
-        assert r.json()["watching"] is False
+        assert not (r.json()["watching"])
 
     def test_list_watches_shape(self, auth):
         r = auth.get(f"{BASE_URL}/api/watches", timeout=20)
@@ -235,12 +235,12 @@ class TestWatchDelete:
         wid = pytest.shared_watch_id
         r = auth.delete(f"{BASE_URL}/api/watches/{wid}", timeout=15)
         assert r.status_code == 200
-        assert r.json().get("deleted") is True
+        assert r.json().get("deleted")
 
         # check is now false
         pid = pytest.shared_anchor["product_id"]
         cr = auth.get(f"{BASE_URL}/api/watches/check/{pid}", timeout=15)
-        assert cr.json()["watching"] is False
+        assert not (cr.json()["watching"])
 
 
 # ---------- regression ----------

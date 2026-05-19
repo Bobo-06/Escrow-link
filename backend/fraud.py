@@ -52,19 +52,17 @@ async def _rule_velocity(db, *, buyer_id: Optional[str], now: datetime) -> Tuple
     return 0, []
 
 
-async def _rule_self_deal_and_account_age(
-    db, *, buyer_id: Optional[str], seller_id: Optional[str], gross: float, now: datetime
-) -> Tuple[int, List[str]]:
+async def _rule_self_deal_by_phone(
+    db, *, buyer_id: Optional[str], seller_id: Optional[str]
+) -> Tuple[int, List[str], Optional[Dict[str, Any]]]:
     """
-    Combined: same-id self-deal short-circuits the lookup; otherwise we look up
-    both users and check (a) self-deal by phone, (b) new-account-high-value.
-    Combining these two rules keeps us to one round-trip per user document.
+    Detect self-deal — either by matching user_ids (cheap) or by matching phones
+    (more permissive but catches alt-accounts). Returns the buyer doc as third
+    tuple element so the new-account-age rule can reuse it without re-fetching.
     """
     if buyer_id and seller_id and buyer_id == seller_id:
-        return 60, ["self_deal"]
+        return 60, ["self_deal"], None
 
-    points = 0
-    flags: List[str] = []
     buyer = (
         await db.users.find_one({"user_id": buyer_id}, {"_id": 0, "phone": 1, "created_at": 1})
         if buyer_id else None
@@ -79,15 +77,23 @@ async def _rule_self_deal_and_account_age(
     # Only flag self-deal-by-phone when BOTH phones are populated (avoids
     # false positives on seeded sellers that have no phone field).
     if bp and sp and bp == sp:
-        points += 60
-        flags.append("self_deal_phone_match")
+        return 60, ["self_deal_phone_match"], buyer
+    return 0, [], buyer
 
-    if buyer and gross >= HIGH_VALUE_THRESHOLD:
-        ca = buyer.get("created_at")
-        if isinstance(ca, datetime) and (now - ca).total_seconds() < NEW_ACCOUNT_HOURS * 3600:
-            points += 25
-            flags.append("new_account_high_value")
-    return points, flags
+
+def _rule_new_account_high_value(
+    *, buyer: Optional[Dict[str, Any]], gross: float, now: datetime
+) -> Tuple[int, List[str]]:
+    """High-value order from a < 24h-old buyer account. Pure function — buyer
+    doc is passed in to avoid an extra round-trip."""
+    if not buyer or gross < HIGH_VALUE_THRESHOLD:
+        return 0, []
+    ca = buyer.get("created_at")
+    if not isinstance(ca, datetime):
+        return 0, []
+    if (now - ca).total_seconds() < NEW_ACCOUNT_HOURS * 3600:
+        return 25, ["new_account_high_value"]
+    return 0, []
 
 
 async def _rule_refund_rate(db, *, seller_id: Optional[str]) -> Tuple[int, List[str]]:
@@ -134,11 +140,24 @@ async def score_order(db, *, order: Dict[str, Any]) -> Dict[str, Any]:
     score = 0
     flags: List[str] = []
 
+    # Velocity (independent)
+    v_pts, v_flags = await _rule_velocity(db, buyer_id=buyer_id, now=now)
+    score += v_pts
+    flags.extend(v_flags)
+
+    # Self-deal returns the buyer doc so we can reuse it for the new-account rule
+    # without a second `db.users.find_one`.
+    sd_pts, sd_flags, buyer_doc = await _rule_self_deal_by_phone(
+        db, buyer_id=buyer_id, seller_id=seller_id
+    )
+    score += sd_pts
+    flags.extend(sd_flags)
+
+    na_pts, na_flags = _rule_new_account_high_value(buyer=buyer_doc, gross=gross, now=now)
+    score += na_pts
+    flags.extend(na_flags)
+
     for points, rule_flags in (
-        await _rule_velocity(db, buyer_id=buyer_id, now=now),
-        await _rule_self_deal_and_account_age(
-            db, buyer_id=buyer_id, seller_id=seller_id, gross=gross, now=now
-        ),
         await _rule_refund_rate(db, seller_id=seller_id),
         await _rule_watchlist(db, user_id=buyer_id, party="buyer"),
         await _rule_watchlist(db, user_id=seller_id, party="seller"),

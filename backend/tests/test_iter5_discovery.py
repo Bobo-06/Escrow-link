@@ -14,8 +14,8 @@ import requests
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://salama-secure.preview.emergentagent.com").rstrip("/")
 TIMEOUT = 30
 
-TEST_PHONE = "+255712345678"
-TEST_PWD = "test1234"
+TEST_PHONE = os.environ.get("TEST_LOGIN_PHONE", "+255712345678")
+TEST_PWD = os.environ.get("TEST_LOGIN_PASSWORD", "test1234")
 
 
 @pytest.fixture(scope="module")

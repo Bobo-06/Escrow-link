@@ -282,7 +282,7 @@ const MyOrderPage: React.FC = () => {
           <div className="relative space-y-6">
             {steps.map((step, i) => (
               <motion.div
-                key={i}
+                key={step.label}
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.08 }}

@@ -125,7 +125,7 @@ export default function DirectBuyerOfferPage() {
               const isSeller = h.by === "seller";
               const label = ({ opened: "Alifungua/Opened", counter: "Alipendekeza/Countered", accepted: "Alikubali/Accepted", rejected: "Alikataa/Declined" } as any)[h.action] || h.action;
               return (
-                <div key={i} style={{ display: "flex", flexDirection: isSeller ? "row" : "row-reverse", marginBottom: i === tx.negotiation_history.length - 1 ? 0 : 8 }}>
+                <div key={`${h.by}-${h.action}-${i}`} style={{ display: "flex", flexDirection: isSeller ? "row" : "row-reverse", marginBottom: i === tx.negotiation_history.length - 1 ? 0 : 8 }}>
                   <div style={{ flex: 1, background: isSeller ? "#FEF8EC" : "#EEF6FF", borderLeft: `3px solid ${isSeller ? C.gold : "#2563EB"}`, padding: 8, borderRadius: 8 }}>
                     <div style={{ fontSize: 9, fontWeight: 700, color: isSeller ? C.gold : "#2563EB", letterSpacing: "0.5px", marginBottom: 2, textTransform: "uppercase" }}>
                       {isSeller ? "Muuzaji / Seller" : "Wewe / You"} · {label}

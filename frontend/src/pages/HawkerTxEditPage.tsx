@@ -165,7 +165,7 @@ export default function HawkerTxEditPage() {
                 const borderCol = isHawker ? "#2563EB" : "#D4850A";
                 const chip = isHawker ? "Wewe / You" : "Mmiliki / Supplier";
                 return (
-                  <div key={i} style={{ display: "flex", gap: 10, marginBottom: i === tx.negotiation_history.length - 1 ? 0 : 10, flexDirection: isHawker ? "row" : "row-reverse" }}>
+                  <div key={`${h.by}-${h.action}-${i}`} style={{ display: "flex", gap: 10, marginBottom: i === tx.negotiation_history.length - 1 ? 0 : 10, flexDirection: isHawker ? "row" : "row-reverse" }}>
                     <div style={{ flex: 1, background: bg, border: `1px solid ${borderCol}33`, borderLeft: `3px solid ${borderCol}`, padding: 10, borderRadius: 10 }}>
                       <div style={{ fontSize: 10, color: borderCol, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 3 }}>
                         {chip} · {actionLabel[h.action] || h.action}

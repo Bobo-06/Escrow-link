@@ -284,3 +284,27 @@ User asked: "How do I capture certificate of registration, Memart extract, TIN, 
   - Stats return `{total, last_24h, last_7d, by_level_7d, retention_days}`.
   - Unauthenticated admin endpoints return 401.
   - Admin user `+255700000001 / AdminPass123!` (added to `test_credentials.md`) loads the page and sees all 4 captured events with expandable detail.
+
+
+### Code Quality Report Round 2 (Feb 19, 2026)
+
+**Applied fixes:**
+- **`backend/fraud.py` — `score_order()` refactor**: split the 90-line monolith into 4 small async rule evaluators (`_rule_velocity`, `_rule_self_deal_and_account_age`, `_rule_refund_rate`, `_rule_watchlist`). The main function is now a glue function that fans out rules and tallies points. Cyclomatic complexity dropped from 28 → ≤6. Behavioural sanity-tested: `self_deal` flag still triggers at 60 points; clean orders score 0.
+- **`backend/ledger.py` — `calculate_split()` refactor**: extracted `_split_direct`, `_split_three_party`, and `_reconcile_pennies`. The public function is now ~30 lines of declarative glue. Numbers match the existing fixtures (3-party 1,850,000 buyer price → supplier 1,617,000, supply_fee 33,000 — bit-exact with `test_biz_salama.py`).
+- **Hardcoded test creds (5 files)**: routed `LOGIN_PHONE`, `LOGIN_PASSWORD`, and `JWT_SECRET` through `os.environ.get(..., DEFAULT)` so CI can override; the documented `+255712345678 / test1234` local dev fixture still works out of the box.
+- **Array-index-as-key (14 instances)** in `SellerDashboard`, `Register`, `OrderTracking`, `MyOrderPage`, `LandingPage` (×6), plus `HawkerTxEditPage`, `DirectBuyerOfferPage`, and `SupplierConfirmationScreen` negotiation history. Static lists now use content-based keys (e.g. `step.label`, `item.title`); dynamic negotiation history uses `${by}-${action}-${i}` composite keys.
+
+**Pushed back on (with reasoning):**
+- **`is True` / `is False` "26+ instances in `server.py`"**: `grep -nE "is True|is False"` in `server.py` returns **zero** matches. The report's specific line numbers (`453, 528, 873, 4074-4082`) all point to other code patterns. False positive. Additionally, the report's recommended fix (`if x == True`) is anti-Pythonic; PEP 8 says use `if x:` directly. No change made.
+- **Hook deps in `SellerProfile`, `ProductDetail`, `LedgerAdminPage`, `ClientErrorsAdminPage`**: the "9+/10+/11+ missing" claim is exaggerated. The actual references are React state setters (`setLoading`, `setNotFound`, …) which React guarantees are stable, plus module-level imports (`api`). Adding them to deps changes nothing. The existing `[id]` / `[level, q, limit]` deps are correct. No change made.
+- **`localStorage` flagged in `clientErrorReporter.ts`**: that file only reads `user_id` (non-sensitive — already broadcast publicly via `/api/seller/{id}` etc.). Not a credential. No change made.
+- **Oversized components (`LandingPage.tsx` 522 lines, `ThreePartyTransactionCreator.tsx` 516 lines)**: these are visually rich marketing/wizard pages. Mechanical line-count splits create one-shot helper components that aren't reused anywhere — net negative for maintainability. Deferred until/unless we find genuine reuse boundaries.
+
+**Outstanding from the report (deferred):**
+- Refactor of `server.py` auth funcs (`register`/`login`/`forgot_password`/`reset_password`) — already on the P2 list; needs route-module extraction to do cleanly.
+- Refactor of `seller_onboarding.start_onboarding()` — P2.
+
+**Tests**:
+- `python3 -c` smoke for `calculate_split` (direct + three_party + edge errors): all pass, books balance.
+- `python3 -c` smoke for `score_order` (self-deal + clean): flags + scores match expectations.
+- Frontend webpack compiles cleanly (no new warnings). Landing page renders.

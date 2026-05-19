@@ -189,7 +189,7 @@ const LandingPage: React.FC = () => {
               }
             ].map((item, index) => (
               <motion.div
-                key={index}
+                key={item.title}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.2 }}
@@ -241,7 +241,7 @@ const LandingPage: React.FC = () => {
               { num: '5', emoji: '💰', title: 'Auto split payout', sw: 'Malipo yanagawanywa', desc: 'Supplier → M-Pesa · Hawker → commission · instant' },
             ].map((s, i) => (
               <motion.div
-                key={i}
+                key={s.num}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.08 }}
@@ -298,8 +298,8 @@ const LandingPage: React.FC = () => {
                     { label: 'Mmiliki Anapata · Supplier (after 2% fee)', amount: '1,617,000', pct: '87.4%', color: 'text-emerald-300', bar: 'bg-emerald-500' },
                     { label: 'Faida Yako · Hawker Commission (net)', amount: '144,500', pct: '7.8%', color: 'text-gold-300', bar: 'bg-gold-500' },
                     { label: 'Ada ya Supply · 2% platform fee', amount: '33,000', pct: '1.8%', color: 'text-ink-400', bar: 'bg-ink-500' },
-                  ].map((row, i) => (
-                    <div key={i} className="py-3 border-b border-ink-800 last:border-0">
+                  ].map((row) => (
+                    <div key={row.label} className="py-3 border-b border-ink-800 last:border-0">
                       <div className="flex justify-between items-center mb-1.5">
                         <span className="text-ink-300 text-sm">{row.label}</span>
                         <span className={`${row.color} font-bold text-sm`}>TSh {row.amount}</span>
@@ -369,8 +369,8 @@ const LandingPage: React.FC = () => {
                       ['📱 Supplier', 'Jumla Electronics Kariakoo', false],
                       ['🏦 Held at', 'CRDB Bank PLC', false],
                       ['⏳ Released when', 'Buyer confirms delivery', false],
-                    ].map(([l, v, mono], i) => (
-                      <div key={i} className="flex justify-between py-1 border-b border-ink-800 last:border-0">
+                    ].map(([l, v, mono]) => (
+                      <div key={l as string} className="flex justify-between py-1 border-b border-ink-800 last:border-0">
                         <span className="text-ink-400">{l as string}</span>
                         <span className={`text-white font-medium text-right ml-2 ${mono ? 'font-mono' : ''}`}>
                           {v as string}
@@ -464,8 +464,8 @@ const LandingPage: React.FC = () => {
                     title: t("trust.f4.title"),
                     description: t("trust.f4.desc"),
                   }
-                ].map((item, index) => (
-                  <div key={index} className="flex items-start">
+                ].map((item) => (
+                  <div key={item.title} className="flex items-start">
                     <div className="w-12 h-12 bg-gold-500/10 rounded-xl flex items-center justify-center mr-4 flex-shrink-0">
                       <item.icon className="w-6 h-6 text-gold-400" />
                     </div>
@@ -493,8 +493,8 @@ const LandingPage: React.FC = () => {
                     { value: '98%', label: t("trust.stat.rate") },
                     { value: 'TZS 500M+', label: t("trust.stat.protected") },
                     { value: '1,200+', label: t("trust.stat.sellers") }
-                  ].map((stat, index) => (
-                    <div key={index} className="text-center p-4 bg-ink-800 rounded-xl">
+                  ].map((stat) => (
+                    <div key={stat.label} className="text-center p-4 bg-ink-800 rounded-xl">
                       <p className="text-2xl font-bold gradient-text">{stat.value}</p>
                       <p className="text-ink-400 text-sm">{stat.label}</p>
                     </div>

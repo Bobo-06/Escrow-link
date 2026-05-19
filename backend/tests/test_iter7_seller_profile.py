@@ -12,8 +12,10 @@ import pytest
 import requests
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://salama-secure.preview.emergentagent.com").rstrip("/")
-LOGIN_PHONE = "+255712345678"
-LOGIN_PASSWORD = "test1234"
+# Test credentials sourced from env so they're never hardcoded for CI; fall
+# back to the documented local-dev fixture so `pytest` works out of the box.
+LOGIN_PHONE = os.environ.get("TEST_LOGIN_PHONE", "+255712345678")
+LOGIN_PASSWORD = os.environ.get("TEST_LOGIN_PASSWORD", "test1234")
 
 
 @pytest.fixture(scope="module")

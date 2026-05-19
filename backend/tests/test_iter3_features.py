@@ -20,9 +20,11 @@ import requests
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://salama-secure.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
 
-PRIMARY_PHONE = "+255712345678"
-PRIMARY_PWD = "test1234"
-JWT_SECRET = "biz-salama-secret-change-in-prod-2026"
+PRIMARY_PHONE = os.environ.get("TEST_LOGIN_PHONE", "+255712345678")
+PRIMARY_PWD = os.environ.get("TEST_LOGIN_PASSWORD", "test1234")
+# JWT_SECRET MUST match the backend's runtime secret so HMAC verify-links are
+# valid. Read from env so CI doesn't bake the dev fallback into compiled bytecode.
+JWT_SECRET = os.environ.get("JWT_SECRET", "biz-salama-secret-change-in-prod-2026")
 
 
 def _hmac_sig(tx_id: str, role: str, identifier: str) -> str:

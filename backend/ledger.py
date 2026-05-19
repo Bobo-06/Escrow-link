@@ -70,6 +70,67 @@ HAWKER_PCT = Decimal("0.02")   # taken from hawker commission (3-party only)
 BUYER_PCT  = Decimal("0.03")   # added on top, paid by buyer
 
 
+def _split_direct(deal: Decimal) -> Dict[str, Decimal]:
+    """Direct (2-party) mode: buyer pays deal × 1.03; seller keeps deal × 0.98."""
+    gross = deal * (Decimal("1") + BUYER_PCT)
+    supply_fee = deal * SUPPLY_PCT
+    buyer_fee = deal * BUYER_PCT
+    return {
+        "gross": gross,
+        "seller_amount": deal - supply_fee,
+        "agent_commission": D(0),
+        "platform_fee": supply_fee + buyer_fee,
+        "supply_fee": supply_fee,
+        "hawker_fee": D(0),
+        "buyer_fee": buyer_fee,
+    }
+
+
+def _split_three_party(deal: Decimal, supplier_cost: Decimal) -> Dict[str, Decimal]:
+    """3-party mode: deal = supplier_cost + hawker_markup; fees split across all three sides."""
+    if supplier_cost <= 0 or supplier_cost >= deal:
+        raise ValueError("supplier_cost must satisfy 0 < supplier_cost < deal_value")
+    markup = deal - supplier_cost
+    supply_fee = supplier_cost * SUPPLY_PCT
+    hawker_fee = markup * HAWKER_PCT
+    buyer_fee = deal * BUYER_PCT
+    return {
+        "gross": deal * (Decimal("1") + BUYER_PCT),
+        "seller_amount": supplier_cost - supply_fee,
+        "agent_commission": markup - hawker_fee,
+        "platform_fee": supply_fee + hawker_fee + buyer_fee,
+        "supply_fee": supply_fee,
+        "hawker_fee": hawker_fee,
+        "buyer_fee": buyer_fee,
+    }
+
+
+def _reconcile_pennies(split: Dict[str, Decimal]) -> Dict[str, Decimal]:
+    """
+    Quantize everything once and absorb any rounding drift into the platform fee
+    so the invariant `gross == seller + agent + platform` always holds exactly.
+    """
+    gross = D(split["gross"])
+    seller_amount = D(split["seller_amount"])
+    agent_commission = D(split["agent_commission"])
+    platform_fee = D(split["platform_fee"])
+
+    drift = gross - (seller_amount + agent_commission + platform_fee)
+    if drift != 0:
+        platform_fee = D(platform_fee + drift)
+
+    assert seller_amount + agent_commission + platform_fee == gross, (
+        f"split invariant broken: {seller_amount}+{agent_commission}+{platform_fee} != {gross}"
+    )
+    return {
+        **split,
+        "gross": gross,
+        "seller_amount": seller_amount,
+        "agent_commission": agent_commission,
+        "platform_fee": platform_fee,
+    }
+
+
 def calculate_split(
     *,
     mode: str,
@@ -96,61 +157,26 @@ def calculate_split(
     """
     if mode not in {"direct", "three_party"}:
         raise ValueError(f"Unknown order mode: {mode}")
-
     deal = D(deal_value)
     if deal <= 0:
         raise ValueError("deal_value must be > 0")
 
     if mode == "direct":
-        # Buyer pays deal_value × 1.03; seller keeps deal × 0.98.
-        gross = (deal * (Decimal("1") + BUYER_PCT))
-        supply_fee = (deal * SUPPLY_PCT)
-        buyer_fee  = (deal * BUYER_PCT)
-        seller_amount = (deal - supply_fee)
-        agent_commission = D(0)
-        hawker_fee = D(0)
-        platform_fee = supply_fee + buyer_fee
+        raw = _split_direct(deal)
     else:
-        # 3-party: deal_value = pre-fee buyer price (supplier_cost + hawker_markup)
         if supplier_cost is None:
             raise ValueError("supplier_cost is required for three_party mode")
-        sc = D(supplier_cost)
-        if sc <= 0 or sc >= deal:
-            raise ValueError("supplier_cost must satisfy 0 < supplier_cost < deal_value")
-        markup = deal - sc
-        gross = (deal * (Decimal("1") + BUYER_PCT))
-        supply_fee = (sc * SUPPLY_PCT)
-        hawker_fee = (markup * HAWKER_PCT)
-        buyer_fee  = (deal * BUYER_PCT)
-        seller_amount = (sc - supply_fee)
-        agent_commission = (markup - hawker_fee)
-        platform_fee = supply_fee + hawker_fee + buyer_fee
+        raw = _split_three_party(deal, D(supplier_cost))
 
-    # Quantize everything once, then enforce the invariant.
-    gross = D(gross)
-    seller_amount = D(seller_amount)
-    agent_commission = D(agent_commission)
-    platform_fee = D(platform_fee)
-
-    # Adjust pennies in platform_fee to make the books exact (rounding artefacts).
-    expected = gross
-    actual = seller_amount + agent_commission + platform_fee
-    drift = expected - actual
-    if drift != 0:
-        platform_fee = D(platform_fee + drift)
-
-    assert seller_amount + agent_commission + platform_fee == gross, (
-        f"split invariant broken: {seller_amount}+{agent_commission}+{platform_fee} != {gross}"
-    )
-
+    final = _reconcile_pennies(raw)
     return {
-        "gross_amount":     to_float(gross),
-        "seller_amount":    to_float(seller_amount),
-        "agent_commission": to_float(agent_commission),
-        "platform_fee":     to_float(platform_fee),
-        "supply_fee":       to_float(supply_fee),
-        "hawker_fee":       to_float(hawker_fee),
-        "buyer_fee":        to_float(buyer_fee),
+        "gross_amount":     to_float(final["gross"]),
+        "seller_amount":    to_float(final["seller_amount"]),
+        "agent_commission": to_float(final["agent_commission"]),
+        "platform_fee":     to_float(final["platform_fee"]),
+        "supply_fee":       to_float(final["supply_fee"]),
+        "hawker_fee":       to_float(final["hawker_fee"]),
+        "buyer_fee":        to_float(final["buyer_fee"]),
     }
 
 

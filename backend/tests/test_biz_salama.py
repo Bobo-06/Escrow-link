@@ -243,8 +243,9 @@ def test_edit_resets_pending_and_recomputes(session, hawker_token):
 
 
 def _hmac_sig(tx_id, role, identifier):
-    import hmac, hashlib
-    secret = "biz-salama-secret-change-in-prod-2026"
+    import hmac, hashlib, os
+    # Source from env so HMAC stays valid when JWT_SECRET is rotated in CI/prod.
+    secret = os.environ.get("JWT_SECRET", "biz-salama-secret-change-in-prod-2026")
     msg = f"{tx_id}:{role}:{identifier or ''}".encode()
     return hmac.new(secret.encode(), msg, hashlib.sha256).hexdigest()[:16]
 

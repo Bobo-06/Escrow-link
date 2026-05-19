@@ -16,8 +16,8 @@ API = f"{BASE_URL}/api"
 MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
 DB_NAME = os.environ.get("DB_NAME", "biz_salama_db")
 
-TEST_PHONE = "+255712345678"
-TEST_PASS = "test1234"
+TEST_PHONE = os.environ.get("TEST_LOGIN_PHONE", "+255712345678")
+TEST_PASS = os.environ.get("TEST_LOGIN_PASSWORD", "test1234")
 
 
 # ─── Fixtures ─────────────────────────────────────────────────────────────

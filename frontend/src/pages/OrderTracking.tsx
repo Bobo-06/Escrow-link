@@ -26,7 +26,7 @@ const OrderTracking: React.FC = () => {
         <div className="glass rounded-xl p-6">
           <div className="space-y-6">
             {steps.map((step, index) => (
-              <div key={index} className="flex items-start">
+              <div key={step.label} className="flex items-start">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
                   step.status === 'complete' ? 'bg-emerald-500' :
                   step.status === 'current' ? 'bg-gold-500' : 'bg-ink-700'

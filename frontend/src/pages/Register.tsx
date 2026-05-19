@@ -99,7 +99,7 @@ const Register: React.FC = () => {
             <div className="space-y-4">
               {benefits.map((benefit, index) => (
                 <motion.div
-                  key={index}
+                  key={benefit}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.1 }}

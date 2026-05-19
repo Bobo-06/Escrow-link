@@ -187,7 +187,7 @@ export default function SupplierConfirmationScreen({ txId, supplierPhone, token,
               const isHawker = h.by === "hawker";
               const label = ({opened:"Alifungua/Opened", counter:"Alipendekeza/Countered", accepted:"Alikubali/Accepted", rejected:"Alikataa/Declined"} as any)[h.action] || h.action;
               return (
-                <div key={i} style={{ display: "flex", gap: 8, marginBottom: i === tx.negotiation_history.length - 1 ? 0 : 8, flexDirection: isHawker ? "row" : "row-reverse", alignItems: "flex-start" }}>
+                <div key={`${h.by}-${h.action}-${i}`} style={{ display: "flex", gap: 8, marginBottom: i === tx.negotiation_history.length - 1 ? 0 : 8, flexDirection: isHawker ? "row" : "row-reverse", alignItems: "flex-start" }}>
                   <div style={{ flex: 1, background: isHawker ? "#EEF6FF" : "#FEF8EC", borderLeft: `3px solid ${isHawker ? "#2563EB" : "#D4850A"}`, padding: 8, borderRadius: 8 }}>
                     <div style={{ fontSize: 9, color: isHawker ? "#2563EB" : "#D4850A", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 2 }}>
                       {isHawker ? "Mchuuzi / Hawker" : "Wewe / You"} · {label}

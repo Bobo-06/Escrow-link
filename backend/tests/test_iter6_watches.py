@@ -16,8 +16,8 @@ import pytest
 import requests
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://salama-secure.preview.emergentagent.com").rstrip("/")
-LOGIN_PHONE = "+255712345678"
-LOGIN_PASSWORD = "test1234"
+LOGIN_PHONE = os.environ.get("TEST_LOGIN_PHONE", "+255712345678")
+LOGIN_PASSWORD = os.environ.get("TEST_LOGIN_PASSWORD", "test1234")
 
 # ---------- fixtures ----------
 

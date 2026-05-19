@@ -28,8 +28,8 @@ BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://salama-secure.previe
 API = f"{BASE_URL}/api"
 
 # A test user already exists per /app/memory/test_credentials.md
-TEST_PHONE = "+255712345678"
-TEST_PASSWORD = "test1234"
+TEST_PHONE = os.environ.get("TEST_LOGIN_PHONE", "+255712345678")
+TEST_PASSWORD = os.environ.get("TEST_LOGIN_PASSWORD", "test1234")
 
 # Direct mongo handle for admin promotion + cleanup
 MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")

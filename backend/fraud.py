@@ -13,11 +13,18 @@ score every order at creation time using cheap, explainable heuristics:
 Score is 0-100. Orders scoring >= 70 are flagged for manual review.
 This is intentionally conservative — better to false-positive a few orders
 into manual review than to miss real fraud.
+
+Implementation note (Feb 2026 refactor)
+---------------------------------------
+The previous `score_order()` was a 90-line monolith. Each rule now lives in
+its own small async function returning `(points, flags)`. `score_order()` is
+just a glue function that fans out the rules and tallies the result, keeping
+cyclomatic complexity ≤6 and making it possible to unit-test rules in isolation.
 """
 from __future__ import annotations
 import uuid
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 
 HIGH_VALUE_THRESHOLD = 500_000  # TZS
@@ -25,7 +32,91 @@ NEW_ACCOUNT_HOURS = 24
 VELOCITY_WINDOW_MIN = 10
 VELOCITY_LIMIT = 5  # orders per window
 REFUND_RATE_FLAG = 0.30
+REVIEW_THRESHOLD = 70
+MAX_SCORE = 100
 
+
+# ─── Rule evaluators ──────────────────────────────────────────────────────
+# Each rule returns `(points, [flag_strings])`. Rules are intentionally small
+# and side-effect free so they can be tested with hand-rolled fixtures.
+
+async def _rule_velocity(db, *, buyer_id: Optional[str], now: datetime) -> Tuple[int, List[str]]:
+    if not buyer_id:
+        return 0, []
+    cutoff = now - timedelta(minutes=VELOCITY_WINDOW_MIN)
+    recent = await db.orders.count_documents(
+        {"buyer_id": buyer_id, "created_at": {"$gte": cutoff}}
+    )
+    if recent >= VELOCITY_LIMIT:
+        return 30, [f"velocity:{recent}_orders_in_{VELOCITY_WINDOW_MIN}min"]
+    return 0, []
+
+
+async def _rule_self_deal_and_account_age(
+    db, *, buyer_id: Optional[str], seller_id: Optional[str], gross: float, now: datetime
+) -> Tuple[int, List[str]]:
+    """
+    Combined: same-id self-deal short-circuits the lookup; otherwise we look up
+    both users and check (a) self-deal by phone, (b) new-account-high-value.
+    Combining these two rules keeps us to one round-trip per user document.
+    """
+    if buyer_id and seller_id and buyer_id == seller_id:
+        return 60, ["self_deal"]
+
+    points = 0
+    flags: List[str] = []
+    buyer = (
+        await db.users.find_one({"user_id": buyer_id}, {"_id": 0, "phone": 1, "created_at": 1})
+        if buyer_id else None
+    )
+    seller = (
+        await db.users.find_one({"user_id": seller_id}, {"_id": 0, "phone": 1})
+        if seller_id else None
+    )
+
+    bp = (buyer or {}).get("phone") or ""
+    sp = (seller or {}).get("phone") or ""
+    # Only flag self-deal-by-phone when BOTH phones are populated (avoids
+    # false positives on seeded sellers that have no phone field).
+    if bp and sp and bp == sp:
+        points += 60
+        flags.append("self_deal_phone_match")
+
+    if buyer and gross >= HIGH_VALUE_THRESHOLD:
+        ca = buyer.get("created_at")
+        if isinstance(ca, datetime) and (now - ca).total_seconds() < NEW_ACCOUNT_HOURS * 3600:
+            points += 25
+            flags.append("new_account_high_value")
+    return points, flags
+
+
+async def _rule_refund_rate(db, *, seller_id: Optional[str]) -> Tuple[int, List[str]]:
+    if not seller_id:
+        return 0, []
+    seller_orders = await db.orders.count_documents(
+        {"seller_id": seller_id, "status": {"$in": ["settled", "refunded"]}}
+    )
+    if seller_orders < 5:
+        return 0, []
+    refunded = await db.orders.count_documents({"seller_id": seller_id, "status": "refunded"})
+    rate = refunded / seller_orders
+    if rate >= REFUND_RATE_FLAG:
+        return 20, [f"high_refund_rate:{rate:.2f}"]
+    return 0, []
+
+
+async def _rule_watchlist(db, *, user_id: Optional[str], party: str) -> Tuple[int, List[str]]:
+    """`party` is 'buyer' or 'seller' — used only for the flag string."""
+    if not user_id:
+        return 0, []
+    wl = await db.fraud_watchlist.find_one({"user_id": user_id})
+    if not wl:
+        return 0, []
+    reason = (wl.get("reason") or "")[:40]
+    return 50, [f"{party}_watchlisted:{reason}"]
+
+
+# ─── Public API ───────────────────────────────────────────────────────────
 
 async def score_order(db, *, order: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -35,69 +126,28 @@ async def score_order(db, *, order: Dict[str, Any]) -> Dict[str, Any]:
 
     Returns the signal dict (suitable for API response).
     """
-    score = 0
-    flags: List[str] = []
     buyer_id = order.get("buyer_id")
     seller_id = order.get("seller_id")
     gross = float(order.get("gross_amount") or 0)
     now = datetime.now(timezone.utc)
 
-    # Rule 1 — velocity
-    if buyer_id:
-        cutoff = now - timedelta(minutes=VELOCITY_WINDOW_MIN)
-        recent = await db.orders.count_documents(
-            {"buyer_id": buyer_id, "created_at": {"$gte": cutoff}}
-        )
-        if recent >= VELOCITY_LIMIT:
-            score += 30
-            flags.append(f"velocity:{recent}_orders_in_{VELOCITY_WINDOW_MIN}min")
+    score = 0
+    flags: List[str] = []
 
-    # Rule 2 — self-deal
-    if buyer_id and seller_id and buyer_id == seller_id:
-        score += 60
-        flags.append("self_deal")
-    else:
-        buyer = await db.users.find_one({"user_id": buyer_id}, {"_id": 0, "phone": 1, "created_at": 1}) if buyer_id else None
-        seller = await db.users.find_one({"user_id": seller_id}, {"_id": 0, "phone": 1}) if seller_id else None
-        # Only flag self-deal-by-phone when BOTH phones are populated (avoids
-        # false positives on seeded sellers that have no phone field).
-        bp = (buyer or {}).get("phone") or ""
-        sp = (seller or {}).get("phone") or ""
-        if bp and sp and bp == sp:
-            score += 60
-            flags.append("self_deal_phone_match")
+    for points, rule_flags in (
+        await _rule_velocity(db, buyer_id=buyer_id, now=now),
+        await _rule_self_deal_and_account_age(
+            db, buyer_id=buyer_id, seller_id=seller_id, gross=gross, now=now
+        ),
+        await _rule_refund_rate(db, seller_id=seller_id),
+        await _rule_watchlist(db, user_id=buyer_id, party="buyer"),
+        await _rule_watchlist(db, user_id=seller_id, party="seller"),
+    ):
+        score += points
+        flags.extend(rule_flags)
 
-        # Rule 3 — new account + high-value
-        if buyer and gross >= HIGH_VALUE_THRESHOLD:
-            ca = buyer.get("created_at")
-            if isinstance(ca, datetime) and (now - ca).total_seconds() < NEW_ACCOUNT_HOURS * 3600:
-                score += 25
-                flags.append("new_account_high_value")
-
-    # Rule 4 — seller refund rate
-    if seller_id:
-        seller_orders = await db.orders.count_documents({"seller_id": seller_id, "status": {"$in": ["settled", "refunded"]}})
-        if seller_orders >= 5:
-            refunded = await db.orders.count_documents({"seller_id": seller_id, "status": "refunded"})
-            rate = refunded / seller_orders
-            if rate >= REFUND_RATE_FLAG:
-                score += 20
-                flags.append(f"high_refund_rate:{rate:.2f}")
-
-    # Rule 5 — watchlist
-    if buyer_id:
-        wl = await db.fraud_watchlist.find_one({"user_id": buyer_id})
-        if wl:
-            score += 50
-            flags.append(f"buyer_watchlisted:{wl.get('reason','')[:40]}")
-    if seller_id:
-        wl = await db.fraud_watchlist.find_one({"user_id": seller_id})
-        if wl:
-            score += 50
-            flags.append(f"seller_watchlisted:{wl.get('reason','')[:40]}")
-
-    score = min(score, 100)
-    requires_review = score >= 70
+    score = min(score, MAX_SCORE)
+    requires_review = score >= REVIEW_THRESHOLD
 
     signal = {
         "signal_id": f"frd_{uuid.uuid4().hex[:12]}",

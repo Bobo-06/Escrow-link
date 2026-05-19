@@ -228,7 +228,14 @@ const SellerOnboardingPage: React.FC = () => {
               </span>
               <span className="text-gold-400 font-semibold">{progressPct}%</span>
             </div>
-            <div className="h-1.5 bg-ink-700 rounded-full overflow-hidden">
+            <div
+              className="h-1.5 bg-ink-700 rounded-full overflow-hidden"
+              role="progressbar"
+              aria-valuenow={progressPct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`${t('onb.step')} ${step + 1} ${t('onb.of')} ${totalSteps}`}
+            >
               <motion.div
                 className="h-full bg-gradient-to-r from-gold-500 to-emerald-500"
                 initial={false}

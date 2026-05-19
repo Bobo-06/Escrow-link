@@ -223,5 +223,28 @@ User shared a PostgreSQL ledger schema and asked us to implement it. Decision: r
 - ⚠️ **Real AzamPay / Selcom disbursement** — will replace the mock `/payouts/{id}/disburse` once the user provides API credentials. From the ledger's perspective, behaviour is identical — success path always ends with `post_payout_paid`.
 - ⏭ **Refactor existing `/api/escrow/three-party/*` and `/api/escrow/direct/*` flows to use the new ledger** — deferred to a follow-up iteration. Today's ledger handles fresh orders coming in via `/api/payments/webhook`. Existing escrow flows still use the old direct-write code path.
 
+## Shipped May 19, 2026 (iter11) — Mobile-First Seller Onboarding (5-doc capture)
+User asked: "How do I capture certificate of registration, Memart extract, TIN, business license, and national ID for each seller from my phone, and uniquely distinguish each seller?"
+
+- [x] **`/app/backend/seller_onboarding.py`** — REQUIRED_DOCS = `[national_id, business_registration, memart_extract, tin_certificate, business_license]`. Bilingual labels (SW + EN). Phone normalized to `+255XXXXXXXXX` via `normalize_tz_phone` BEFORE uniqueness checks. Phone = primary key, TIN (9-12 digits) = secondary unique key. Returns 409 on either collision so reps can resolve in the field.
+- [x] **HTTP API** (auth required for all except required-docs list):
+  - `GET /api/onboarding/seller/required-docs` (public) — 5 doc types + SW/EN labels
+  - `POST /api/onboarding/seller/start` — creates `seller_onboarding` (status=draft); validates phone + TIN uniqueness
+  - `POST /api/onboarding/seller/{id}/doc` — one camera snap at a time (so a flaky 3G connection only loses a single upload)
+  - `POST /api/onboarding/seller/{id}/submit` — gated on all 5 docs captured
+  - `GET /api/onboarding/seller/{id}` — progress reconcile (no base64 in list view)
+  - `GET /api/admin/onboarding/queue` — admin-only review queue
+  - `GET /api/admin/onboarding/{id}/doc/{doc_type}` — raw base64 for inspection
+  - `POST /api/admin/onboarding/{id}/review` — verified | rejected. On verified: creates seller user with `role='seller'`, `kyc_status='verified'`, `auth_type='password_pending'` (forces password reset on first login). **Auto-sends a bilingual welcome SMS with a password-set link** via existing Africa's Talking helper (simulated until AT key configured).
+- [x] **Mobile-first wizard** — `/app/frontend/src/pages/SellerOnboardingPage.tsx` at `/onboard/seller`. 7 steps: business info → 5 doc captures (rear-camera via `<input capture="environment">`) → review → success. Progress bar with `role="progressbar"` + ARIA. Optimizes photos client-side (canvas resize to ≤1600px JPEG 70%) before upload so cellular bandwidth + Mongo doc size stay sane.
+- [x] **i18n** — full `onb.*` key set (SW + EN).
+- [x] **Mongo schema** — new collection `seller_onboarding` with fields: `onboarding_id, business_name, owner_name, phone (UNIQUE-by-status), tin (UNIQUE-by-status), business_email, location, category, rep_user_id, documents{5}, status (draft|submitted|verified|rejected), created_user_id, submitted_at, reviewed_at, reviewed_by, rejection_reason, created_at, updated_at`.
+- [x] **Tests** — `/app/test_reports/iteration_11.json`: 18/18 new backend + 45/45 regression (iter5/6/10) + 6/6 frontend, zero issues. Phone-normalization across 5 formats verified; duplicate-phone and duplicate-TIN both return 409.
+- [x] **Polish (iter12)** — added `role="progressbar"` ARIA to the wizard progress bar; auto-SMS on admin verified.
+
+### Operational notes
+- Photos stored as base64 inside `seller_onboarding.documents.{doc_type}.image_b64`. Swap to S3 (or equivalent) when the volume justifies it; the API contract doesn't change.
+- The dedup is a read-then-write — under bursty concurrent rep traffic, two `start` calls with the same phone could race past the existence check. Mitigation (deferred): add a unique partial index on `(phone, status in [draft,submitted])`.
+
 ---
-*Version 6.7 — Financial Ledger (double-entry on Mongo), Apr 29, 2026*
+*Version 6.8 — Mobile-first 5-doc seller onboarding, May 19, 2026*

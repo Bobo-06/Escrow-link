@@ -5580,6 +5580,27 @@ async def admin_onboarding_review(onboarding_id: str, payload: OnboardingReviewR
         raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    # On approval, text the new seller a welcome + password-set link so they
+    # can sign in. Best-effort — never fail the review on SMS hiccup.
+    if payload.decision == "verified":
+        try:
+            phone = onb.get("phone", "")
+            biz = onb.get("business_name", "")
+            link = f"{os.environ.get('BASE_URL','https://www.biz-salama.co.tz')}/forgot-password?phone={phone}"
+            sms_sw = (
+                f"Karibu Biz-Salama! Akaunti yako ya '{biz}' imethibitishwa. "
+                f"Weka nenosiri lako hapa: {link}"
+            )
+            sms_en = (
+                f"Welcome to Biz-Salama! Your '{biz}' account is verified. "
+                f"Set your password here: {link}"
+            )
+            if phone:
+                await send_sms(phone, sms_en, sms_sw)
+        except Exception as sms_err:
+            logger.warning(f"Welcome SMS failed for {onboarding_id}: {sms_err}")
+
     return {"ok": True, "onboarding": onb}
 
 

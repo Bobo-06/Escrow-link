@@ -33,10 +33,21 @@ export const productsAPI = {
   getAll: (params?: { category?: string; search?: string; sort?: string }) =>
     api.get('/products/public', { params }),
   getOne: (id: string) => api.get(`/products/detail/${id}`),
-  create: (data: FormData) =>
-    api.post('/products', data, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }),
+  /**
+   * Create a product. Backend expects JSON matching `ProductCreate`.
+   * Use the `lib/imageUpload.ts` helper to produce the `image_b64` field
+   * — never send raw camera bytes (they exceed FastAPI's body limit).
+   */
+  create: (data: {
+    name: string;
+    price: number;
+    currency?: string;
+    description?: string;
+    image_b64?: string;
+    category?: string;
+    location?: string;
+    listed_via_voice?: boolean;
+  }) => api.post('/products', data),
   getBySeller: (sellerId: string) => api.get(`/products/seller/${sellerId}`),
 };
 

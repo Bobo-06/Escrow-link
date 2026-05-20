@@ -256,6 +256,10 @@ class ProductCreate(BaseModel):
     currency: str = "TZS"  # Base pricing currency
     description: str | None = None
     image: str | None = None
+    # Base64-encoded JPEG produced by the frontend's `processImageForUpload`
+    # helper. No `data:` prefix. Sellers attach this when listing products
+    # with a photo (the marketplace shows `image_b64` if `image` URL is empty).
+    image_b64: str | None = None
     category: str | None = "general"
     location: str | None = None
     export_category: str | None = None
@@ -1132,6 +1136,7 @@ async def create_product(product: ProductCreate, request: Request):
         "currency": product.currency,
         "description": product.description,
         "image": product.image,
+        "image_b64": product.image_b64,
         "category": product.category or "general",
         "location": product.location,
         "payment_link_code": payment_link_code,

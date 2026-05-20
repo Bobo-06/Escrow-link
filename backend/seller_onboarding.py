@@ -33,8 +33,8 @@ Flow:
 from __future__ import annotations
 import uuid
 import re
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 
 # The 5 documents required from every Tanzanian seller. Order is preserved
@@ -59,14 +59,14 @@ TIN_REGEX = re.compile(r"^\d{9,12}$")
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _iso(v):
     return v.isoformat() if isinstance(v, datetime) else v
 
 
-def _public(doc: Dict[str, Any]) -> Dict[str, Any]:
+def _public(doc: dict[str, Any]) -> dict[str, Any]:
     """Strip Mongo internals + ISO-format dates + trim heavy base64 bodies."""
     out = {k: v for k, v in doc.items() if k != "_id"}
     for f in ("created_at", "updated_at", "submitted_at", "reviewed_at"):
@@ -93,8 +93,8 @@ async def start_onboarding(
     db,
     *,
     rep_user_id: str,
-    payload: Dict[str, Any],
-) -> Dict[str, Any]:
+    payload: dict[str, Any],
+) -> dict[str, Any]:
     """
     Begin a new seller onboarding. The rep (currently-authenticated admin /
     sales agent) is recorded so we can audit who collected the data.
@@ -166,7 +166,7 @@ async def upload_document(
     image_b64: str,
     note: str = "",
     rep_user_id: str = "",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """One camera snap at a time — each /doc call uploads ONE of the 5 docs."""
     if doc_type not in REQUIRED_DOCS:
         raise ValueError(f"doc_type must be one of {REQUIRED_DOCS}")
@@ -205,7 +205,7 @@ async def upload_document(
     return _public(updated)
 
 
-async def submit_for_review(db, *, onboarding_id: str) -> Dict[str, Any]:
+async def submit_for_review(db, *, onboarding_id: str) -> dict[str, Any]:
     """Mark onboarding submission complete — must have all 5 docs captured."""
     existing = await db.seller_onboarding.find_one({"onboarding_id": onboarding_id}, {"_id": 0})
     if not existing:
@@ -231,14 +231,14 @@ async def submit_for_review(db, *, onboarding_id: str) -> Dict[str, Any]:
     return _public(updated)
 
 
-async def get_onboarding(db, *, onboarding_id: str) -> Dict[str, Any]:
+async def get_onboarding(db, *, onboarding_id: str) -> dict[str, Any]:
     doc = await db.seller_onboarding.find_one({"onboarding_id": onboarding_id}, {"_id": 0})
     if not doc:
         raise LookupError("Onboarding not found")
     return _public(doc)
 
 
-async def get_document_image(db, *, onboarding_id: str, doc_type: str) -> Optional[str]:
+async def get_document_image(db, *, onboarding_id: str, doc_type: str) -> str | None:
     """Admin endpoint helper — return the raw base64 image so the reviewer can see it."""
     doc = await db.seller_onboarding.find_one(
         {"onboarding_id": onboarding_id},
@@ -249,8 +249,8 @@ async def get_document_image(db, *, onboarding_id: str, doc_type: str) -> Option
     return ((doc.get("documents") or {}).get(doc_type) or {}).get("image_b64")
 
 
-async def list_for_admin(db, *, status: str = "submitted", limit: int = 50) -> List[Dict[str, Any]]:
-    q: Dict[str, Any] = {}
+async def list_for_admin(db, *, status: str = "submitted", limit: int = 50) -> list[dict[str, Any]]:
+    q: dict[str, Any] = {}
     if status != "all":
         q["status"] = status
     rows = await db.seller_onboarding.find(q, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
@@ -265,7 +265,7 @@ async def review_onboarding(
     reviewer_id: str,
     reason: str = "",
     create_account: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Admin verify or reject the entire onboarding package.
 
@@ -286,7 +286,7 @@ async def review_onboarding(
         raise ValueError(f"Cannot review onboarding in status '{existing.get('status')}'")
 
     now = _now()
-    update_set: Dict[str, Any] = {
+    update_set: dict[str, Any] = {
         "status": decision,
         "reviewed_at": now,
         "reviewed_by": reviewer_id,

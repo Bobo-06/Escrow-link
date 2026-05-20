@@ -3,7 +3,6 @@ import asyncio
 import os
 import sys
 import uuid
-from datetime import datetime, timezone
 
 sys.path.insert(0, "/app/backend")
 

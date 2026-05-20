@@ -232,9 +232,9 @@ const Register: React.FC = () => {
                   />
                   <span className="ml-3 text-ink-400 text-sm">
                     {t("reg.agree")}{' '}
-                    <a href="#" className="text-gold-400 hover:underline">{t("reg.terms")}</a>
+                    <a href="/terms" className="text-gold-400 hover:underline" target="_blank" rel="noopener noreferrer">{t("reg.terms")}</a>
                     {' '}{t("reg.and")}{' '}
-                    <a href="#" className="text-gold-400 hover:underline">{t("reg.privacy")}</a>
+                    <a href="/privacy" className="text-gold-400 hover:underline" target="_blank" rel="noopener noreferrer">{t("reg.privacy")}</a>
                   </span>
                 </label>
 

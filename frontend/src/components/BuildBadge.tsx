@@ -113,11 +113,10 @@ const BuildBadge: React.FC = () => {
 
   if (state.kind === 'stale') {
     return (
-      <a
+      <button
+        type="button"
         data-testid="build-badge-stale"
-        href="#"
-        onClick={(e) => {
-          e.preventDefault();
+        onClick={() => {
           alert(
             'Stale build detected on ' +
               state.host +
@@ -130,7 +129,7 @@ const BuildBadge: React.FC = () => {
       >
         <AlertTriangle className="w-3 h-3" />
         STALE
-      </a>
+      </button>
     );
   }
 

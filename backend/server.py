@@ -7,14 +7,12 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import Any
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, UTC
 import httpx
 import bcrypt
-import jwt
 import base64
-import random
 import secrets
 import string
 import hashlib
@@ -227,27 +225,27 @@ EXPORT_CATEGORIES = [
 # ============== MODELS ==============
 
 class UserCreate(BaseModel):
-    email: Optional[str] = None
-    phone: Optional[str] = None
+    email: str | None = None
+    phone: str | None = None
     password: str = Field(..., min_length=6, description="Password must be at least 6 characters")
     name: str
-    business_name: Optional[str] = None
+    business_name: str | None = None
     is_women_owned: bool = True  # Default to women-owned for this platform
-    business_type: Optional[str] = None
+    business_type: str | None = None
     export_enabled: bool = False
 
 class UserLogin(BaseModel):
-    email: Optional[str] = None
-    phone: Optional[str] = None
+    email: str | None = None
+    phone: str | None = None
     password: str
 
 class ForgotPasswordRequest(BaseModel):
-    email: Optional[str] = None
-    phone: Optional[str] = None
+    email: str | None = None
+    phone: str | None = None
 
 class ResetPasswordRequest(BaseModel):
-    email: Optional[str] = None
-    phone: Optional[str] = None
+    email: str | None = None
+    phone: str | None = None
     otp: str
     new_password: str = Field(..., min_length=6)
 
@@ -255,13 +253,13 @@ class ProductCreate(BaseModel):
     name: str
     price: float  # Price in base currency (TZS)
     currency: str = "TZS"  # Base pricing currency
-    description: Optional[str] = None
-    image: Optional[str] = None
-    category: Optional[str] = "general"
-    location: Optional[str] = None
-    export_category: Optional[str] = None
+    description: str | None = None
+    image: str | None = None
+    category: str | None = "general"
+    location: str | None = None
+    export_category: str | None = None
     international_shipping: bool = False
-    shipping_countries: Optional[List[str]] = None
+    shipping_countries: list[str] | None = None
     listed_via_voice: bool = False  # Flagged when created from voice listing flow
 
 class OrderCreate(BaseModel):
@@ -282,8 +280,8 @@ class PaymentSimulate(BaseModel):
 
 class ChatMessage(BaseModel):
     message: str
-    session_id: Optional[str] = None
-    context: Optional[Dict] = None
+    session_id: str | None = None
+    context: dict | None = None
 
 class FraudCheckRequest(BaseModel):
     item: str
@@ -299,7 +297,7 @@ class FraudCheckRequest(BaseModel):
 class SMSRequest(BaseModel):
     phone: str
     type: str  # escrow_created, item_shipped, funds_released, dispute_opened
-    data: Dict[str, Any]
+    data: dict[str, Any]
 
 class SelcomCheckoutRequest(BaseModel):
     amount: float
@@ -328,7 +326,7 @@ class StripeCaptureRequest(BaseModel):
 
 class StripeCancelRequest(BaseModel):
     intent_id: str
-    reason: Optional[str] = "requested_by_customer"
+    reason: str | None = "requested_by_customer"
 
 class NalaTransferRequest(BaseModel):
     sender_phone: str
@@ -350,7 +348,7 @@ class KYCSelfieRequest(BaseModel):
     user_id: str
 
 class PushSubscribeRequest(BaseModel):
-    subscription: Dict[str, Any]
+    subscription: dict[str, Any]
     user_id: str
 
 class EscrowCreateRequest(BaseModel):
@@ -368,14 +366,14 @@ class EscrowReleaseRequest(BaseModel):
 class EscrowDisputeRequest(BaseModel):
     tx_id: str
     reason: str
-    evidence: Optional[str] = None
+    evidence: str | None = None
     buyer_id: str
 
 class AuditLogRequest(BaseModel):
     tx_id: str
     event: str  # ESCROW_CREATED, PAYMENT_RECEIVED, FUNDS_RELEASED, etc.
     actor: str
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
 
 # ═══════════════════════════════════════════════════════════════════════════
 # THREE-PARTY ESCROW MODELS (Hawker ↔ Supplier ↔ Buyer)
@@ -384,16 +382,16 @@ class AuditLogRequest(BaseModel):
 class ThreePartyEscrowCreate(BaseModel):
     """Hawker creates stock request to supplier"""
     item_name: str
-    item_description: Optional[str] = None
-    item_condition: Optional[str] = None
+    item_description: str | None = None
+    item_condition: str | None = None
     buyer_price: float  # Price hawker will charge buyer
-    supplier_cost: Optional[float] = None  # Wholesale price hawker will pay supplier (optional - supplier can set)
+    supplier_cost: float | None = None  # Wholesale price hawker will pay supplier (optional - supplier can set)
     supplier_phone: str  # Supplier's phone number
-    supplier_name: Optional[str] = None
-    supplier_location: Optional[str] = None
-    notes: Optional[str] = None
+    supplier_name: str | None = None
+    supplier_location: str | None = None
+    notes: str | None = None
     quantity: int = 1
-    image_b64: Optional[str] = None
+    image_b64: str | None = None
 
 class ThreePartyEscrowApprove(BaseModel):
     """Supplier approves with their wholesale price"""
@@ -415,7 +413,7 @@ class ThreePartyEscrowRelease(BaseModel):
 
 # ============== HELPER FUNCTIONS ==============
 
-def normalize_tz_phone(raw: Optional[str]) -> Optional[str]:
+def normalize_tz_phone(raw: str | None) -> str | None:
     """Canonicalise a Tanzanian mobile number to E.164 (+255XXXXXXXXX).
 
     Accepts any of:
@@ -448,7 +446,7 @@ def normalize_tz_phone(raw: Optional[str]) -> Optional[str]:
     return None
 
 
-def is_valid_tz_phone(raw: Optional[str]) -> bool:
+def is_valid_tz_phone(raw: str | None) -> bool:
     """True if raw can be normalized to a valid Tanzanian mobile."""
     return normalize_tz_phone(raw) is not None
 
@@ -461,7 +459,7 @@ def generate_payment_link_code():
     alphabet = string.ascii_lowercase + string.digits
     return ''.join(secrets.choice(alphabet) for _ in range(8))
 
-def convert_currency(amount: float, from_currency: str, to_currency: str) -> Dict:
+def convert_currency(amount: float, from_currency: str, to_currency: str) -> dict:
     """Convert between currencies with tracking"""
     if from_currency == to_currency:
         return {"amount": amount, "rate": 1, "from": from_currency, "to": to_currency}
@@ -526,8 +524,8 @@ async def get_current_user(request: Request) -> dict:
     if isinstance(expires_at, str):
         expires_at = datetime.fromisoformat(expires_at)
     if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if expires_at < datetime.now(timezone.utc):
+        expires_at = expires_at.replace(tzinfo=UTC)
+    if expires_at < datetime.now(UTC):
         raise HTTPException(status_code=401, detail="Session expired")
     
     user = await db.users.find_one(
@@ -540,7 +538,7 @@ async def get_current_user(request: Request) -> dict:
     
     return user
 
-def calculate_trade_metrics(transactions: List[dict]) -> dict:
+def calculate_trade_metrics(transactions: list[dict]) -> dict:
     """Calculate trade finance metrics for a seller"""
     if not transactions:
         return {
@@ -627,7 +625,7 @@ async def register(user_data: UserCreate, response: Response):
         "business_type": user_data.business_type,
         "export_enabled": user_data.export_enabled,
         "auth_type": auth_type,
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
         # Trade finance tracking
         "total_sales_tzs": 0,
         "successful_orders": 0,
@@ -640,8 +638,8 @@ async def register(user_data: UserCreate, response: Response):
     session = {
         "user_id": user_id,
         "session_token": session_token,
-        "expires_at": datetime.now(timezone.utc) + timedelta(days=7),
-        "created_at": datetime.now(timezone.utc)
+        "expires_at": datetime.now(UTC) + timedelta(days=7),
+        "created_at": datetime.now(UTC)
     }
     await db.user_sessions.insert_one(session)
     
@@ -719,8 +717,8 @@ async def login(credentials: UserLogin, response: Response):
     session = {
         "user_id": user['user_id'],
         "session_token": session_token,
-        "expires_at": datetime.now(timezone.utc) + timedelta(days=7),
-        "created_at": datetime.now(timezone.utc)
+        "expires_at": datetime.now(UTC) + timedelta(days=7),
+        "created_at": datetime.now(UTC)
     }
     await db.user_sessions.insert_one(session)
     
@@ -789,8 +787,8 @@ async def forgot_password(data: ForgotPasswordRequest):
         {"$set": {
             "user_id": user['user_id'],
             "otp": otp,
-            "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
-            "created_at": datetime.now(timezone.utc)
+            "expires_at": datetime.now(UTC) + timedelta(minutes=10),
+            "created_at": datetime.now(UTC)
         }},
         upsert=True
     )
@@ -871,9 +869,9 @@ async def reset_password(data: ResetPasswordRequest):
     if isinstance(expires_at, str):
         expires_at = datetime.fromisoformat(expires_at)
     if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
+        expires_at = expires_at.replace(tzinfo=UTC)
     
-    if expires_at < datetime.now(timezone.utc):
+    if expires_at < datetime.now(UTC):
         raise HTTPException(status_code=400, detail="Nambari imekwisha muda. Omba mpya / Code expired. Please request a new one")
     
     if reset_record['otp'] != data.otp:
@@ -915,7 +913,7 @@ async def exchange_session(request: Request, response: Response):
             oauth_data = res.json()
         except Exception as e:
             logger.error(f"OAuth error: {e}")
-            raise HTTPException(status_code=500, detail="Authentication failed")
+            raise HTTPException(status_code=500, detail="Authentication failed") from e
     
     email = oauth_data.get('email')
     name = oauth_data.get('name')
@@ -943,7 +941,7 @@ async def exchange_session(request: Request, response: Response):
             "business_type": None,
             "export_enabled": False,
             "auth_type": "google",
-            "created_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(UTC),
             "total_sales_tzs": 0,
             "successful_orders": 0,
             "international_orders": 0
@@ -954,8 +952,8 @@ async def exchange_session(request: Request, response: Response):
     session = {
         "user_id": user_id,
         "session_token": session_token,
-        "expires_at": datetime.now(timezone.utc) + timedelta(days=7),
-        "created_at": datetime.now(timezone.utc)
+        "expires_at": datetime.now(UTC) + timedelta(days=7),
+        "created_at": datetime.now(UTC)
     }
     await db.user_sessions.insert_one(session)
     
@@ -1107,7 +1105,7 @@ async def create_product(product: ProductCreate, request: Request):
         "total_buyer_pays": fees['total_buyer_pays'],
         "seller_receives": fees['seller_receives'],
         "is_active": True,
-        "created_at": datetime.now(timezone.utc)
+        "created_at": datetime.now(UTC)
     }
     
     await db.products.insert_one(product_data)
@@ -1146,13 +1144,13 @@ async def create_product(product: ProductCreate, request: Request):
         "created_at": product_data["created_at"].isoformat()
     }
 
-def _tag_lowest_price_per_category(products: List[Dict[str, Any]]) -> None:
+def _tag_lowest_price_per_category(products: list[dict[str, Any]]) -> None:
     """
     Mutate `products` in-place, stamping `is_lowest_price=True` on the cheapest
     product within each category that has price variation. Discovery UX helper —
     keeps the marketplace handler readable.
     """
-    by_cat: Dict[str, List[Dict[str, Any]]] = {}
+    by_cat: dict[str, list[dict[str, Any]]] = {}
     for p in products:
         cat = p.get('category') or 'general'
         by_cat.setdefault(cat, []).append(p)
@@ -1168,12 +1166,12 @@ def _tag_lowest_price_per_category(products: List[Dict[str, Any]]) -> None:
 
 @api_router.get("/products/public")
 async def get_public_products(
-    category: Optional[str] = None,
-    search: Optional[str] = None,
+    category: str | None = None,
+    search: str | None = None,
     sort: str = "newest"
 ):
     """Get all public products for marketplace (no auth required)"""
-    query: Dict[str, Any] = {}
+    query: dict[str, Any] = {}
     if category and category != 'all':
         query["category"] = category
     if search:
@@ -1386,7 +1384,7 @@ class WatchCreate(BaseModel):
     product_id: str
 
 
-def _watch_public(w: Dict[str, Any]) -> Dict[str, Any]:
+def _watch_public(w: dict[str, Any]) -> dict[str, Any]:
     """Strip Mongo internals + ISO-format datetimes for the API response."""
     out = {k: v for k, v in w.items() if k != "_id"}
     for k in ("created_at", "last_alerted_at"):
@@ -1429,7 +1427,7 @@ async def create_watch(payload: WatchCreate, request: Request):
         "category": product.get("category") or "general",
         "image": product.get("image") or product.get("image_b64") or "",
         "seller_id": product.get("seller_id") or "",
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
         "last_alerted_at": None,
         "alerts": [],
         "active": True,
@@ -1452,7 +1450,7 @@ async def list_my_watches(request: Request):
 
     # For each watch, surface the cheapest *currently active* product in the same
     # category that is strictly cheaper than the watched anchor price.
-    results: List[Dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
     for w in rows:
         match = await db.products.find_one(
             {
@@ -1499,7 +1497,7 @@ async def check_watch(product_id: str, request: Request):
     return {"watching": bool(w), "watch_id": (w or {}).get("watch_id")}
 
 
-async def _trigger_price_drop_alerts(new_product: Dict[str, Any]) -> int:
+async def _trigger_price_drop_alerts(new_product: dict[str, Any]) -> int:
     """Best-effort fan-out: when a new product is listed, notify every watcher
     in the same category whose anchor price was higher. Returns alert count.
 
@@ -1524,7 +1522,7 @@ async def _trigger_price_drop_alerts(new_product: Dict[str, Any]) -> int:
         if not candidates:
             return 0
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         sent = 0
         for w in candidates:
             savings = float(w.get("price_at_watch") or 0) - new_price
@@ -1776,7 +1774,7 @@ async def create_order(order_data: OrderCreate):
         "status": "pending_payment",
         "escrow_status": "pending",
         "nala_reference": None,  # For NALA payments
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
         "paid_at": None,
         "delivered_at": None
     }
@@ -1876,7 +1874,7 @@ async def simulate_payment(payment: PaymentSimulate):
             "$set": {
                 "status": "paid",
                 "escrow_status": "held",
-                "paid_at": datetime.now(timezone.utc),
+                "paid_at": datetime.now(UTC),
                 "nala_reference": payment_ref if payment.payment_method == "nala" else None
             }
         }
@@ -1897,7 +1895,7 @@ async def simulate_payment(payment: PaymentSimulate):
         "status": "held",
         "bank": "NMB",
         "is_international": order.get('is_international', False),
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
         "released_at": None
     }
     await db.escrows.insert_one(escrow)
@@ -1966,7 +1964,7 @@ async def confirm_delivery(order_id: str):
             "$set": {
                 "status": "completed",
                 "escrow_status": "released",
-                "delivered_at": datetime.now(timezone.utc)
+                "delivered_at": datetime.now(UTC)
             }
         }
     )
@@ -1977,7 +1975,7 @@ async def confirm_delivery(order_id: str):
         {
             "$set": {
                 "status": "released",
-                "released_at": datetime.now(timezone.utc)
+                "released_at": datetime.now(UTC)
             }
         }
     )
@@ -2002,7 +2000,7 @@ async def confirm_delivery(order_id: str):
 
 class RatingCreate(BaseModel):
     rating: int
-    comment: Optional[str] = None
+    comment: str | None = None
 
 @api_router.post("/orders/{order_id}/rate")
 async def rate_seller(order_id: str, rating_data: RatingCreate):
@@ -2023,7 +2021,7 @@ async def rate_seller(order_id: str, rating_data: RatingCreate):
         "buyer_name": order['buyer_name'],
         "rating": rating_data.rating,
         "comment": rating_data.comment,
-        "created_at": datetime.now(timezone.utc)
+        "created_at": datetime.now(UTC)
     }
     await db.ratings.insert_one(rating_record)
     
@@ -2065,7 +2063,7 @@ async def create_dispute(order_id: str, dispute: DisputeCreate):
         "order_id": order_id,
         "reason": dispute.reason,
         "status": "open",
-        "created_at": datetime.now(timezone.utc)
+        "created_at": datetime.now(UTC)
     }
     await db.disputes.insert_one(dispute_record)
     
@@ -2231,7 +2229,7 @@ async def ai_support_chat(chat_data: ChatMessage):
         # Save chat history
         await db.chat_sessions.update_one(
             {"session_id": session_id},
-            {"$set": {"messages": messages, "updated_at": datetime.now(timezone.utc)}},
+            {"$set": {"messages": messages, "updated_at": datetime.now(UTC)}},
             upsert=True
         )
         
@@ -2303,7 +2301,7 @@ async def ai_dispute_mediator(chat_data: ChatMessage):
                 "$set": {
                     "messages": messages,
                     "recommendation": recommendation,
-                    "updated_at": datetime.now(timezone.utc)
+                    "updated_at": datetime.now(UTC)
                 }
             },
             upsert=True
@@ -2376,10 +2374,10 @@ Tanzania social commerce context."""
 # ═══════════════════════════════════════════════════════════════════════════
 
 class SuggestionRequest(BaseModel):
-    user_id: Optional[str] = None
+    user_id: str | None = None
     current_product_id: str
-    order_id: Optional[str] = None  # If exists, no suggestions (anti-poaching)
-    preferences: List[str] = ["price", "rating", "shipping_speed"]
+    order_id: str | None = None  # If exists, no suggestions (anti-poaching)
+    preferences: list[str] = ["price", "rating", "shipping_speed"]
 
 @api_router.post("/ai/suggestions")
 async def get_ai_suggestions(request: SuggestionRequest):
@@ -2406,7 +2404,6 @@ async def get_ai_suggestions(request: SuggestionRequest):
         return {"suggestions": [], "reason": "Product not found"}
     
     current_price = current_product.get('price', 0)
-    current_category = current_product.get('category', 'general')
     seller_id = current_product.get('seller_id', '')
     
     # Find similar products (different sellers, similar price range)
@@ -2444,9 +2441,8 @@ async def get_ai_suggestions(request: SuggestionRequest):
             rating = seller.get('average_rating', 4.0) if seller else 4.0
             score += rating * 10
         
-        if 'shipping_speed' in request.preferences:
-            if product.get('express_shipping'):
-                score += 15
+        if 'shipping_speed' in request.preferences and product.get('express_shipping'):
+            score += 15
         
         # Bonus for verified sellers
         if seller and seller.get('is_verified'):
@@ -2513,7 +2509,7 @@ Generate a brief, friendly message (max 2 sentences) in Swahili explaining why t
 # SMS NOTIFICATIONS — AFRICA'S TALKING
 # ═══════════════════════════════════════════════════════════════════════════
 
-async def send_sms(phone: str, message_en: str, message_sw: str) -> Dict:
+async def send_sms(phone: str, message_en: str, message_sw: str) -> dict:
     """Send bilingual SMS via Africa's Talking"""
     body = f"{message_sw}\n---\n{message_en}"
     
@@ -2566,13 +2562,13 @@ async def send_sms_notification(request: SMSRequest):
         return {"ok": True, "result": result}
     except Exception as e:
         logger.error(f"SMS notification error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SELCOM PESALINK INTEGRATION
 # ═══════════════════════════════════════════════════════════════════════════
 
-def selcom_headers() -> Dict[str, str]:
+def selcom_headers() -> dict[str, str]:
     """Generate Selcom API headers with signature"""
     import time
     nonce = uuid.uuid4().hex
@@ -2634,7 +2630,7 @@ async def selcom_checkout(request: SelcomCheckoutRequest):
         }
     except Exception as e:
         logger.error(f"Selcom checkout error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @api_router.post("/payments/selcom/stk")
 async def selcom_stk_push(request: SelcomSTKRequest):
@@ -2662,7 +2658,7 @@ async def selcom_stk_push(request: SelcomSTKRequest):
             
         return {"ok": True, **response.json()}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @api_router.post("/payments/selcom/webhook")
 async def selcom_webhook(request: Request):
@@ -2678,7 +2674,7 @@ async def selcom_webhook(request: Request):
                 "status": "paid",
                 "payment_status": "completed",
                 "selcom_tx_id": body.get("selcom_transaction_id"),
-                "paid_at": datetime.now(timezone.utc)
+                "paid_at": datetime.now(UTC)
             }}
         )
         # Create audit log
@@ -2737,11 +2733,10 @@ async def mpesa_stk_push(request: MpesaSTKRequest):
     
     try:
         token = await get_mpesa_token()
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        password = base64.b64encode(
-            f"{MPESA_SHORTCODE}{MPESA_PASSKEY}{timestamp}".encode()
-        ).decode()
-        
+        # NOTE: Vodacom TZ C2B uses Bearer-token auth only. The Kenyan Daraja
+        # STK-push `password = base64(shortcode + passkey + timestamp)` pattern
+        # does not apply here — was leftover from a copy-paste and removed.
+
         # Normalize phone number (255XXXXXXXXX)
         phone = request.phone.replace("+", "")
         if phone.startswith("0"):
@@ -2779,7 +2774,7 @@ async def mpesa_stk_push(request: MpesaSTKRequest):
         }
     except Exception as e:
         logger.error(f"M-Pesa STK error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @api_router.post("/payments/mpesa/callback")
 async def mpesa_callback(request: Request):
@@ -2795,7 +2790,7 @@ async def mpesa_callback(request: Request):
                 "status": "paid",
                 "payment_status": "completed",
                 "mpesa_tx_id": body.get("output_TransactionID"),
-                "paid_at": datetime.now(timezone.utc)
+                "paid_at": datetime.now(UTC)
             }}
         )
         await create_audit_log(tx_ref, "PAYMENT_RECEIVED", "system", {"gateway": "mpesa"})
@@ -2844,7 +2839,7 @@ async def stripe_create_intent(request: StripeIntentRequest):
         }
     except Exception as e:
         logger.error(f"Stripe create intent error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @api_router.post("/payments/stripe/capture")
 async def stripe_capture(request: StripeCaptureRequest):
@@ -2860,7 +2855,7 @@ async def stripe_capture(request: StripeCaptureRequest):
         
         return {"ok": True, "status": captured.status}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @api_router.post("/payments/stripe/cancel")
 async def stripe_cancel(request: StripeCancelRequest):
@@ -2879,7 +2874,7 @@ async def stripe_cancel(request: StripeCancelRequest):
         
         return {"ok": True, "status": canceled.status}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 # ═══════════════════════════════════════════════════════════════════════════
 # NALA BUSINESS API (Diaspora Payments)
@@ -2924,7 +2919,7 @@ async def nala_initiate_transfer(request: NalaTransferRequest):
             "pay_link": data.get("payment_link")
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @api_router.post("/payments/nala/callback")
 async def nala_callback(request: Request):
@@ -2940,7 +2935,7 @@ async def nala_callback(request: Request):
                 "status": "paid",
                 "payment_status": "completed",
                 "nala_tx_id": body.get("transaction_id"),
-                "paid_at": datetime.now(timezone.utc)
+                "paid_at": datetime.now(UTC)
             }}
         )
         await create_audit_log(tx_ref, "PAYMENT_RECEIVED", "system", {"gateway": "nala"})
@@ -2992,7 +2987,7 @@ async def kyc_verify_nin(request: KYCVerifyNINRequest):
             # Update user KYC level in database
             await db.users.update_one(
                 {"phone": request.phone},
-                {"$set": {"kyc_level": 2, "nida_verified": True, "kyc_verified_at": datetime.now(timezone.utc)}}
+                {"$set": {"kyc_level": 2, "nida_verified": True, "kyc_verified_at": datetime.now(UTC)}}
             )
         
         return {
@@ -3002,7 +2997,7 @@ async def kyc_verify_nin(request: KYCVerifyNINRequest):
         }
     except Exception as e:
         logger.error(f"Smile KYC error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @api_router.post("/kyc/selfie")
 async def kyc_verify_selfie(request: KYCSelfieRequest):
@@ -3048,7 +3043,7 @@ async def kyc_verify_selfie(request: KYCSelfieRequest):
             "confidence": data.get("result", {}).get("ConfidenceValue")
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PUSH NOTIFICATIONS
@@ -3063,7 +3058,7 @@ async def push_subscribe(request: PushSubscribeRequest):
     )
     return {"ok": True}
 
-async def send_push_to_user(user_id: str, notification: Dict):
+async def send_push_to_user(user_id: str, notification: dict):
     """Send push notification to user"""
     user = await db.users.find_one({"_id": user_id})
     if not user or not user.get("push_subscription"):
@@ -3092,7 +3087,7 @@ async def escrow_create(request: EscrowCreateRequest):
         "payment_method": request.payment_method,
         "status": "created",
         "escrow_status": "pending",
-        "created_at": datetime.now(timezone.utc)
+        "created_at": datetime.now(UTC)
     }
     
     await db.escrow_transactions.insert_one(escrow)
@@ -3120,7 +3115,7 @@ async def escrow_release(request: EscrowReleaseRequest):
         {"$set": {
             "status": "released",
             "escrow_status": "released",
-            "released_at": datetime.now(timezone.utc)
+            "released_at": datetime.now(UTC)
         }}
     )
     
@@ -3156,7 +3151,7 @@ async def escrow_dispute(request: EscrowDisputeRequest):
         "evidence": request.evidence,
         "raised_by": request.buyer_id,
         "status": "open",
-        "created_at": datetime.now(timezone.utc)
+        "created_at": datetime.now(UTC)
     }
     
     await db.disputes.insert_one(dispute)
@@ -3219,7 +3214,7 @@ def _compute_three_party_split(buyer_price: float, supplier_cost: float) -> dict
 
 
 @api_router.get("/escrow/verify/{tx_id}")
-async def escrow_verify(tx_id: str, token: Optional[str] = None, role: Optional[str] = None):
+async def escrow_verify(tx_id: str, token: str | None = None, role: str | None = None):
     """Public verification endpoint for escrow transactions (2-party AND 3-party).
     
     Role-based output (Option B):
@@ -3245,7 +3240,7 @@ async def escrow_verify(tx_id: str, token: Optional[str] = None, role: Optional[
             "verified": True,
             "platform": "Biz-Salama TZ",
             "fee_pct": {"supply": SUPPLY_FEE_PCT * 100, "buyer": BUYER_FEE_PCT * 100},
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         # Validate token against role (HMAC over tx_id:role:identifier)
@@ -3319,11 +3314,11 @@ async def escrow_verify(tx_id: str, token: Optional[str] = None, role: Optional[
         "type": "two_party",
         "verified": True,
         "platform": "Biz-Salama TZ",
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": datetime.now(UTC).isoformat()
     }
 
 
-def _sign_verify_token(tx_id: str, role: str, identifier: Optional[str]) -> str:
+def _sign_verify_token(tx_id: str, role: str, identifier: str | None) -> str:
     """HMAC-SHA256 signed token for role-scoped verify URLs. 16 hex chars (64-bit)."""
     msg = f"{tx_id}:{role}:{identifier or ''}".encode()
     return hmac.new(JWT_SECRET.encode(), msg, hashlib.sha256).hexdigest()[:16]
@@ -3389,14 +3384,14 @@ async def three_party_create(request: ThreePartyEscrowCreate, current_user: dict
         "buyer_address": None,
         
         # Timestamps
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "approved_at": None,
         "paid_at": None,
         "released_at": None,
 
         # Negotiation history — each entry: {at, by, action, supplier_cost?, note?}
         "negotiation_history": [{
-            "at": datetime.now(timezone.utc).isoformat(),
+            "at": datetime.now(UTC).isoformat(),
             "by": "hawker",
             "action": "opened",
             "supplier_cost": request.supplier_cost,
@@ -3502,7 +3497,7 @@ async def three_party_approve(request: ThreePartyEscrowApprove, current_user: di
             "supplier_cost": request.supplier_cost,
             "commission": hawker_commission,
             "platform_fee": platform_fee,
-            "approved_at": datetime.now(timezone.utc).isoformat()
+            "approved_at": datetime.now(UTC).isoformat()
         }}
     )
     
@@ -3513,9 +3508,16 @@ async def three_party_approve(request: ThreePartyEscrowApprove, current_user: di
         "platform_fee": platform_fee
     })
     
-    # Notify hawker
-    template_msg = f"Biz-Salama: Ombi lako la bidhaa limekubaliwa! TX: {request.tx_id}. Sasa unaweza kuuza kwa wateja."
-    # await send_sms(tx["hawker_phone"], template_msg, template_msg)
+    # Notify hawker that the shop owner has approved their request. SMS uses the
+    # graceful fallback in `send_sms()` — no-op when AT_API_KEY is unset.
+    try:
+        hawker_phone = tx.get("hawker_phone") or ""
+        if hawker_phone:
+            sms_sw = f"Biz-Salama: Ombi lako la bidhaa limekubaliwa! TX: {request.tx_id}. Sasa unaweza kuuza kwa wateja."
+            sms_en = f"Biz-Salama: Your supply request was approved! TX: {request.tx_id}. You can now sell to your customers."
+            await send_sms(hawker_phone, sms_en, sms_sw)
+    except Exception as sms_err:
+        logger.warning(f"Hawker approval SMS failed for {request.tx_id}: {sms_err}")
     
     return {
         "ok": True,
@@ -3617,7 +3619,7 @@ async def three_party_pay(request: ThreePartyEscrowPay, current_user: dict = Dep
             "buyer_address": request.buyer_address,
             "payment_method": request.payment_method,
             "payment_ref": payment_ref,
-            "paid_at": datetime.now(timezone.utc).isoformat()
+            "paid_at": datetime.now(UTC).isoformat()
         }}
     )
     
@@ -3684,7 +3686,7 @@ async def three_party_release(request: ThreePartyEscrowRelease, current_user: di
             "status": "completed",
             "escrow_status": "released",
             "released_by": user_id,
-            "released_at": datetime.now(timezone.utc).isoformat(),
+            "released_at": datetime.now(UTC).isoformat(),
             "payout_refs": payout_refs,
             "disbursements": {
                 "supplier": supplier_payout,
@@ -3716,7 +3718,7 @@ async def three_party_release(request: ThreePartyEscrowRelease, current_user: di
     }
 
 @api_router.post("/escrow/three-party/{tx_id}/buyer-confirm-delivery")
-async def three_party_buyer_confirm_delivery(tx_id: str, token: str, buyer_phone: Optional[str] = None):
+async def three_party_buyer_confirm_delivery(tx_id: str, token: str, buyer_phone: str | None = None):
     """Public buyer-scoped confirm delivery via HMAC signed token (same as /verify links).
     Releases escrow funds: supplier gets cost, hawker gets commission, platform takes fee.
     No login required — buyer authenticates via the signed token from their payment receipt.
@@ -3749,7 +3751,7 @@ async def three_party_buyer_confirm_delivery(tx_id: str, token: str, buyer_phone
             "status": "completed",
             "escrow_status": "released",
             "released_by": "buyer",
-            "released_at": datetime.now(timezone.utc).isoformat(),
+            "released_at": datetime.now(UTC).isoformat(),
             "payout_refs": payout_refs,
             "disbursements": {
                 "supplier": supplier_payout,
@@ -3792,7 +3794,7 @@ async def three_party_reject(tx_id: str, reason: str = "Not available", current_
     
     await db.three_party_transactions.update_one(
         {"tx_id": tx_id},
-        {"$set": {"status": "rejected", "rejection_reason": reason, "rejected_at": datetime.now(timezone.utc).isoformat()}}
+        {"$set": {"status": "rejected", "rejection_reason": reason, "rejected_at": datetime.now(UTC).isoformat()}}
     )
     
     await create_audit_log(tx_id, "THREE_PARTY_REJECTED", current_user["user_id"], {"reason": reason})
@@ -3803,7 +3805,7 @@ async def three_party_reject(tx_id: str, reason: str = "Not available", current_
 # BOT AUDIT TRAIL (Bank of Tanzania Compliance)
 # ═══════════════════════════════════════════════════════════════════════════
 
-async def create_audit_log(tx_id: str, event: str, actor: str, metadata: Dict = None):
+async def create_audit_log(tx_id: str, event: str, actor: str, metadata: dict = None):
     """Create immutable audit log entry for BOT compliance"""
     entry = {
         "audit_id": str(uuid.uuid4()),
@@ -3811,7 +3813,7 @@ async def create_audit_log(tx_id: str, event: str, actor: str, metadata: Dict = 
         "event": event,
         "actor": actor,
         "metadata": metadata or {},
-        "timestamp": datetime.now(timezone.utc),
+        "timestamp": datetime.now(UTC),
         "hash": hashlib.sha256(f"{tx_id}{event}{datetime.now().timestamp()}".encode()).hexdigest()
     }
     
@@ -3850,7 +3852,7 @@ async def get_exchange_rates():
     return {
         "base": "TZS",
         "rates": EXCHANGE_RATES,
-        "updated_at": datetime.now(timezone.utc).isoformat()
+        "updated_at": datetime.now(UTC).isoformat()
     }
 
 # ============== HEALTH CHECK ==============
@@ -3875,7 +3877,7 @@ async def root():
 async def health():
     return {
         "status": "healthy",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "platform": "CraftHer Trade Finance"
     }
 
@@ -3885,10 +3887,10 @@ async def health():
 
 class SupplierResponse(BaseModel):
     accepted: bool
-    supplier_phone: Optional[str] = None
-    supplier_cost: Optional[float] = None
+    supplier_phone: str | None = None
+    supplier_cost: float | None = None
     counter_offer: bool = False    # if True → tx enters "counter_offered" status
-    note: Optional[str] = None
+    note: str | None = None
 
 
 @api_router.post("/escrow/three-party/{tx_id}/supplier-response")
@@ -3906,7 +3908,7 @@ async def supplier_response_public(tx_id: str, payload: SupplierResponse):
     if tx.get("status") not in ("pending_approval", "awaiting_supplier", "counter_offered"):
         raise HTTPException(status_code=400, detail=f"Cannot respond — current status: {tx.get('status')}")
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
 
     if payload.accepted and not payload.counter_offer:
         supplier_cost = payload.supplier_cost or tx.get("supplier_cost")
@@ -3988,16 +3990,16 @@ async def supplier_response_public(tx_id: str, payload: SupplierResponse):
 
 
 class ThreePartyEditRequest(BaseModel):
-    buyer_price: Optional[float] = None
-    supplier_cost: Optional[float] = None
-    item_name: Optional[str] = None
-    item_condition: Optional[str] = None
-    notes: Optional[str] = None
+    buyer_price: float | None = None
+    supplier_cost: float | None = None
+    item_name: str | None = None
+    item_condition: str | None = None
+    notes: str | None = None
 
 
 class HawkerCounterRequest(BaseModel):
     supplier_cost: float   # new price hawker is willing to pay the supplier
-    note: Optional[str] = None
+    note: str | None = None
 
 
 @api_router.post("/escrow/three-party/{tx_id}/hawker-counter")
@@ -4023,7 +4025,7 @@ async def three_party_hawker_counter(
     if payload.supplier_cost >= buyer_price:
         raise HTTPException(status_code=400, detail="Counter supplier_cost must be less than buyer_price")
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     split = _compute_three_party_split(buyer_price, payload.supplier_cost)
     update = {
         "status": "pending_approval",
@@ -4069,7 +4071,7 @@ async def three_party_edit(tx_id: str, request: ThreePartyEditRequest, current_u
     if tx.get("status") not in ("pending_approval", "counter_offered", "rejected"):
         raise HTTPException(status_code=400, detail=f"Cannot edit — status={tx.get('status')}")
 
-    update: dict = {"status": "pending_approval", "edited_at": datetime.now(timezone.utc).isoformat()}
+    update: dict = {"status": "pending_approval", "edited_at": datetime.now(UTC).isoformat()}
     if request.buyer_price is not None:
         update["buyer_price"] = float(request.buyer_price)
     if request.supplier_cost is not None:
@@ -4111,26 +4113,26 @@ async def three_party_edit(tx_id: str, request: ThreePartyEditRequest, current_u
 # ═══════════════════════════════════════════════════════════════════════════
 class DirectEscrowCreate(BaseModel):
     item_name: str
-    item_description: Optional[str] = None
-    item_condition: Optional[str] = "new"
+    item_description: str | None = None
+    item_condition: str | None = "new"
     price: float
     buyer_phone: str
-    buyer_name: Optional[str] = None
-    notes: Optional[str] = None
-    image_b64: Optional[str] = None
+    buyer_name: str | None = None
+    notes: str | None = None
+    image_b64: str | None = None
 
 
 class DirectBuyerResponse(BaseModel):
     token: str              # HMAC supplied via SMS link
     accepted: bool = False
     counter_offer: bool = False
-    counter_price: Optional[float] = None
-    note: Optional[str] = None
+    counter_price: float | None = None
+    note: str | None = None
 
 
 class DirectSellerCounter(BaseModel):
     new_price: float
-    note: Optional[str] = None
+    note: str | None = None
 
 
 @api_router.post("/escrow/direct/create")
@@ -4151,7 +4153,7 @@ async def direct_escrow_create(
         raise HTTPException(status_code=400, detail="Bei si sahihi / Invalid price")
 
     tx_id = f"D2P_{uuid.uuid4().hex[:12]}"
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     transaction = {
         "tx_id": tx_id,
         "type": "direct_2p",
@@ -4219,7 +4221,7 @@ async def direct_escrow_create(
 
 
 @api_router.get("/escrow/direct/{tx_id}")
-async def direct_escrow_get(tx_id: str, token: Optional[str] = None):
+async def direct_escrow_get(tx_id: str, token: str | None = None):
     """Return a direct escrow tx.
     - Authenticated seller (matching seller_id): full view.
     - Public caller with valid HMAC buyer token: buyer-scoped view.
@@ -4258,7 +4260,7 @@ async def direct_buyer_response(tx_id: str, payload: DirectBuyerResponse):
     if tx.get("status") not in ("pending_buyer_approval", "seller_countered"):
         raise HTTPException(status_code=400, detail=f"Cannot respond — status={tx.get('status')}")
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     if payload.accepted and not payload.counter_offer:
         update = {
             "status": "buyer_accepted",
@@ -4307,7 +4309,7 @@ async def direct_seller_counter(
     if payload.new_price <= 0:
         raise HTTPException(status_code=400, detail="Invalid price")
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     update = {
         "status": "pending_buyer_approval",
         "price": float(payload.new_price),
@@ -4342,8 +4344,8 @@ async def direct_escrow_my_seller(current_user: dict = Depends(get_current_user)
 @api_router.post("/voice/transcribe")
 async def voice_transcribe(
     audio: UploadFile = File(...),
-    language: Optional[str] = None,
-    context: Optional[str] = None,  # "search" | "listing" | "assistant"
+    language: str | None = None,
+    context: str | None = None,  # "search" | "listing" | "assistant"
 ):
     """Transcribe audio (mp3/wav/webm/m4a) to text using Whisper.
     Accepts Swahili and English (Whisper auto-detects if language is not provided).
@@ -4399,8 +4401,8 @@ async def voice_transcribe(
         # Translate BadRequest-style errors (invalid/empty audio, wrong format) → 400
         low = msg.lower()
         if any(k in low for k in ("badrequest", "invalid", "decode", "400", "could not be decoded")):
-            raise HTTPException(status_code=400, detail=f"Invalid audio: {msg}")
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {msg}")
+            raise HTTPException(status_code=400, detail=f"Invalid audio: {msg}") from e
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {msg}") from e
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -4422,7 +4424,7 @@ def _html_escape(s: Any) -> str:
 
 
 def _seo_html(*, title: str, description: str, url: str, image: str,
-              extra_jsonld: Optional[Dict[str, Any]] = None,
+              extra_jsonld: dict[str, Any] | None = None,
               body_heading: str = "", body_text: str = "") -> str:
     base = BASE_URL or ""
     canonical = f"{base.rstrip('/')}{url}" if base else url
@@ -4573,7 +4575,7 @@ async def admin_seed_marketplace(x_admin_secret: str = Header(default="")):
     from scripts.seed_marketplace import SEED_SELLER, PRODUCTS, _fees  # local import
     await db.users.update_one(
         {"user_id": SEED_SELLER["user_id"]},
-        {"$set": {**SEED_SELLER, "created_at": datetime.now(timezone.utc)}},
+        {"$set": {**SEED_SELLER, "created_at": datetime.now(UTC)}},
         upsert=True,
     )
     inserted, updated = 0, 0
@@ -4610,7 +4612,7 @@ async def admin_seed_marketplace(x_admin_secret: str = Header(default="")):
             await db.products.update_one({"product_id": product_id}, {"$set": doc})
             updated += 1
         else:
-            doc["created_at"] = datetime.now(timezone.utc)
+            doc["created_at"] = datetime.now(UTC)
             await db.products.insert_one(doc)
             inserted += 1
     total = await db.products.count_documents({"is_active": True})
@@ -4628,7 +4630,7 @@ async def admin_seed_marketplace(x_admin_secret: str = Header(default="")):
 class FeeQuoteRequest(BaseModel):
     mode: str = Field(..., description="'direct' or 'three_party'")
     deal_value: float
-    supplier_cost: Optional[float] = None
+    supplier_cost: float | None = None
 
 
 class DisputeOpenRequest(BaseModel):
@@ -4638,7 +4640,7 @@ class DisputeOpenRequest(BaseModel):
 
 class DisputeResolveRequest(BaseModel):
     resolution: str  # 'release_to_seller' | 'refund_to_buyer'
-    resolution_note: Optional[str] = None
+    resolution_note: str | None = None
 
 
 class DisputeAgreeRequest(BaseModel):
@@ -4677,7 +4679,7 @@ async def quote_fees(payload: FeeQuoteRequest):
             supplier_cost=payload.supplier_cost,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     return {"mode": payload.mode, **split}
 
 
@@ -4736,7 +4738,7 @@ async def handle_payment_webhook(payload: GatewayWebhookPayload, request: Reques
         )
         await db.orders.update_one(
             {"order_id": payload.order_id},
-            {"$set": {"status": "funded", "funded_at": datetime.now(timezone.utc)}},
+            {"$set": {"status": "funded", "funded_at": datetime.now(UTC)}},
         )
 
     await ledger_mark_webhook_processed(db, provider=payload.provider, event_id=payload.event_id)
@@ -4763,7 +4765,7 @@ async def release_order_funds(order_id: str, request: Request):
     await ledger_post_release(db, order=order)
 
     # Queue payouts (mock disbursement until AzamPay/Selcom keys are wired)
-    payouts: List[Dict[str, Any]] = []
+    payouts: list[dict[str, Any]] = []
     seller_amt = float(order.get("seller_amount") or 0)
     agent_amt = float(order.get("agent_commission") or 0)
     if seller_amt > 0 and order.get("seller_id"):
@@ -4776,8 +4778,8 @@ async def release_order_funds(order_id: str, request: Request):
             "destination": order.get("seller_phone", ""),
             "amount": seller_amt,
             "status": "queued",
-            "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(UTC),
+            "updated_at": datetime.now(UTC),
         })
     if agent_amt > 0 and order.get("agent_id"):
         payouts.append({
@@ -4789,24 +4791,24 @@ async def release_order_funds(order_id: str, request: Request):
             "destination": order.get("agent_phone", ""),
             "amount": agent_amt,
             "status": "queued",
-            "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(UTC),
+            "updated_at": datetime.now(UTC),
         })
     if payouts:
         await db.payouts.insert_many(payouts)
 
     await db.orders.update_one(
         {"order_id": order_id},
-        {"$set": {"status": "settled", "released_at": datetime.now(timezone.utc)}},
+        {"$set": {"status": "settled", "released_at": datetime.now(UTC)}},
     )
     return {"ok": True, "order_id": order_id, "payouts_queued": len(payouts)}
 
 
 @api_router.get("/payouts")
-async def list_payouts(request: Request, status: Optional[str] = None):
+async def list_payouts(request: Request, status: str | None = None):
     """List payouts (admin / seller / agent — scoped by user)."""
     user = await get_current_user(request)
-    q: Dict[str, Any] = {}
+    q: dict[str, Any] = {}
     if status:
         q["status"] = status
     # Non-admin users only see their own payouts
@@ -4847,7 +4849,7 @@ async def disburse_payout(payout_id: str, request: Request):
         {"$set": {
             "status": "paid",
             "provider_ref": provider_ref,
-            "updated_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(UTC),
         }},
     )
     return {"ok": True, "payout_id": payout_id, "provider_ref": provider_ref, "mocked": True}
@@ -4870,7 +4872,7 @@ async def open_dispute(payload: DisputeOpenRequest, request: Request):
     if existing:
         raise HTTPException(status_code=400, detail="Dispute already open for this order")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     dispute_id = f"disp_{uuid.uuid4().hex[:12]}"
     await db.disputes.insert_one({
         "dispute_id": dispute_id,
@@ -4893,7 +4895,7 @@ async def open_dispute(payload: DisputeOpenRequest, request: Request):
     return {"ok": True, "dispute_id": dispute_id, "auto_resolves_in_days": DISPUTE_AUTO_RESOLVE_DAYS}
 
 
-async def _apply_dispute_resolution(dispute: Dict[str, Any], *, resolution: str, note: str = "", resolved_by: str = "system") -> Dict[str, Any]:
+async def _apply_dispute_resolution(dispute: dict[str, Any], *, resolution: str, note: str = "", resolved_by: str = "system") -> dict[str, Any]:
     """Shared finalizer for admin / agreement / auto-resolve paths."""
     order = await db.orders.find_one({"order_id": dispute["order_id"]}, {"_id": 0})
     if not order:
@@ -4903,13 +4905,13 @@ async def _apply_dispute_resolution(dispute: Dict[str, Any], *, resolution: str,
         await ledger_post_release(db, order=order)
         await db.orders.update_one(
             {"order_id": dispute["order_id"]},
-            {"$set": {"status": "settled", "released_at": datetime.now(timezone.utc)}},
+            {"$set": {"status": "settled", "released_at": datetime.now(UTC)}},
         )
     elif resolution == "refund_to_buyer":
         await ledger_post_refund(db, order_id=dispute["order_id"], amount=order["gross_amount"])
         await db.orders.update_one(
             {"order_id": dispute["order_id"]},
-            {"$set": {"status": "refunded", "refunded_at": datetime.now(timezone.utc)}},
+            {"$set": {"status": "refunded", "refunded_at": datetime.now(UTC)}},
         )
     else:
         raise HTTPException(status_code=400, detail="Unknown resolution")
@@ -4921,7 +4923,7 @@ async def _apply_dispute_resolution(dispute: Dict[str, Any], *, resolution: str,
             "resolution": resolution,
             "resolution_note": note,
             "resolved_by": resolved_by,
-            "resolved_at": datetime.now(timezone.utc),
+            "resolved_at": datetime.now(UTC),
         }},
     )
     return {"ok": True, "dispute_id": dispute["dispute_id"], "resolution": resolution, "resolved_by": resolved_by}
@@ -4965,7 +4967,7 @@ async def dispute_party_agree(dispute_id: str, payload: DisputeAgreeRequest, req
     field = "buyer_decision" if payload.role == "buyer" else "seller_decision"
     await db.disputes.update_one(
         {"dispute_id": dispute_id},
-        {"$set": {field: payload.decision, f"{field}_at": datetime.now(timezone.utc)}},
+        {"$set": {field: payload.decision, f"{field}_at": datetime.now(UTC)}},
     )
 
     refreshed = await db.disputes.find_one({"dispute_id": dispute_id}, {"_id": 0})
@@ -4980,10 +4982,10 @@ async def dispute_party_agree(dispute_id: str, payload: DisputeAgreeRequest, req
 
 
 @api_router.get("/disputes")
-async def list_disputes(request: Request, status: Optional[str] = None):
+async def list_disputes(request: Request, status: str | None = None):
     """List disputes the user is involved in (or all, if admin)."""
     user = await get_current_user(request)
-    q: Dict[str, Any] = {}
+    q: dict[str, Any] = {}
     if status:
         q["status"] = status
 
@@ -5044,8 +5046,8 @@ async def _dispute_auto_resolver_loop():
 class CheckoutStartRequest(BaseModel):
     product_id: str
     quantity: int = 1
-    delivery_address: Optional[str] = None
-    delivery_phone: Optional[str] = None
+    delivery_address: str | None = None
+    delivery_phone: str | None = None
     payment_method: str = "mpesa"  # 'mpesa' | 'airtel' | 'tigo' | 'card' | 'mock'
 
 
@@ -5068,7 +5070,7 @@ async def checkout_start(payload: CheckoutStartRequest, request: Request):
     split = ledger_calculate_split(mode="direct", deal_value=deal_value)
 
     order_id = f"ord_{uuid.uuid4().hex[:14]}"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     order_doc = {
         "order_id": order_id,
         "mode": "direct",
@@ -5175,7 +5177,7 @@ async def admin_reconciliation(request: Request):
     ]
     rows = await db.ledger_entries.aggregate(pipeline).to_list(100)
 
-    balances: Dict[str, Dict[str, float]] = {}
+    balances: dict[str, dict[str, float]] = {}
     for r in rows:
         code = r["_id"]["code"]
         et = r["_id"]["type"]
@@ -5185,7 +5187,7 @@ async def admin_reconciliation(request: Request):
     # Compute net per account: assets/expenses are debit-positive,
     # liabilities/revenue are credit-positive.
     code_to_type = {a["code"]: a["type"] for a in LEDGER_ACCOUNTS}
-    net: List[Dict[str, Any]] = []
+    net: list[dict[str, Any]] = []
     total_debit = 0.0
     total_credit = 0.0
     for code, ttype in code_to_type.items():
@@ -5244,13 +5246,13 @@ class KycSubmitRequest(BaseModel):
     document_type: str
     document_number: str
     full_name: str
-    selfie_b64: Optional[str] = ""
-    document_b64: Optional[str] = ""
+    selfie_b64: str | None = ""
+    document_b64: str | None = ""
 
 
 class KycReviewRequest(BaseModel):
     decision: str  # 'verified' | 'rejected'
-    rejection_reason: Optional[str] = None
+    rejection_reason: str | None = None
 
 
 @api_router.post("/kyc/submit")
@@ -5259,7 +5261,7 @@ async def kyc_submit_endpoint(payload: KycSubmitRequest, request: Request):
     try:
         sub = await kyc_submit(db, user_id=user["user_id"], payload=payload.dict())
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     if isinstance(sub.get("created_at"), datetime):
         sub["created_at"] = sub["created_at"].isoformat()
     # Trim heavy fields from the response
@@ -5296,7 +5298,7 @@ async def admin_kyc_review_endpoint(submission_id: str, payload: KycReviewReques
             reason=payload.rejection_reason or "",
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     for f in ("created_at", "reviewed_at"):
         if isinstance(sub.get(f), datetime):
             sub[f] = sub[f].isoformat()
@@ -5315,7 +5317,7 @@ class FraudWatchRequest(BaseModel):
 
 class FraudReviewRequest(BaseModel):
     action: str  # 'clear' | 'block_order'
-    note: Optional[str] = ""
+    note: str | None = ""
 
 
 @api_router.get("/admin/fraud/signals")
@@ -5350,7 +5352,7 @@ async def admin_fraud_review(signal_id: str, payload: FraudReviewRequest, reques
             action=payload.action, note=payload.note or "",
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     if isinstance(sig.get("created_at"), datetime):
         sig["created_at"] = sig["created_at"].isoformat()
     return {"ok": True, "signal": sig}
@@ -5369,7 +5371,7 @@ async def _auto_release_engine_loop():
     """Hourly sweep of delivered+expired orders → release funds."""
     while True:
         try:
-            cutoff = datetime.now(timezone.utc) - timedelta(days=AUTO_RELEASE_DAYS)
+            cutoff = datetime.now(UTC) - timedelta(days=AUTO_RELEASE_DAYS)
             stale = await db.orders.find(
                 {"status": "delivered", "delivered_at": {"$lt": cutoff}},
                 {"_id": 0},
@@ -5381,12 +5383,12 @@ async def _auto_release_engine_loop():
                         {"order_id": order["order_id"]},
                         {"$set": {
                             "status": "settled",
-                            "released_at": datetime.now(timezone.utc),
+                            "released_at": datetime.now(UTC),
                             "released_by": "system:auto",
                         }},
                     )
                     # Queue payouts (mock destination falls back to seller's stored phone)
-                    payouts: List[Dict[str, Any]] = []
+                    payouts: list[dict[str, Any]] = []
                     seller_amt = float(order.get("seller_amount") or 0)
                     agent_amt = float(order.get("agent_commission") or 0)
                     if seller_amt > 0 and order.get("seller_id"):
@@ -5399,8 +5401,8 @@ async def _auto_release_engine_loop():
                             "destination": order.get("seller_phone", ""),
                             "amount": seller_amt,
                             "status": "queued",
-                            "created_at": datetime.now(timezone.utc),
-                            "updated_at": datetime.now(timezone.utc),
+                            "created_at": datetime.now(UTC),
+                            "updated_at": datetime.now(UTC),
                         })
                     if agent_amt > 0 and order.get("agent_id"):
                         payouts.append({
@@ -5412,8 +5414,8 @@ async def _auto_release_engine_loop():
                             "destination": order.get("agent_phone", ""),
                             "amount": agent_amt,
                             "status": "queued",
-                            "created_at": datetime.now(timezone.utc),
-                            "updated_at": datetime.now(timezone.utc),
+                            "created_at": datetime.now(UTC),
+                            "updated_at": datetime.now(UTC),
                         })
                     if payouts:
                         await db.payouts.insert_many(payouts)
@@ -5442,7 +5444,7 @@ async def mark_order_delivered(order_id: str, request: Request):
         raise HTTPException(status_code=400, detail=f"Cannot mark delivered from status '{order.get('status')}'")
     await db.orders.update_one(
         {"order_id": order_id},
-        {"$set": {"status": "delivered", "delivered_at": datetime.now(timezone.utc)}},
+        {"$set": {"status": "delivered", "delivered_at": datetime.now(UTC)}},
     )
     return {
         "ok": True,
@@ -5462,21 +5464,21 @@ class OnboardingStartRequest(BaseModel):
     business_name: str
     owner_name: str
     phone: str
-    tin: Optional[str] = None
-    business_email: Optional[str] = None
-    location: Optional[str] = None
-    category: Optional[str] = "general"
+    tin: str | None = None
+    business_email: str | None = None
+    location: str | None = None
+    category: str | None = "general"
 
 
 class OnboardingDocRequest(BaseModel):
     doc_type: str
     image_b64: str
-    note: Optional[str] = ""
+    note: str | None = ""
 
 
 class OnboardingReviewRequest(BaseModel):
     decision: str          # 'verified' | 'rejected'
-    rejection_reason: Optional[str] = None
+    rejection_reason: str | None = None
 
 
 @api_router.get("/onboarding/seller/required-docs")
@@ -5500,9 +5502,9 @@ async def onboarding_start(payload: OnboardingStartRequest, request: Request):
     try:
         onb = await onb_start(db, rep_user_id=user["user_id"], payload=body)
     except PermissionError as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     return {"ok": True, "onboarding": onb}
 
 
@@ -5520,9 +5522,9 @@ async def onboarding_doc(onboarding_id: str, payload: OnboardingDocRequest, requ
             rep_user_id=user["user_id"],
         )
     except LookupError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     return {"ok": True, "onboarding": onb}
 
 
@@ -5533,9 +5535,9 @@ async def onboarding_submit(onboarding_id: str, request: Request):
     try:
         onb = await onb_submit(db, onboarding_id=onboarding_id)
     except LookupError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     return {"ok": True, "onboarding": onb}
 
 
@@ -5546,7 +5548,7 @@ async def onboarding_progress(onboarding_id: str, request: Request):
     try:
         return await onb_get(db, onboarding_id=onboarding_id)
     except LookupError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @api_router.get("/admin/onboarding/queue")
@@ -5585,9 +5587,9 @@ async def admin_onboarding_review(onboarding_id: str, payload: OnboardingReviewR
             reason=payload.rejection_reason or "",
         )
     except LookupError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     # On approval, text the new seller a welcome + password-set link so they
     # can sign in. Best-effort — never fail the review on SMS hiccup.
@@ -5645,9 +5647,9 @@ async def post_client_error(request: Request):
 @api_router.get("/admin/client-errors")
 async def admin_list_client_errors(
     request: Request,
-    level: Optional[str] = None,
-    since: Optional[str] = None,
-    q: Optional[str] = None,
+    level: str | None = None,
+    since: str | None = None,
+    q: str | None = None,
     limit: int = 100,
 ):
     user = await get_current_user(request)
@@ -5666,7 +5668,7 @@ async def admin_client_error_stats(request: Request):
 
 
 @api_router.delete("/admin/client-errors")
-async def admin_purge_client_errors(request: Request, older_than_days: Optional[int] = None):
+async def admin_purge_client_errors(request: Request, older_than_days: int | None = None):
     user = await get_current_user(request)
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only")

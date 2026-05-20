@@ -33,9 +33,9 @@ Collections created lazily on first use:
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, UTC
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # ─── Money helpers ─────────────────────────────────────────────────────────
 TWO = Decimal("0.01")
@@ -70,7 +70,7 @@ HAWKER_PCT = Decimal("0.02")   # taken from hawker commission (3-party only)
 BUYER_PCT  = Decimal("0.03")   # added on top, paid by buyer
 
 
-def _split_direct(deal: Decimal) -> Dict[str, Decimal]:
+def _split_direct(deal: Decimal) -> dict[str, Decimal]:
     """Direct (2-party) mode: buyer pays deal × 1.03; seller keeps deal × 0.98."""
     gross = deal * (Decimal("1") + BUYER_PCT)
     supply_fee = deal * SUPPLY_PCT
@@ -86,7 +86,7 @@ def _split_direct(deal: Decimal) -> Dict[str, Decimal]:
     }
 
 
-def _split_three_party(deal: Decimal, supplier_cost: Decimal) -> Dict[str, Decimal]:
+def _split_three_party(deal: Decimal, supplier_cost: Decimal) -> dict[str, Decimal]:
     """3-party mode: deal = supplier_cost + hawker_markup; fees split across all three sides."""
     if supplier_cost <= 0 or supplier_cost >= deal:
         raise ValueError("supplier_cost must satisfy 0 < supplier_cost < deal_value")
@@ -105,7 +105,7 @@ def _split_three_party(deal: Decimal, supplier_cost: Decimal) -> Dict[str, Decim
     }
 
 
-def _reconcile_pennies(split: Dict[str, Decimal]) -> Dict[str, Decimal]:
+def _reconcile_pennies(split: dict[str, Decimal]) -> dict[str, Decimal]:
     """
     Quantize everything once and absorb any rounding drift into the platform fee
     so the invariant `gross == seller + agent + platform` always holds exactly.
@@ -135,8 +135,8 @@ def calculate_split(
     *,
     mode: str,
     deal_value: Decimal,
-    supplier_cost: Optional[Decimal] = None,
-) -> Dict[str, float]:
+    supplier_cost: Decimal | None = None,
+) -> dict[str, float]:
     """
     Compute the canonical money split.
 
@@ -187,7 +187,7 @@ async def seed_chart_of_accounts(db) -> int:
     for a in ACCOUNTS:
         res = await db.ledger_accounts.update_one(
             {"code": a["code"]},
-            {"$setOnInsert": {**a, "created_at": datetime.now(timezone.utc)}},
+            {"$setOnInsert": {**a, "created_at": datetime.now(UTC)}},
             upsert=True,
         )
         if res.upserted_id is not None:
@@ -195,7 +195,7 @@ async def seed_chart_of_accounts(db) -> int:
     return inserted
 
 
-async def _post_entries(db, *, order_id: str, batch: List[Dict[str, Any]], memo: str) -> List[str]:
+async def _post_entries(db, *, order_id: str, batch: list[dict[str, Any]], memo: str) -> list[str]:
     """
     Append a balanced batch of debits/credits to `ledger_entries`.
 
@@ -221,9 +221,9 @@ async def _post_entries(db, *, order_id: str, batch: List[Dict[str, Any]], memo:
     if debit_sum != credit_sum:
         raise ValueError(f"Unbalanced batch: debits={debit_sum} credits={credit_sum}")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     docs = []
-    ids: List[str] = []
+    ids: list[str] = []
     for e in batch:
         eid = f"led_{uuid.uuid4().hex[:14]}"
         docs.append({
@@ -242,7 +242,7 @@ async def _post_entries(db, *, order_id: str, batch: List[Dict[str, Any]], memo:
     return ids
 
 
-async def assert_balanced(db, order_id: str) -> Dict[str, float]:
+async def assert_balanced(db, order_id: str) -> dict[str, float]:
     """Assert the ledger for an order is currently balanced. Returns the position."""
     cursor = db.ledger_entries.find({"order_id": order_id}, {"_id": 0, "entry_type": 1, "amount": 1})
     debit = D(0)
@@ -262,7 +262,7 @@ async def assert_balanced(db, order_id: str) -> Dict[str, float]:
 
 # ─── High-level transaction posters ───────────────────────────────────────
 async def post_funds_received(
-    db, *, order_id: str, gross_amount, provider: str, provider_txn_id: str, raw_payload: Dict | None = None,
+    db, *, order_id: str, gross_amount, provider: str, provider_txn_id: str, raw_payload: dict | None = None,
 ) -> str:
     """
     Buyer payment confirmed by gateway:
@@ -283,7 +283,7 @@ async def post_funds_received(
         return existing["tx_id"]
 
     tx_id = f"ptx_{uuid.uuid4().hex[:14]}"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     await db.payment_transactions.insert_one({
         "tx_id": tx_id,
         "order_id": order_id,
@@ -309,7 +309,7 @@ async def post_funds_received(
     return tx_id
 
 
-async def post_release(db, *, order: Dict[str, Any]) -> None:
+async def post_release(db, *, order: dict[str, Any]) -> None:
     """
     Buyer confirmed delivery / dispute resolved in seller's favour:
         debit  escrow_liability      (gross_amount)
@@ -328,7 +328,7 @@ async def post_release(db, *, order: Dict[str, Any]) -> None:
             f"Release split mismatch: {seller}+{agent}+{platform} != {gross}"
         )
 
-    batch: List[Dict[str, Any]] = [
+    batch: list[dict[str, Any]] = [
         {"account_code": "escrow_liability", "entry_type": "debit",  "amount": gross},
         {"account_code": "seller_payable",   "entry_type": "credit", "amount": seller},
         {"account_code": "platform_revenue", "entry_type": "credit", "amount": platform},
@@ -359,7 +359,7 @@ async def post_refund(db, *, order_id: str, amount) -> None:
     await assert_balanced(db, order_id)
 
 
-async def post_payout_paid(db, *, payout: Dict[str, Any]) -> None:
+async def post_payout_paid(db, *, payout: dict[str, Any]) -> None:
     """
     Disbursement provider confirmed payout was sent:
         debit  seller_payable | agent_payable
@@ -380,7 +380,7 @@ async def post_payout_paid(db, *, payout: Dict[str, Any]) -> None:
 
 
 # ─── Reconciliation views ─────────────────────────────────────────────────
-async def order_financials(db, order_id: str) -> Dict[str, Any]:
+async def order_financials(db, order_id: str) -> dict[str, Any]:
     """The Mongo equivalent of the SQL `v_order_financials` view."""
     order = await db.orders.find_one({"order_id": order_id}, {"_id": 0})
     if not order:
@@ -413,7 +413,7 @@ async def mark_webhook_processed(db, *, provider: str, event_id: str) -> None:
     await db.processed_webhooks.update_one(
         {"provider": provider, "event_id": event_id},
         {"$setOnInsert": {"provider": provider, "event_id": event_id,
-                          "created_at": datetime.now(timezone.utc)}},
+                          "created_at": datetime.now(UTC)}},
         upsert=True,
     )
 
@@ -422,9 +422,9 @@ async def mark_webhook_processed(db, *, provider: str, event_id: str) -> None:
 DISPUTE_AUTO_RESOLVE_DAYS = 3
 
 
-async def find_auto_resolvable_disputes(db) -> List[Dict[str, Any]]:
+async def find_auto_resolvable_disputes(db) -> list[dict[str, Any]]:
     """Disputes with status=open older than DISPUTE_AUTO_RESOLVE_DAYS."""
-    cutoff = datetime.now(timezone.utc) - timedelta(days=DISPUTE_AUTO_RESOLVE_DAYS)
+    cutoff = datetime.now(UTC) - timedelta(days=DISPUTE_AUTO_RESOLVE_DAYS)
     rows = await db.disputes.find(
         {"status": "open", "created_at": {"$lt": cutoff}}, {"_id": 0}
     ).to_list(200)

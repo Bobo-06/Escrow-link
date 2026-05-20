@@ -15,14 +15,14 @@ and a small audit trail.
 """
 from __future__ import annotations
 import uuid
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 
 VALID_DOC_TYPES = {"national_id", "voter_id", "passport", "drivers_license"}
 
 
-async def submit_kyc(db, *, user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+async def submit_kyc(db, *, user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     """
     Persist a KYC submission. Stored as base64 document images so we don't
     need an external object store for the MVP. Production should swap to S3.
@@ -46,7 +46,7 @@ async def submit_kyc(db, *, user_id: str, payload: Dict[str, Any]) -> Dict[str, 
         "rejection_reason": None,
         "reviewed_by": None,
         "reviewed_at": None,
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
     }
     await db.kyc_submissions.insert_one(doc)
     # Strip Mongo-injected _id so the dict is JSON-serializable when returned.
@@ -58,7 +58,7 @@ async def submit_kyc(db, *, user_id: str, payload: Dict[str, Any]) -> Dict[str, 
     return doc
 
 
-async def review_kyc(db, *, submission_id: str, decision: str, reviewer_id: str, reason: str = "") -> Dict[str, Any]:
+async def review_kyc(db, *, submission_id: str, decision: str, reviewer_id: str, reason: str = "") -> dict[str, Any]:
     """Admin marks the KYC submission as verified or rejected."""
     if decision not in {"verified", "rejected"}:
         raise ValueError("decision must be 'verified' or 'rejected'")
@@ -66,7 +66,7 @@ async def review_kyc(db, *, submission_id: str, decision: str, reviewer_id: str,
     if not sub:
         raise ValueError("Submission not found")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     await db.kyc_submissions.update_one(
         {"submission_id": submission_id},
         {"$set": {
@@ -84,7 +84,7 @@ async def review_kyc(db, *, submission_id: str, decision: str, reviewer_id: str,
     return sub
 
 
-async def list_pending(db, limit: int = 50) -> List[Dict[str, Any]]:
+async def list_pending(db, limit: int = 50) -> list[dict[str, Any]]:
     """Admin queue — pending submissions oldest-first."""
     rows = await db.kyc_submissions.find(
         {"status": "pending"}, {"_id": 0}
@@ -98,7 +98,7 @@ async def list_pending(db, limit: int = 50) -> List[Dict[str, Any]]:
     return rows
 
 
-async def get_user_kyc_status(db, user_id: str) -> Dict[str, Any]:
+async def get_user_kyc_status(db, user_id: str) -> dict[str, Any]:
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "kyc_status": 1, "kyc_submission_id": 1})
     if not user:
         return {"kyc_status": "unknown"}

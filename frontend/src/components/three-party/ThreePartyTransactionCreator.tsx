@@ -19,7 +19,7 @@ export default function ThreePartyTransactionCreator({ hawker, onCreated, onClos
     supplier_location: "Kariakoo, DSM",
     notes: "",
   });
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -33,7 +33,6 @@ export default function ThreePartyTransactionCreator({ hawker, onCreated, onClos
   const buyerFee = Math.round(bp * BUYER_FEE_PCT);
   const supplierPayout = sc - supplyFee;
   const commission = bp && sc ? bp - sc - buyerFee : 0;
-  const platformFee = supplyFee + buyerFee;
   const commissionPct = bp ? ((commission / bp) * 100).toFixed(1) : 0;
 
   const handleImage = (e: React.ChangeEvent<HTMLInputElement>) => {

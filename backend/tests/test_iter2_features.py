@@ -118,8 +118,10 @@ class TestVoiceTranscribe:
             pytest.fail(f"Non-JSON response: {r.text[:300]}")
         if r.status_code == 200:
             assert "text" in body, f"Missing 'text': {body}"
-            # Optional fields
-            assert "duration_bytes" in body or "size" in body or True  # soft
+            # Either a duration or size field is fine; both are optional metadata.
+            assert "duration_bytes" in body or "size" in body, (
+                f"Expected duration_bytes or size in response: {body}"
+            )
         else:
             # Whisper rejecting short/silent audio is acceptable — must be structured error
             assert "detail" in body or "error" in body or "message" in body, \

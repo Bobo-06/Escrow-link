@@ -15,8 +15,6 @@ Covers:
 import io
 import secrets
 import os
-import random
-import time
 
 import pytest
 import requests
@@ -72,7 +70,7 @@ class TestRegisterValidFormats:
         r = client.post(f"{BASE_URL}/api/auth/register", json=payload)
         # May be 400 if same phone pre-exists; in that case re-generate
         if r.status_code == 400 and "tayari" in r.text:
-            phone = phone[:-2] + str((secrets.randbelow(99 - 10 + 1) + 10))
+            phone = phone[:-2] + str(secrets.randbelow(99 - 10 + 1) + 10)
             payload["phone"] = phone
             digits = "".join(c for c in phone if c.isdigit())
             if digits.startswith("255"):

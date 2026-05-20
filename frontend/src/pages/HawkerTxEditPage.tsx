@@ -61,7 +61,6 @@ export default function HawkerTxEditPage() {
   const buyerFee = Math.round(bp * 0.03);
   const supplierPayout = sc - supplyFee;
   const commission = bp && sc ? bp - sc - buyerFee : 0;
-  const platformFee = supplyFee + buyerFee;
 
   const submit = async () => {
     if (!bp || !sc || sc >= bp) { setMsg("Bei si sahihi"); return; }

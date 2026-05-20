@@ -13,7 +13,6 @@ import hmac as _hmac
 import secrets
 import hashlib
 import os
-import random
 import uuid
 import pytest
 import requests
@@ -135,7 +134,7 @@ class TestBuyerConfirmDelivery:
         buyer_user_id = r.json()["user_id"]
 
         # Register fresh supplier
-        sup_suffix = str((secrets.randbelow(99999999 - 10000000 + 1) + 10000000))
+        sup_suffix = str(secrets.randbelow(99999999 - 10000000 + 1) + 10000000)
         supplier_phone = f"+2557557{sup_suffix[:5]}"
         supplier_pw = "SupPw1234!"
         reg = requests.post(

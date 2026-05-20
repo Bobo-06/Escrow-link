@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { X, Loader2, Sparkles, Mic } from 'lucide-react';
 import toast from 'react-hot-toast';
 import VoiceRecorder from './VoiceRecorder';
-import { productsAPI } from '../lib/api';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || '';
 
@@ -35,7 +34,7 @@ const VoiceProductListingModal: React.FC<Props> = ({ open, onClose, onCreated })
   const parseTranscript = (text: string): ParsedFields => {
     const out: ParsedFields = { description: text };
     // Price: match TSh / TZS / shilingi / 'at 50000'
-    const priceMatch = text.match(/(?:tsh|tzs|shilingi|sh|\bbei\b|\bprice\b|\bat\b|-)\s*([\d][\d,\.\s]*)/i);
+    const priceMatch = text.match(/(?:tsh|tzs|shilingi|sh|\bbei\b|\bprice\b|\bat\b|-)\s*([\d][\d,.\s]*)/i);
     if (priceMatch) {
       const n = parseInt(priceMatch[1].replace(/[^\d]/g, ''), 10);
       if (!isNaN(n) && n > 100) out.price = n;

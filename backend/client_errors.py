@@ -31,8 +31,8 @@ from __future__ import annotations
 import time
 import uuid
 from collections import defaultdict, deque
-from datetime import datetime, timezone, timedelta
-from typing import Any, Deque, Dict, List, Optional, Tuple
+from datetime import datetime, timedelta, UTC
+from typing import Any
 
 
 COLLECTION = "client_errors"
@@ -48,7 +48,7 @@ ALLOWED_LEVELS = ("debug", "info", "warn", "error")
 # scale to multi-replica, swap for Redis or move the limiter to the ingress.
 _RATE_WINDOW_SECONDS = 60
 _RATE_MAX_EVENTS = 30
-_rate_buckets: Dict[str, Deque[float]] = defaultdict(deque)
+_rate_buckets: dict[str, deque[float]] = defaultdict(deque)
 
 
 # ---------------------------------------------------------------------------
@@ -63,11 +63,11 @@ def _truncate(value: Any, limit: int) -> str:
     return s if len(s) <= limit else s[: limit - 3] + "..."
 
 
-def _safe_meta(meta: Any) -> Dict[str, Any]:
+def _safe_meta(meta: Any) -> dict[str, Any]:
     """Shallow-clone meta dict, dropping anything that bloats the doc."""
     if not isinstance(meta, dict):
         return {}
-    out: Dict[str, Any] = {}
+    out: dict[str, Any] = {}
     running = 0
     for k, v in meta.items():
         # Stringify nested structures so the doc stays predictable in Mongo
@@ -131,7 +131,7 @@ async def ensure_indexes(db) -> None:
         pass
 
 
-async def ingest(db, *, request, payload: Dict[str, Any]) -> Tuple[bool, str]:
+async def ingest(db, *, request, payload: dict[str, Any]) -> tuple[bool, str]:
     """
     Validate, trim and insert one event. Returns (accepted, status_string).
     `accepted=False` for rate-limited callers — endpoint should still 202 so
@@ -160,8 +160,8 @@ async def ingest(db, *, request, payload: Dict[str, Any]) -> Tuple[bool, str]:
         "viewport": _truncate(payload.get("viewport"), 40),
         "meta": _safe_meta(payload.get("meta")),
         "ip": ip,
-        "created_at": datetime.now(timezone.utc),
-        "expire_at": datetime.now(timezone.utc) + timedelta(days=TTL_DAYS),
+        "created_at": datetime.now(UTC),
+        "expire_at": datetime.now(UTC) + timedelta(days=TTL_DAYS),
     }
     await db[COLLECTION].insert_one(doc)
     # Mongo mutates the dict to add `_id`. We never return this dict from a
@@ -170,7 +170,7 @@ async def ingest(db, *, request, payload: Dict[str, Any]) -> Tuple[bool, str]:
     return True, "accepted"
 
 
-def _serialize(doc: Dict[str, Any]) -> Dict[str, Any]:
+def _serialize(doc: dict[str, Any]) -> dict[str, Any]:
     """Make a Mongo doc JSON-safe (datetimes → ISO; drop _id defensively)."""
     out = {k: v for k, v in doc.items() if k != "_id"}
     for f in ("created_at", "expire_at"):
@@ -183,13 +183,13 @@ def _serialize(doc: Dict[str, Any]) -> Dict[str, Any]:
 async def list_events(
     db,
     *,
-    level: Optional[str] = None,
-    since_iso: Optional[str] = None,
-    q: Optional[str] = None,
+    level: str | None = None,
+    since_iso: str | None = None,
+    q: str | None = None,
     limit: int = 100,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Admin-only listing with simple filters."""
-    query: Dict[str, Any] = {}
+    query: dict[str, Any] = {}
     if level and level in ALLOWED_LEVELS:
         query["level"] = level
     if since_iso:
@@ -213,9 +213,9 @@ async def list_events(
     return [_serialize(r) for r in rows]
 
 
-async def stats(db) -> Dict[str, Any]:
+async def stats(db) -> dict[str, Any]:
     """Operator dashboard summary."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     last_24h = now - timedelta(hours=24)
     last_7d = now - timedelta(days=7)
     total = await db[COLLECTION].count_documents({})
@@ -223,7 +223,7 @@ async def stats(db) -> Dict[str, Any]:
     last_7d_count = await db[COLLECTION].count_documents({"created_at": {"$gte": last_7d}})
 
     # Per-level breakdown for the last 7 days — cheap aggregation.
-    by_level: Dict[str, int] = {lvl: 0 for lvl in ALLOWED_LEVELS}
+    by_level: dict[str, int] = {lvl: 0 for lvl in ALLOWED_LEVELS}
     pipeline = [
         {"$match": {"created_at": {"$gte": last_7d}}},
         {"$group": {"_id": "$level", "n": {"$sum": 1}}},
@@ -241,11 +241,11 @@ async def stats(db) -> Dict[str, Any]:
     }
 
 
-async def purge(db, *, older_than_days: Optional[int] = None) -> int:
+async def purge(db, *, older_than_days: int | None = None) -> int:
     """Admin-only delete. With no argument, wipes everything."""
     if older_than_days is None:
         result = await db[COLLECTION].delete_many({})
         return result.deleted_count
-    cutoff = datetime.now(timezone.utc) - timedelta(days=max(0, older_than_days))
+    cutoff = datetime.now(UTC) - timedelta(days=max(0, older_than_days))
     result = await db[COLLECTION].delete_many({"created_at": {"$lt": cutoff}})
     return result.deleted_count

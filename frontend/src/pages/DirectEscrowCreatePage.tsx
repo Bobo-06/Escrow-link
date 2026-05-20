@@ -11,7 +11,7 @@ const API_URL = process.env.REACT_APP_BACKEND_URL || "";
  *  SMS/WhatsApp → buyer accepts/counters/declines → on accept, buyer pays.
  */
 export default function DirectEscrowCreatePage() {
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
   const [form, setForm] = useState({
     item_name: "",

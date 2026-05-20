@@ -38,7 +38,8 @@ export default function DirectBuyerOfferPage() {
       setLoading(false);
     }
   };
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [txId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [txId]);
 
   const respond = async (accepted: boolean, counter = false) => {
     setBusy(true); setMsg("");

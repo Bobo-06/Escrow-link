@@ -13,9 +13,6 @@ Covers:
 """
 import os
 import secrets
-import time
-import uuid
-import random
 import pytest
 import requests
 
@@ -58,7 +55,7 @@ def test_login_wrong_password(session):
 
 def test_register_and_relogin_different_format(session):
     """Register with one format, login with a different format."""
-    suffix = str((secrets.randbelow(99999999 - 10000000 + 1) + 10000000))
+    suffix = str(secrets.randbelow(99999999 - 10000000 + 1) + 10000000)
     raw_phone = f"0799{suffix[:6]}"  # 10-digit national
     canonical = f"+255799{suffix[:6]}"
     pwd = "Demo1234!"
@@ -93,7 +90,7 @@ def test_og_image_served():
 @pytest.fixture(scope="module")
 def hawker_token(session):
     """Register a fresh hawker and return session_token."""
-    suffix = str((secrets.randbelow(99999999 - 10000000 + 1) + 10000000))
+    suffix = str(secrets.randbelow(99999999 - 10000000 + 1) + 10000000)
     pwd = "Demo1234!"
     r = session.post(f"{API}/auth/register", json={
         "phone": f"+2557881{suffix[:5]}",
@@ -107,7 +104,7 @@ def hawker_token(session):
 @pytest.fixture(scope="module")
 def three_party_tx(session, hawker_token):
     """Create a fresh 3-party tx with the exact fee-invariant numbers."""
-    suffix = str((secrets.randbelow(99999999 - 10000000 + 1) + 10000000))
+    suffix = str(secrets.randbelow(99999999 - 10000000 + 1) + 10000000)
     supplier_phone = f"+2557552{suffix[:5]}"
     body = {
         "supplier_phone": supplier_phone,
@@ -184,7 +181,7 @@ def test_buyer_verify_view(three_party_tx):
 def test_counter_offer_transitions_status(session, hawker_token):
     """Fresh tx → counter_offer → status=counter_offered."""
     # create fresh tx
-    suffix = str((secrets.randbelow(99999999 - 10000000 + 1) + 10000000))
+    suffix = str(secrets.randbelow(99999999 - 10000000 + 1) + 10000000)
     body = {
         "supplier_phone": f"+2557553{suffix[:5]}",
         "supplier_name": "TEST Supplier B",
@@ -209,7 +206,7 @@ def test_counter_offer_transitions_status(session, hawker_token):
 
 def test_edit_resets_pending_and_recomputes(session, hawker_token):
     """Create → counter_offer → edit → status=pending_approval with new split."""
-    suffix = str((secrets.randbelow(99999999 - 10000000 + 1) + 10000000))
+    suffix = str(secrets.randbelow(99999999 - 10000000 + 1) + 10000000)
     body = {
         "supplier_phone": f"+2557554{suffix[:5]}",
         "supplier_cost": 1500000,
@@ -244,7 +241,9 @@ def test_edit_resets_pending_and_recomputes(session, hawker_token):
 
 
 def _hmac_sig(tx_id, role, identifier):
-    import hmac, hashlib, os
+    import hmac
+    import hashlib
+    import os
     # Source from env so HMAC stays valid when JWT_SECRET is rotated in CI/prod.
     secret = os.environ.get("JWT_SECRET", "biz-salama-secret-change-in-prod-2026")
     msg = f"{tx_id}:{role}:{identifier or ''}".encode()
@@ -253,7 +252,7 @@ def _hmac_sig(tx_id, role, identifier):
 
 def test_accept_creates_scrubbed_snapshot(session, hawker_token):
     """Approval snapshot contains supplier-side ONLY — no buyer_fee / platform_fee."""
-    suffix = str((secrets.randbelow(99999999 - 10000000 + 1) + 10000000))
+    suffix = str(secrets.randbelow(99999999 - 10000000 + 1) + 10000000)
     supplier_phone = f"+2557555{suffix[:5]}"
     body = {
         "supplier_phone": supplier_phone,
@@ -286,7 +285,7 @@ def test_accept_creates_scrubbed_snapshot(session, hawker_token):
 
 def test_fee_invariant(session, hawker_token):
     """buyer_price=1,850,000, supplier_cost=1,650,000 → exact fee split."""
-    suffix = str((secrets.randbelow(99999999 - 10000000 + 1) + 10000000))
+    suffix = str(secrets.randbelow(99999999 - 10000000 + 1) + 10000000)
     supplier_phone = f"+2557556{suffix[:5]}"
     body = {
         "supplier_phone": supplier_phone,

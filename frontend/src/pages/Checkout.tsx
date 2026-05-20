@@ -1,9 +1,7 @@
 import React from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { Shield, CreditCard, MapPin, Phone, User } from 'lucide-react';
+import { Shield, CreditCard, User } from 'lucide-react';
 
 const Checkout: React.FC = () => {
-  const { id } = useParams();
 
   return (
     <div className="min-h-screen bg-ink-900 pt-20">

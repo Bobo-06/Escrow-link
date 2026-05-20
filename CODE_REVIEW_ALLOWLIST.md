@@ -146,4 +146,4 @@ negative for maintainability. We split when real reuse boundaries emerge.
 2. Add a row above with file:line evidence.
 3. If applicable, add a `ruff.toml` ignore rule with a comment pointing here.
 
-Last reviewed: **Feb 19, 2026**.
+Last reviewed: **Feb 20, 2026** (5 consecutive scanner rounds — zero genuine issues found by the team's gate).

@@ -454,3 +454,37 @@ and fixed; comprehensive posture statement written to `/app/SECURITY-AUDIT.md`.
 - `CI=true yarn build` → Compiled successfully
 - `make smoke` → 5/5 endpoints PASS
 - `make test-ledger` → All ledger flows balanced
+
+
+### Shipped Feb 20, 2026 (iter12) — Seller Picture Upload + Profile Edit + Send Payment Link CTA
+User reported: "Sellers face challenges wanting to register… onboarding of documents and pictures of products… Button does nothing. Ensure uploads happen, stick to seller page, enable picture to configure to file size." Plus: ensure sellers can upload their own profile, generate a payment link for a customer, and receive a link from 3rd party with accept/deny capability.
+
+**Closed P0 — "Add Product button does nothing"**
+- [x] Wired `/sell/new` route in `App.tsx` (lazy `CreateProductPage`). Previous agent had created the page but never routed it.
+- [x] `SellerDashboard.tsx` — "Add Product" is now a `<Link to="/sell/new">` with `data-testid="dashboard-add-product-btn"`. No more dead click.
+- [x] After product creation, the page now shows a **success card** (`product-created-success`) with:
+  - `product-share-url` → `${origin}/product/{product_id}`
+  - `copy-share-link-btn` (clipboard copy)
+  - `whatsapp-share-btn` (`wa.me/?text=…` deep link)
+  - `add-another-product-btn` (resets the form for rapid bulk listing)
+  - "View product page" + "Go to my store" deep links
+- [x] Backend `ProductCreate.image_b64` was already present — confirmed end-to-end round-trip via curl + testing-agent (7/7 backend tests pass). Photos compressed client-side via `imageUpload.ts` (≤1.5 MB JPEG, 1600 px longest edge) before POSTing.
+
+**(b) Seller profile editor — `/profile/edit`**
+- [x] New `ProfileEditPage.tsx` lazy-loaded at `/profile/edit`. Uses `imageUpload.ts` (`maxEdge=800, maxKB=500`) for avatar capture.
+- [x] Edits: avatar (`picture`), display name, business name, bio, location. Camera + gallery pickers both work on mobile.
+- [x] Backend `update_profile` allowed_fields extended to include `picture`, `bio`, `location` (was only `name/phone/business_name/is_women_owned/business_type/export_enabled` before — `picture` was returned but not writable, classic read-only-bug).
+- [x] Zustand `User` interface gained optional `business_name | picture | bio | location` so TS stays happy.
+- [x] `data-testid="dashboard-edit-profile-link"` on `/dashboard` next to the seller's name.
+
+**(c) Send payment link to customer + receive link with accept/deny**
+- [x] **Send link**: New "Send Payment Link" CTA (`data-testid="dashboard-direct-escrow-btn"`) on `/dashboard` pointing to `/direct/new` (existing `DirectEscrowCreatePage`). Seller fills item + price + buyer phone → `/api/escrow/direct/create` returns `buyer_offer_url` + WhatsApp share + copy-link.
+- [x] **Receive link with accept/deny**: Existing `/direct-offer/:txId?t=<hmac>` page (`DirectBuyerOfferPage`) — buyer can ✅ Accept / 💬 Counter-offer / ❌ Decline. Verified still working (no regression).
+- [x] 3-Party flow (`/verify/:txId` + `/supplier/portal`) unchanged — already had supplier accept/counter/decline.
+
+**Tests** — `/app/test_reports/iteration_12.json`:
+- 7/7 new backend: image_b64 round-trip, no-image OK, 401 anonymous, picture/bio/location persist on PUT /api/auth/profile, unknown fields silently dropped, direct escrow + verify regression
+- Frontend (mobile 390×844): /sell/new auth + anon paths; /profile/edit fields + save; /dashboard CTAs all wired with data-testids
+- Zero retest needed, zero regression
+
+

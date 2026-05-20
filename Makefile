@@ -30,3 +30,9 @@ smoke:
 
 test-ledger:
 	cd backend && export $$(grep -v '^#' .env | xargs) && python3 tests/test_ledger_e2e.py
+
+pitch-deck:
+	cd backend && python3 scripts/generate_seller_pitch.py
+	@echo ""
+	@echo "Open the deck:  /app/biz_salama_seller_pitch_sw.pptx"
+	@echo "Public URL:     /api/docs/seller-pitch.pptx"

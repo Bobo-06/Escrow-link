@@ -80,6 +80,19 @@ const LandingPage: React.FC = () => {
                 </Link>
               </div>
 
+              {/* Pitch-deck download — Kiswahili-primary seller guide,
+                  visible right under the hero CTA so first-time visitors can
+                  evaluate Biz-Salama offline before signing up. */}
+              <a
+                href={`${process.env.REACT_APP_BACKEND_URL}/api/docs/seller-pitch.pptx`}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid="hero-pitch-download"
+                className="mt-4 inline-flex items-center gap-2 text-sm text-gold-400 hover:text-gold-300 underline decoration-gold-500/40 decoration-dotted underline-offset-4 transition"
+              >
+                📥  Pakua mwongozo wa muuzaji (Kiswahili .pptx)
+              </a>
+
               {/* Trust badges */}
               <div className="flex items-center gap-6 mt-10">
                 <div className="flex items-center">

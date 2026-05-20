@@ -30,14 +30,24 @@ must be triaged.
 `is None`. Using `==` with `None` is wrong because `None`-like objects (e.g. NumPy NaN)
 can override `__eq__`.
 
-**Evidence — every flagged line in `server.py` is `is None`, not `is True/False`:**
-- `server.py:453` → `return normalize_tz_phone(raw) is not None`
-- `server.py:528` → `if expires_at.tzinfo is None:`
-- `server.py:873` → `if expires_at.tzinfo is None:`
-- `server.py:4074-4082` → 5 lines of `if request.<field> is not None:`
+**Evidence — every flagged line across multiple rounds is `is None`, not `is True/False`:**
+
+| File:line | Actual code |
+|---|---|
+| `server.py:453` | `return normalize_tz_phone(raw) is not None` |
+| `server.py:528, 873` | `if expires_at.tzinfo is None:` |
+| `server.py:4074-4082` | 5 lines of `if request.<field> is not None:` |
+| `server.py:4414, 5571` | `is None` |
+| `ledger.py:167` | `if supplier_cost is None:` |
+| `ledger.py:193` | `if res.upserted_id is not None:` |
+| `ledger.py:409` | `return existing is not None` |
+| `client_errors.py:60` | `if value is None:` (inside `_truncate` guard) |
+| `client_errors.py:77` | `sv = str(v) if v is not None else ""` |
+| `client_errors.py:246` | `if older_than_days is None:` (signature default check) |
 
 **Lint config:** `E711` remains **enabled** (which is what catches the *real* bug —
-`== None`). Ruff correctly distinguishes the two.
+`== None`). Ruff correctly distinguishes the two. **If this entry triggers a
+fourth time, please point the scanner vendor at this section.**
 
 ### 2. `random` in test files
 
@@ -66,12 +76,20 @@ field defaults that contain the word "password").
 ### 4. "Possibly undefined variables (11 instances)"
 
 **Scanner says:** "11 undefined variables across the backend."
-**Reality:** `ruff check . --select F821` reports **zero** undefined names. We
+**Reality:** `ruff check . --select F821,F823` reports **zero**. We
 suspect this scanner trips on string interpolation patterns like `f"…{x or ''}"`
 that aren't actually unbound.
 
-**Action if flagged again:** Ask the report author for file+line numbers. Until then,
-treat as a false positive.
+**Verified false positives (concrete examples surfaced in later rounds):**
+
+| Reported line | Actual code | Why it's safe |
+|---|---|---|
+| `server.py:3989` — "`update` possibly undefined" | `return {..., "status": update["status"]}` | `update` is assigned in **every** branch of the preceding `if/elif/else` (lines ~3940, 3958, 3972). All paths set it before line 3989. |
+| `server.py:4292` — "`update` possibly undefined" | `return {..., "status": update["status"]}` | Same pattern — `update` set in 3 branches at lines 4264, 4272, 4284 covering all `payload.accepted/counter_offer` combinations. |
+
+**Action if flagged again:** Ask the report author for the *exact* execution
+path where `update` would be unbound. Ruff's `F823` (local-variable-referenced-
+before-assignment) flags real cases; this scanner does not.
 
 ---
 

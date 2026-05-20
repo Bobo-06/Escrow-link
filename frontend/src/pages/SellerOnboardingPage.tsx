@@ -220,16 +220,28 @@ const SellerOnboardingPage: React.FC = () => {
 
           {/* Download pitch deck — explains Biz-Salama in Kiswahili for sellers
               who want a take-away before signing up, or for sharing on WhatsApp. */}
-          <a
-            href={`${process.env.REACT_APP_BACKEND_URL}/api/docs/seller-pitch.pptx`}
-            target="_blank"
-            rel="noopener noreferrer"
-            data-testid="seller-pitch-download"
-            className="mt-4 inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-ink-800 border border-gold-500/30 text-gold-300 text-xs hover:bg-gold-500/10 hover:border-gold-500/60 transition"
-          >
-            <Download className="w-3.5 h-3.5" />
-            Pakua mwongozo (.pptx)  ·  Download seller guide
-          </a>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <a
+              href={`${process.env.REACT_APP_BACKEND_URL}/api/docs/seller-pitch.pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="seller-pitch-download-pdf"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-ink-800 border border-gold-500/30 text-gold-300 text-xs hover:bg-gold-500/10 hover:border-gold-500/60 transition"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Mwongozo PDF (WhatsApp)
+            </a>
+            <a
+              href={`${process.env.REACT_APP_BACKEND_URL}/api/docs/seller-pitch.pptx`}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="seller-pitch-download-pptx"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-ink-800 border border-ink-700 text-ink-300 text-xs hover:text-white hover:border-gold-500/40 transition"
+            >
+              <Download className="w-3.5 h-3.5" />
+              .pptx
+            </a>
+          </div>
         </div>
 
         {/* Progress bar */}

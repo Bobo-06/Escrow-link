@@ -80,18 +80,30 @@ const LandingPage: React.FC = () => {
                 </Link>
               </div>
 
-              {/* Pitch-deck download — Kiswahili-primary seller guide,
-                  visible right under the hero CTA so first-time visitors can
-                  evaluate Biz-Salama offline before signing up. */}
-              <a
-                href={`${process.env.REACT_APP_BACKEND_URL}/api/docs/seller-pitch.pptx`}
-                target="_blank"
-                rel="noopener noreferrer"
-                data-testid="hero-pitch-download"
-                className="mt-4 inline-flex items-center gap-2 text-sm text-gold-400 hover:text-gold-300 underline decoration-gold-500/40 decoration-dotted underline-offset-4 transition"
-              >
-                📥  Pakua mwongozo wa muuzaji (Kiswahili .pptx)
-              </a>
+              {/* Pitch-deck downloads — Kiswahili-primary seller guide.
+                  PDF is shown first since it's the easiest to share on WhatsApp;
+                  PowerPoint is offered for sellers/agents who want to edit it. */}
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <a
+                  href={`${process.env.REACT_APP_BACKEND_URL}/api/docs/seller-pitch.pdf`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="hero-pitch-download-pdf"
+                  className="inline-flex items-center gap-2 text-sm text-gold-400 hover:text-gold-300 underline decoration-gold-500/40 decoration-dotted underline-offset-4 transition"
+                >
+                  📥  Pakua mwongozo (PDF — kwa WhatsApp)
+                </a>
+                <span className="text-ink-600 text-xs">·</span>
+                <a
+                  href={`${process.env.REACT_APP_BACKEND_URL}/api/docs/seller-pitch.pptx`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="hero-pitch-download-pptx"
+                  className="inline-flex items-center gap-2 text-xs text-ink-400 hover:text-gold-300 transition"
+                >
+                  .pptx (PowerPoint)
+                </a>
+              </div>
 
               {/* Trust badges */}
               <div className="flex items-center gap-6 mt-10">

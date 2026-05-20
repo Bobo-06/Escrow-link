@@ -33,6 +33,9 @@ test-ledger:
 
 pitch-deck:
 	cd backend && python3 scripts/generate_seller_pitch.py
+	cd backend && python3 scripts/generate_seller_pitch_pdf.py
 	@echo ""
-	@echo "Open the deck:  /app/biz_salama_seller_pitch_sw.pptx"
-	@echo "Public URL:     /api/docs/seller-pitch.pptx"
+	@echo "Open the deck:  /app/biz_salama_seller_pitch_sw.pptx  (PowerPoint)"
+	@echo "                /app/biz_salama_seller_pitch_sw.pdf   (PDF for WhatsApp)"
+	@echo "Public URLs:    /api/docs/seller-pitch.pptx"
+	@echo "                /api/docs/seller-pitch.pdf"

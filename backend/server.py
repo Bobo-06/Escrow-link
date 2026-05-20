@@ -5703,6 +5703,26 @@ async def download_seller_pitch():
     )
 
 
+@api_router.get("/docs/seller-pitch.pdf")
+async def download_seller_pitch_pdf():
+    """
+    PDF version of the seller pitch deck — same 11 slides, native rendering
+    via ReportLab. Preferred format for WhatsApp sharing on mobile.
+    Regenerate via:
+        cd /app/backend && python3 scripts/generate_seller_pitch_pdf.py
+    """
+    from fastapi.responses import FileResponse
+    path = "/app/biz_salama_seller_pitch_sw.pdf"
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Pitch deck PDF not generated yet")
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        filename="Biz-Salama-Mwongozo-Wa-Muuzaji.pdf",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
 # Include the router
 app.include_router(api_router)
 

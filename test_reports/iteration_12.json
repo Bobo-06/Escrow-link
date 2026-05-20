@@ -1,0 +1,35 @@
+{
+  "summary": "Iter12 — Add-Product (image_b64) + Profile-Edit wiring fix verified end-to-end. Backend: 7/7 new tests pass (POST /api/products with image_b64 round-trips to DB, without image succeeds, 401 when anonymous; PUT /api/auth/profile persists picture/business_name/bio/location and silently drops unknown fields like is_admin/password_hash; regression /api/escrow/direct/create returns buyer_offer_url containing /direct-offer/; /api/escrow/verify/{tx_id} reachable). Frontend (390x844 mobile): /dashboard exposes dashboard-add-product-btn (A href=/sell/new), dashboard-direct-escrow-btn (A href=/direct/new), dashboard-edit-profile-link (A href=/profile/edit). /sell/new authenticated renders camera/gallery pickers + name/price/category/submit; submit (no image) creates product, returns success card with product-share-url containing /product/{product_id}, plus copy-share-link-btn / whatsapp-share-btn / add-another-product-btn; clicking add-another resets name and price to empty. /sell/new anonymous renders signin-to-sell-btn (no form leaked). /profile/edit renders profile-avatar-preview + avatar-camera-btn + avatar-gallery-btn + profile-name-input + profile-business-input + profile-location-input + profile-bio-input + save-profile-btn. No regressions in direct-escrow or 3-party verify endpoints.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter12_product_profile.py",
+    "/app/test_reports/pytest/iteration_12.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:create_product response does NOT echo image_b64 back to the client (only image URL). Round-trip is verifiable via GET /api/products/{id}, but the create response handing off to the front-end success card could include image_b64 (or a small image_url) so the seller can preview what was actually stored without an extra fetch. Currently the test confirms persistence via GET.",
+    "server.py:update_profile response is missing bio and location in the echoed dict (lines 1077-1090) even though it persists them. Frontend that wants to immediately show the saved bio/location must call /api/auth/me again. Recommend adding 'bio' and 'location' to the returned dict for consistency with the new allowed_fields.",
+    "server.py is still 5,826 lines (up from 5,630 in iter11) — past the 700-line code-review guideline. The product + auth handlers are good extraction candidates next iteration.",
+    "CreateProductPage.tsx (479 lines) is reasonable in isolation, but the success-card half (lines 168-249) could be pulled into a small <ProductCreatedCard /> subcomponent for unit testability and re-use on /direct/new which is also a 'share-link' flow.",
+    "DirectEscrowCreate.price is float — TZS is whole-shilling currency and float introduces 0.0000001-ish rounding risk on serialization. Mirror products and use int (or pydantic constrained Decimal). Same for ProductCreate.price.",
+    "Anonymous-guard on /sell/new is client-only: an attacker can still call POST /api/products with no Authorization, but backend correctly rejects 401 (confirmed). Good defense-in-depth. No fix needed — just documenting."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter12_product_profile.py"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (all 4 flows + anon redirect)"},
+  "test_credentials": "+255712345678 / test1234 (per /app/memory/test_credentials.md)",
+  "seed_data_creation": "Each product/profile test prefixes data with TEST_iter12_ / TEST_BIZ_ / TEST_KEEP_ for easy cleanup. Profile test does NOT revert business_name/bio/location/picture/name — they persist on the shared test user. Recommend the main agent add an autouse teardown that snapshots+restores the profile if other suites depend on a clean shared user.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: pytest /app/backend/tests/test_iter12_product_profile.py -v. The frontend persists Zustand under localStorage key 'biz-salama-auth' shape {state:{token,user,isAuthenticated},version:0}; to test anon flows clear localStorage + cookies before navigating. Note: PUT /api/auth/profile silently mutates the shared test user's business_name/bio/location/picture — if a later iter needs a pristine user, snapshot first via GET /api/auth/me. The product-created success card uses data-testid='product-created-success' wrapping data-testid='product-share-url' (the URL is in textContent, not href). DirectEscrowCreate requires fields: buyer_phone + item_name + price (NOT product_name/amount).",
+  "rca of the issue": "No bugs found in iter12 scope. The previous-agent gap (route /sell/new not wired, Add Product button no-op, no success card) is fully closed: App.tsx now lazy-imports CreateProductPage at /sell/new and ProfileEditPage at /profile/edit; SellerDashboard's Add-Product element is now an <a href='/sell/new'> (not a no-op button); the success card with copy-link + WhatsApp share + 'Add another' (which clears state) renders on successful create; backend image_b64 persists end-to-end."
+}

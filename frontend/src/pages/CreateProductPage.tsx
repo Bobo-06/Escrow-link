@@ -1,11 +1,11 @@
 import React, { useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Camera, ImagePlus, Loader2, ChevronLeft, ShieldCheck, Sparkles } from 'lucide-react';
+import { Camera, ImagePlus, Loader2, ChevronLeft, ShieldCheck, Sparkles, Copy, Check, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { productsAPI } from '../lib/api';
 import { useAuthStore } from '../store/authStore';
-import { useLang } from '../i18n';
+import { useT } from '../i18n';
 import SEO from '../components/SEO';
 import { processImageForUpload, formatSize, type ProcessedImage } from '../lib/imageUpload';
 
@@ -37,7 +37,7 @@ export default function CreateProductPage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const { lang } = useLang();
+  const { lang } = useT();
 
   const [form, setForm] = useState({
     name: '',
@@ -50,6 +50,8 @@ export default function CreateProductPage() {
   const [imgProgress, setImgProgress] = useState<number>(0);
   const [imgProcessing, setImgProcessing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [created, setCreated] = useState<{ product_id: string; payment_link_code: string; name: string } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -118,10 +120,14 @@ export default function CreateProductPage() {
         location: form.location.trim() || undefined,
         image_b64: image?.base64,
       });
+      // Backend returns the product directly (not nested under `product`).
+      const data = res?.data || {};
       toast.success(lang === 'sw' ? 'Bidhaa imeorodheshwa!' : 'Product listed!');
-      const pid = res?.data?.product?.product_id;
-      // Always return to the seller's own page so the upload "sticks to the seller".
-      navigate(pid ? `/seller/${user?.user_id}` : `/seller/${user?.user_id}`);
+      setCreated({
+        product_id: data.product_id,
+        payment_link_code: data.payment_link_code,
+        name: data.name,
+      });
     } catch (err) {
       const e = err as { response?: { data?: { detail?: string } }; message?: string };
       const msg = e?.response?.data?.detail || e?.message || 'Upload failed';
@@ -131,10 +137,118 @@ export default function CreateProductPage() {
     }
   };
 
+  // Computed share URL — works both on preview and on the production domain
+  // because `window.location.origin` is always the page the seller is on.
+  const shareUrl = created
+    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/product/${created.product_id}`
+    : '';
+  const whatsappShareUrl = created
+    ? `https://wa.me/?text=${encodeURIComponent(
+        (lang === 'sw'
+          ? `Nunua kwa usalama kupitia Biz-Salama: ${created.name} - ${shareUrl}`
+          : `Buy securely via Biz-Salama: ${created.name} - ${shareUrl}`),
+      )}`
+    : '';
+
+  const copyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      toast.success(lang === 'sw' ? 'Kiungo kimenakiliwa' : 'Link copied');
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      toast.error(lang === 'sw' ? 'Imeshindwa kunakili' : 'Could not copy');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-ink-900 pt-20 pb-16 px-4 sm:px-6">
       <SEO title={lang === 'sw' ? 'Orodhesha bidhaa' : 'List a product'} url="/sell/new" noindex />
       <div className="max-w-2xl mx-auto">
+        {created ? (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            data-testid="product-created-success"
+            className="bg-ink-800 border border-emerald-500/40 rounded-2xl p-6"
+          >
+            <div className="flex items-center gap-2">
+              <Check className="w-6 h-6 text-emerald-400" />
+              <h2 className="text-xl font-bold text-white">
+                {lang === 'sw' ? 'Imeorodheshwa! Shiriki kiungo' : 'Listed! Share the link'}
+              </h2>
+            </div>
+            <p className="text-ink-400 text-sm mt-1">
+              {lang === 'sw'
+                ? 'Tuma kiungo hiki kwa mteja. Atalipia salama kupitia escrow.'
+                : "Send this link to your customer. They'll pay securely via escrow."}
+            </p>
+
+            <div className="mt-4 p-3 bg-ink-900 border border-ink-700 rounded-xl font-mono text-xs text-ink-300 break-all" data-testid="product-share-url">
+              {shareUrl}
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <button
+                onClick={copyShareLink}
+                data-testid="copy-share-link-btn"
+                className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-ink-700 text-white font-semibold hover:bg-ink-600 transition"
+              >
+                {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                {lang === 'sw' ? (copied ? 'Imenakiliwa' : 'Nakili kiungo') : (copied ? 'Copied' : 'Copy link')}
+              </button>
+              <a
+                href={whatsappShareUrl}
+                target="_blank"
+                rel="noreferrer"
+                data-testid="whatsapp-share-btn"
+                className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-500 text-white font-semibold hover:bg-emerald-400 transition"
+              >
+                {lang === 'sw' ? 'Tuma WhatsApp' : 'Share on WhatsApp'}
+              </a>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-3 text-sm">
+              <Link
+                to={`/product/${created.product_id}`}
+                data-testid="view-product-link"
+                className="inline-flex items-center gap-1 text-gold-400 hover:underline"
+              >
+                <ExternalLink className="w-4 h-4" /> {lang === 'sw' ? 'Tazama ukurasa wa bidhaa' : 'View product page'}
+              </Link>
+              <Link
+                to={`/seller/${user?.user_id}`}
+                data-testid="view-seller-page-link"
+                className="inline-flex items-center gap-1 text-ink-300 hover:text-white"
+              >
+                {lang === 'sw' ? 'Nenda kwenye duka langu' : 'Go to my store'} →
+              </Link>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => {
+                  setCreated(null);
+                  setForm({ name: '', price: '', description: '', category: 'general', location: '' });
+                  setImage(null);
+                  setImgProgress(0);
+                }}
+                data-testid="add-another-product-btn"
+                className="flex-1 px-4 py-3 rounded-xl bg-gold-500 text-ink-900 font-bold hover:bg-gold-400 transition"
+              >
+                {lang === 'sw' ? '+ Ongeza bidhaa nyingine' : '+ Add another product'}
+              </button>
+              <button
+                onClick={() => navigate('/dashboard')}
+                data-testid="back-to-dashboard-btn"
+                className="px-4 py-3 rounded-xl bg-ink-700 text-white font-semibold hover:bg-ink-600 transition"
+              >
+                {lang === 'sw' ? 'Dashboard' : 'Dashboard'}
+              </button>
+            </div>
+          </motion.div>
+        ) : (
+        <>
         <button
           onClick={() => navigate(-1)}
           data-testid="create-product-back"
@@ -356,6 +470,8 @@ export default function CreateProductPage() {
             ? 'Bidhaa itahifadhiwa kwa profaili yako ya muuzaji.'
             : 'Product will be saved to your seller profile.'}
         </p>
+        </>
+        )}
       </div>
     </div>
   );

@@ -1062,7 +1062,7 @@ async def update_profile(request: Request):
     body = await request.json()
     
     update_data = {}
-    allowed_fields = ['name', 'phone', 'business_name', 'is_women_owned', 'business_type', 'export_enabled']
+    allowed_fields = ['name', 'phone', 'business_name', 'is_women_owned', 'business_type', 'export_enabled', 'picture', 'bio', 'location']
     for field in allowed_fields:
         if field in body:
             update_data[field] = body[field]

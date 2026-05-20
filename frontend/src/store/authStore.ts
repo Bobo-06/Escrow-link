@@ -9,6 +9,10 @@ interface User {
   kyc_tier?: number;
   is_verified?: boolean;
   role?: string;
+  business_name?: string | null;
+  picture?: string | null;
+  bio?: string | null;
+  location?: string | null;
 }
 
 interface AuthState {

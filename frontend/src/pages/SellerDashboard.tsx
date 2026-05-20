@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Shield, Plus, Package, TrendingUp, DollarSign, Users, Mic } from 'lucide-react';
+import { Shield, Plus, Package, TrendingUp, DollarSign, Users, Mic, Send, UserCog } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import SEO from '../components/SEO';
 import VoiceProductListingModal from '../components/VoiceProductListingModal';
@@ -23,9 +23,22 @@ const SellerDashboard: React.FC = () => {
         <div className="flex flex-wrap gap-3 justify-between items-center mb-8">
           <div>
             <h1 className="text-2xl font-display font-bold text-white">Seller Dashboard</h1>
-            <p className="text-ink-400">Welcome back, {user?.name || 'Seller'}</p>
+            <p className="text-ink-400">
+              Welcome back, {user?.name || 'Seller'} · {' '}
+              <Link to="/profile/edit" data-testid="dashboard-edit-profile-link" className="text-gold-400 hover:underline inline-flex items-center gap-1">
+                <UserCog className="w-3.5 h-3.5" /> Edit profile
+              </Link>
+            </p>
           </div>
           <div className="flex flex-wrap gap-3">
+            <Link
+              data-testid="dashboard-direct-escrow-btn"
+              to="/direct/new"
+              className="flex items-center px-5 py-3 bg-ink-700 text-white rounded-xl font-semibold hover:bg-ink-600 transition-all border border-emerald-500/30"
+            >
+              <Send className="w-5 h-5 mr-2 text-emerald-400" />
+              Send Payment Link
+            </Link>
             <Link
               data-testid="dashboard-three-party-btn"
               to="/hawker/new"
@@ -50,12 +63,13 @@ const SellerDashboard: React.FC = () => {
               <Mic className="w-5 h-5 mr-2 text-gold-400" />
               List by Voice
             </button>
-            <button
+            <Link
+              to="/sell/new"
               data-testid="dashboard-add-product-btn"
               className="flex items-center px-5 py-3 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-900 rounded-xl font-semibold hover:from-gold-400 hover:to-gold-500 transition-all">
               <Plus className="w-5 h-5 mr-2" />
               Add Product
-            </button>
+            </Link>
           </div>
         </div>
 

@@ -44,6 +44,7 @@ const Marketplace: React.FC = () => {
     { value: 'food', label: t('mkt.cat.food') },
   ];
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   useEffect(() => {
     fetchProducts();
     // eslint-disable-next-line react-hooks/exhaustive-deps

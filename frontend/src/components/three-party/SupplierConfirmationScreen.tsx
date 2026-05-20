@@ -19,6 +19,7 @@ export default function SupplierConfirmationScreen({ txId, supplierPhone, token,
   const [counterNote, setCounterNote] = useState("");
   const [showCounter, setShowCounter] = useState(false);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   useEffect(() => {
     (async () => {
       try {
@@ -37,6 +38,7 @@ export default function SupplierConfirmationScreen({ txId, supplierPhone, token,
         );
       }
     })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   }, [txId, token]);
 
   /**

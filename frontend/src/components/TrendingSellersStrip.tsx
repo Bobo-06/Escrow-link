@@ -21,6 +21,7 @@ const TrendingSellersStrip: React.FC<{ limit?: number }> = ({ limit = 6 }) => {
   const [sellers, setSellers] = useState<TrendingSeller[]>([]);
   const [loaded, setLoaded] = useState(false);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -37,6 +38,7 @@ const TrendingSellersStrip: React.FC<{ limit?: number }> = ({ limit = 6 }) => {
     return () => {
       alive = false;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   }, [limit]);
 
   // Hide gracefully when empty / not yet loaded

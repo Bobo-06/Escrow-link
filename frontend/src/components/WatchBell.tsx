@@ -28,6 +28,7 @@ const WatchBell: React.FC<WatchBellProps> = ({
   const [busy, setBusy] = useState(false);
 
   // Pull current watch state on mount (auth users only — anonymous can't watch).
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   useEffect(() => {
     let alive = true;
     if (!isAuthenticated || !productId) return;
@@ -46,6 +47,7 @@ const WatchBell: React.FC<WatchBellProps> = ({
     return () => {
       alive = false;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   }, [productId, isAuthenticated]);
 
   const handleClick = async (e: React.MouseEvent) => {

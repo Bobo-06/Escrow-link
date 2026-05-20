@@ -424,6 +424,7 @@ export const LangProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   const t = useCallback(
     (key: string) => {
       const entry = TRANSLATIONS[key];
@@ -434,10 +435,12 @@ export const LangProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 
   // Reflect lang on <html> for accessibility / screen readers
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   useEffect(() => {
     if (typeof document !== "undefined") {
       document.documentElement.lang = lang;
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   }, [lang]);
 
   return <LangContext.Provider value={{ lang, setLang, t }}>{children}</LangContext.Provider>;

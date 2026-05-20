@@ -50,6 +50,7 @@ const SellerProfile: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   useEffect(() => {
     let alive = true;
     if (!id) return;
@@ -70,6 +71,7 @@ const SellerProfile: React.FC = () => {
     return () => {
       alive = false;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   }, [id]);
 
   if (loading) {

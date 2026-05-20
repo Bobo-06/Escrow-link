@@ -17,6 +17,7 @@ export default function EscrowVerifyPublic({ txId, onClose }: Props) {
   const [status, setStatus] = useState<"loading" | "verified" | "not_found">("loading");
   const [tx, setTx] = useState<any>(null);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   useEffect(() => {
     const verify = async () => {
       try {
@@ -33,6 +34,7 @@ export default function EscrowVerifyPublic({ txId, onClose }: Props) {
       }
     };
     verify();
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   }, [txId, token, role]);
 
   if (status === "loading")

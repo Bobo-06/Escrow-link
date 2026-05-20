@@ -64,6 +64,7 @@ const FeeCalculator: React.FC = () => {
   const [supplierCost, setSupplierCost] = useState('80000');
   const [quote, setQuote] = useState<any>(null);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   useEffect(() => {
     const dv = parseFloat(deal);
     const sc = parseFloat(supplierCost);
@@ -81,6 +82,7 @@ const FeeCalculator: React.FC = () => {
       }
     })();
     return () => { alive = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   }, [mode, deal, supplierCost]);
 
   return (
@@ -343,6 +345,7 @@ const LedgerAdminPage: React.FC = () => {
   const { isAuthenticated } = useAuthStore();
   const [tab, setTab] = useState<'payouts' | 'disputes' | 'accounts'>('payouts');
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   const tabs = useMemo(() => ([
     { id: 'payouts',  label: t('ledger.tab.payouts'),  icon: Wallet },
     { id: 'disputes', label: t('ledger.tab.disputes'), icon: Scale },

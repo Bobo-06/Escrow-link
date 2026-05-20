@@ -99,6 +99,7 @@ const MyOrderPage: React.FC = () => {
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps

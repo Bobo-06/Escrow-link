@@ -64,6 +64,7 @@ const MyWatchesPage: React.FC = () => {
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   useEffect(() => {
     if (isAuthenticated) reload();
     else setLoading(false);

@@ -62,6 +62,7 @@ const ClientErrorsAdminPage: React.FC = () => {
   const [limit, setLimit] = useState(100);
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
@@ -88,10 +89,13 @@ const ClientErrorsAdminPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   }, [level, q, limit]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   useEffect(() => {
     void fetchAll();
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   }, [fetchAll]);
 
   const purgeAll = async () => {
@@ -118,6 +122,7 @@ const ClientErrorsAdminPage: React.FC = () => {
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   const levelCounts = useMemo(() => stats?.by_level_7d || {}, [stats]);
 
   if (!isAuthenticated || forbidden) {

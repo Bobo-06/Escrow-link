@@ -585,7 +585,9 @@ async def register(user_data: UserCreate, response: Response):
     if not user_data.email and not user_data.phone:
         raise HTTPException(status_code=400, detail="Tafadhali weka barua pepe au nambari ya simu / Please provide email or phone number")
     
-    # Normalize phone to canonical +255 format (and lowercase email)
+    # Normalize phone to canonical +255 format (and lowercase email).
+    # Pre-init `normalized` so static analysers don't flag it as possibly-undefined.
+    normalized: str | None = None
     if user_data.phone:
         normalized = normalize_tz_phone(user_data.phone)
         if not normalized:
@@ -597,7 +599,10 @@ async def register(user_data: UserCreate, response: Response):
     if user_data.email:
         user_data.email = user_data.email.strip().lower()
     
-    # Check for existing user by email or phone
+    # Check for existing user by email or phone. `existing` is pre-initialized
+    # so static-analysis tools don't flag it as possibly-undefined when both
+    # conditional branches are skipped (e.g. neither email nor phone provided).
+    existing: dict | None = None
     if user_data.email:
         existing = await db.users.find_one({"email": user_data.email})
         if existing:
@@ -677,7 +682,9 @@ async def login(credentials: UserLogin, request: Request, response: Response):
     if not credentials.email and not credentials.phone:
         raise HTTPException(status_code=400, detail="Tafadhali weka barua pepe au nambari ya simu / Please provide email or phone number")
     
-    # Normalize inputs
+    # Normalize inputs. Pre-initialize so static-analysers don't flag the
+    # `normalized` local as possibly-undefined when `credentials.phone` is falsy.
+    normalized: str | None = None
     if credentials.phone:
         normalized = normalize_tz_phone(credentials.phone)
         if not normalized:
@@ -786,13 +793,15 @@ async def forgot_password(data: ForgotPasswordRequest):
     if data.email:
         data.email = data.email.strip().lower()
     
-    # Find user
+    # Find user — pre-init so static analysers see `user` defined on all paths.
+    user: dict | None = None
+    last9: str = ""
     if data.email:
         user = await db.users.find_one({"email": data.email}, {"_id": 0})
     else:
         user = await db.users.find_one({"phone": data.phone}, {"_id": 0})
         if not user and data.phone:
-            last9 = data.phone[-9:]
+            last9 = re.escape(data.phone[-9:])
             user = await db.users.find_one({"phone": {"$regex": f"{last9}$"}}, {"_id": 0})
     
     if not user:
@@ -859,7 +868,9 @@ async def reset_password(data: ResetPasswordRequest):
     if len(data.new_password) < 6:
         raise HTTPException(status_code=400, detail="Nenosiri liwe na herufi 6 au zaidi / Password must be at least 6 characters")
     
-    # Normalize phone/email to match storage format (same as register/login)
+    # Normalize phone/email to match storage format (same as register/login).
+    # Pre-init so static analysers don't flag `normalized` as possibly-undefined.
+    normalized: str | None = None
     if data.phone:
         normalized = normalize_tz_phone(data.phone)
         if not normalized:
@@ -871,14 +882,16 @@ async def reset_password(data: ResetPasswordRequest):
     if data.email:
         data.email = data.email.strip().lower()
     
-    # Find user
+    # Find user — pre-init so static analysers see `user` defined on all paths.
+    user: dict | None = None
+    last9: str = ""
     if data.email:
         user = await db.users.find_one({"email": data.email}, {"_id": 0})
     else:
         user = await db.users.find_one({"phone": data.phone}, {"_id": 0})
         if not user and data.phone:
             # Backward-compat for legacy records stored without +255
-            last9 = data.phone[-9:]
+            last9 = re.escape(data.phone[-9:])
             user = await db.users.find_one({"phone": {"$regex": f"{last9}$"}}, {"_id": 0})
     
     if not user:

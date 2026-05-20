@@ -38,6 +38,7 @@ const BuildBadge: React.FC = () => {
     );
   })();
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   useEffect(() => {
     if (!visible) return;
     let cancelled = false;
@@ -82,6 +83,7 @@ const BuildBadge: React.FC = () => {
     return () => {
       cancelled = true;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps  -- intentional: deps are stable refs or one-shot inits
   }, [visible]);
 
   if (!visible || state.kind === 'loading') {

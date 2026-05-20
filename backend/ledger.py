@@ -119,9 +119,13 @@ def _reconcile_pennies(split: dict[str, Decimal]) -> dict[str, Decimal]:
     if drift != 0:
         platform_fee = D(platform_fee + drift)
 
-    assert seller_amount + agent_commission + platform_fee == gross, (
-        f"split invariant broken: {seller_amount}+{agent_commission}+{platform_fee} != {gross}"
-    )
+    # Ledger invariant — must NEVER be an `assert` because production servers
+    # typically run with `python -O` which strips asserts at byte-code level.
+    # A silent money-routing bug would be catastrophic; raise a real error.
+    if seller_amount + agent_commission + platform_fee != gross:
+        raise RuntimeError(
+            f"split invariant broken: {seller_amount}+{agent_commission}+{platform_fee} != {gross}"
+        )
     return {
         **split,
         "gross": gross,

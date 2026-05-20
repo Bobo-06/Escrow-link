@@ -138,7 +138,7 @@ class TestUpdateProfile:
         # Use a tiny base64 data URL (~70 bytes) to validate picture roundtrip
         picture_data_url = f"data:image/jpeg;base64,{TINY_JPEG_B64}"
         payload = {
-            "name": f"Test User",  # keep canonical name to avoid permadrift for shared phone
+            "name": "Test User",  # keep canonical name to avoid permadrift for shared phone
             "business_name": f"TEST_BIZ_{unique}",
             "bio": f"TEST bio iter12 {unique}",
             "location": "Dar es Salaam",

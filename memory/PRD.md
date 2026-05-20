@@ -398,3 +398,59 @@ The repeated scanner false positives (`is None` as "anti-pattern", "missing
 hook deps" that are stable setters, etc.) are now formally documented and
 dismissible by reading `CODE_REVIEW_ALLOWLIST.md` instead of re-proving them
 each round.
+
+
+### Security Audit + Real Hardening (Feb 20, 2026)
+
+Conducted a genuine security audit (not just documentation). Real gaps found
+and fixed; comprehensive posture statement written to `/app/SECURITY-AUDIT.md`.
+
+**New module — `/app/backend/security.py`:**
+- `SecurityHeadersMiddleware` — sets HSTS, X-Frame-Options DENY, X-Content-Type-
+  Options nosniff, Referrer-Policy, Permissions-Policy, X-XSS-Protection on
+  every response; full Content-Security-Policy on HTML.
+- `LoginRateLimiter` — sliding-window brute-force protection. 5 failed attempts
+  per (IP, identifier) in 15 minutes → 1-hour lockout. Successful login resets
+  the counter. Returns 429 + `Retry-After` + bilingual SW/EN error.
+
+**Real bugs found while auditing and fixed:**
+1. 🐛 `server.py:3173` — dispute SMS handler queried `db.users.find_one({"_id":
+   request.buyer_id})`. Users are stored with `user_id` (UUID), so this lookup
+   **never matched anyone**; dispute notifications silently never sent. Fixed to
+   `{"user_id": request.buyer_id}`.
+2. 🐛 `server.py:702` — backward-compat phone-fallback regex did `{"$regex":
+   f"{last9}$"}` without escaping. `phone` is digits-only after `normalize_tz_phone`
+   so not immediately exploitable, but added `re.escape()` as defence-in-depth.
+3. 🔒 No login brute-force protection — now shipped (verified: 5×401, 6th=429).
+4. 🔒 No HTTP security headers — now shipped (all 6 verified via curl).
+
+**`/app/SECURITY-AUDIT.md` — 16 sections covering:**
+- Executive summary with full posture table (15 domains scored)
+- Authentication (bcrypt, JWT, OTP CSPRNG, RBAC, brute-force lockout)
+- Transport (HSTS, TLS, mixed-content prevention)
+- CORS policy (allow-listed, no `*`)
+- HTTP headers (full CSP breakdown)
+- Input validation & injection (Pydantic, NoSQL, XSS, open-redirect)
+- Rate limiting (all surfaces)
+- Money flow integrity (ledger invariants, HMAC verify-links, webhook idempotency)
+- Fraud monitoring (5 rules)
+- File uploads (KYC + product images)
+- Logging & observability (no PII)
+- Secrets management (env-only, no git history leaks)
+- Dependencies (Dependabot recommended P3)
+- Privacy posture (TZ DPA + GDPR notes)
+- Threat model (top 5 attacks scored)
+- Remediation roadmap (Done / P2 / P3)
+- Self-verification: 5 commands anyone can run
+
+**P2 hardening tracked in audit doc:**
+- Migrate JWT from localStorage → HttpOnly + Secure + SameSite=Lax cookies
+- Move KYC images from Mongo base64 → S3 + KMS
+- Submit `biz-salama.co.tz` to HSTS preload list
+- Add `/api/csp-report` for CSP violation telemetry
+
+**All 4 gates green after these changes:**
+- `ruff check .` → All checks passed
+- `CI=true yarn build` → Compiled successfully
+- `make smoke` → 5/5 endpoints PASS
+- `make test-ledger` → All ledger flows balanced

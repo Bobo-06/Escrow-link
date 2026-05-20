@@ -62,6 +62,7 @@ from seller_onboarding import (
 
 # Browser-side error / debug-log collector — self-hosted Sentry-lite.
 import client_errors as ce_module
+from security import SecurityHeadersMiddleware, login_rate_limiter
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -670,7 +671,7 @@ async def register(user_data: UserCreate, response: Response):
     }
 
 @api_router.post("/auth/login")
-async def login(credentials: UserLogin, response: Response):
+async def login(credentials: UserLogin, request: Request, response: Response):
     """Login with email/phone and password"""
     # Require at least email or phone
     if not credentials.email and not credentials.phone:
@@ -687,18 +688,38 @@ async def login(credentials: UserLogin, response: Response):
         credentials.phone = normalized
     if credentials.email:
         credentials.email = credentials.email.strip().lower()
-    
+
+    # Brute-force protection — before any DB lookup so a locked attacker
+    # can't even probe whether the account exists.
+    identifier = credentials.email or credentials.phone or ""
+    locked, retry_after = login_rate_limiter.is_locked(request, identifier=identifier)
+    if locked:
+        response.headers["Retry-After"] = str(retry_after)
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "Umeshindwa kuingia mara nyingi. Subiri "
+                f"{max(retry_after // 60, 1)} dakika kabla ya kujaribu tena. / "
+                "Too many failed login attempts. Please wait "
+                f"{max(retry_after // 60, 1)} minute(s) before trying again."
+            ),
+        )
+
     # Find user by email or phone (primary: normalized phone; fallback: raw for legacy records)
     if credentials.email:
         user = await db.users.find_one({"email": credentials.email}, {"_id": 0})
     else:
         user = await db.users.find_one({"phone": credentials.phone}, {"_id": 0})
         if not user and credentials.phone:
-            # Backward-compat: try matching last 9 digits in case legacy records are stored without +255
-            last9 = credentials.phone[-9:]
+            # Backward-compat: try matching last 9 digits for legacy rows stored
+            # without +255. `re.escape` is defensive — phone has passed
+            # `normalize_tz_phone` so it's digits-only, but escaping keeps the
+            # contract explicit and immune to future input-source changes.
+            last9 = re.escape(credentials.phone[-9:])
             user = await db.users.find_one({"phone": {"$regex": f"{last9}$"}}, {"_id": 0})
     
     if not user:
+        login_rate_limiter.record_failure(request, identifier=identifier)
         raise HTTPException(status_code=401, detail="Taarifa si sahihi / Invalid credentials")
     
     if user.get('auth_type') == 'google':
@@ -708,10 +729,15 @@ async def login(credentials: UserLogin, response: Response):
     # accounts, or legacy rows). Surface as 401 instead of 500 KeyError.
     pw_hash = user.get('password_hash')
     if not pw_hash:
+        login_rate_limiter.record_failure(request, identifier=identifier)
         raise HTTPException(status_code=401, detail="Taarifa si sahihi / Invalid credentials")
 
     if not bcrypt.checkpw(credentials.password.encode(), pw_hash.encode()):
+        login_rate_limiter.record_failure(request, identifier=identifier)
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # Successful login — reset the brute-force counter for this caller.
+    login_rate_limiter.record_success(request, identifier=identifier)
     
     session_token = f"session_{uuid.uuid4().hex}"
     session = {
@@ -3168,9 +3194,10 @@ async def escrow_dispute(request: EscrowDisputeRequest):
         "reason": request.reason
     })
     
-    # Notify parties
+    # Notify parties — `user_id` (UUID), not `_id` (Mongo ObjectId). Previous
+    # `_id` lookup never matched any user and silently dropped the SMS.
     template = SMS_TEMPLATES["dispute_opened"](request.tx_id, case_no)
-    buyer = await db.users.find_one({"_id": request.buyer_id})
+    buyer = await db.users.find_one({"user_id": request.buyer_id}, {"_id": 0})
     if buyer and buyer.get("phone"):
         await send_sms(buyer["phone"], template["en"], template["sw"])
     
@@ -5746,9 +5773,15 @@ app.add_middleware(
     allow_credentials=True,
     allow_origins=_allowed_origins,
     allow_origin_regex=r"https://.*\.preview\.emergentagent\.com",
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
+    expose_headers=["Retry-After"],
 )
+
+# Security-headers middleware is registered LAST (in code) so it runs FIRST
+# on the response leg — meaning the headers it adds survive any later
+# middleware that might rewrite Content-Type or strip headers.
+app.add_middleware(SecurityHeadersMiddleware)
 
 @app.on_event("startup")
 async def _startup_ledger_init():

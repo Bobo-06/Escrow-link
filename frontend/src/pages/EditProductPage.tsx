@@ -107,7 +107,7 @@ export default function EditProductPage() {
     return (
       <div className="min-h-screen bg-ink-900 pt-24 px-6 text-center">
         <p className="text-white">{lang === 'sw' ? 'Bidhaa haijapatikana' : 'Product not found'}</p>
-        <button onClick={() => navigate('/my-products')} className="mt-4 px-4 py-2 rounded-xl bg-ink-700 text-white">
+        <button onClick={() => navigate('/my-products')} data-testid="edit-not-found-back-btn" className="mt-4 px-4 py-2 rounded-xl bg-ink-700 text-white">
           {lang === 'sw' ? 'Rudi kwa bidhaa zangu' : 'Back to my products'}
         </button>
       </div>

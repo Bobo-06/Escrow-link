@@ -488,3 +488,25 @@ User reported: "Sellers face challenges wanting to register… onboarding of doc
 - Zero retest needed, zero regression
 
 
+
+
+
+### Shipped Feb 21, 2026 (iter13) — Seller Inventory CRUD ("My Products" + Edit/Hide/Delete + Price Review)
+User: "Allow sellers to view their profile and products plus ability to edit information whether on credentials or their listings (review their prices)."
+
+**Backend (`server.py`)**:
+- New **`GET /api/products/mine`** — authenticated seller's full inventory (active + inactive) wrapped as `{products: [...], count: N}`. Distinct from `GET /sellers/{seller_id}` (public + active-only).
+- New **`PATCH /api/products/{product_id}`** — partial update, ownership-scoped (returns 404 on non-owner to avoid leaking product existence). When `price` changes, `calculate_fees()` re-stamps `price_tzs / buyer_protection_fee / seller_acquisition_fee / total_buyer_pays / seller_receives`. Empty-body PATCH is a true no-op (no DB write). Stamps `updated_at = datetime.now(UTC)`.
+- Renamed pre-existing `GET /api/products` handler `get_my_products` → `list_seller_products_legacy` to resolve a ruff `F811` redefinition; the legacy bare-list response shape is unchanged.
+
+**Frontend**:
+- New **`/my-products`** (`MyProductsPage.tsx`) — grid of product cards with per-card **Edit / Hide-Show / Copy Link / Delete** actions, "Add product" CTA, empty state. Active toggle uses PATCH; delete uses DELETE; link copy uses `navigator.clipboard`. All actions show bilingual toasts.
+- New **`/sell/edit/:productId`** (`EditProductPage.tsx`) — pre-loads the existing record, allows photo replacement (reuses `imageUpload.ts` ≤1.5 MB compression), Saves via PATCH. Bottom destructive "Delete product" button mirrors the same `DELETE` call. 404 fallback for non-owners with a "Back to my products" CTA (`edit-not-found-back-btn`).
+- `productsAPI` in `lib/api.ts` gained `getMine / getOneMine / update / remove`.
+- Dashboard surfaces a new **My Products** CTA (`dashboard-my-products-btn` → `/my-products`) alongside Add Product.
+
+**Tests** — `/app/test_reports/iteration_13.json`:
+- 14/14 backend pytest: wrapped shape, includes-inactive, 401 unauth, fee-recalc on price change, validation 400s (empty name + negative price), is_active=false hides from public listing, non-owner 404 (PATCH + DELETE), unauth 401, empty-body no-op, image_b64 replacement persists, legacy `/products` still bare-list.
+- Smoke (5 public endpoints) all pass — zero regressions.
+- Frontend (390×844 mobile): 27 product cards rendered with all 4 per-card testids; dashboard CTA wires correctly; edit page pre-fills all 5 inputs + preview image; save redirects to `/my-products`; 404 fallback works.
+

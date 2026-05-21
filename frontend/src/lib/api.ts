@@ -49,6 +49,18 @@ export const productsAPI = {
     listed_via_voice?: boolean;
   }) => api.post('/products', data),
   getBySeller: (sellerId: string) => api.get(`/products/seller/${sellerId}`),
+  getMine: () => api.get('/products/mine'),
+  getOneMine: (id: string) => api.get(`/products/${id}`),
+  update: (id: string, data: Partial<{
+    name: string;
+    price: number;
+    description: string | null;
+    image_b64: string | null;
+    category: string;
+    location: string | null;
+    is_active: boolean;
+  }>) => api.patch(`/products/${id}`, data),
+  remove: (id: string) => api.delete(`/products/${id}`),
 };
 
 // Orders APIs

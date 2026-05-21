@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Shield, Plus, Package, TrendingUp, DollarSign, Users, Mic, Send, UserCog } from 'lucide-react';
+import { Shield, Plus, Package, TrendingUp, DollarSign, Users, Mic, Send, UserCog, ListChecks } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import SEO from '../components/SEO';
 import VoiceProductListingModal from '../components/VoiceProductListingModal';
@@ -63,6 +63,14 @@ const SellerDashboard: React.FC = () => {
               <Mic className="w-5 h-5 mr-2 text-gold-400" />
               List by Voice
             </button>
+            <Link
+              to="/my-products"
+              data-testid="dashboard-my-products-btn"
+              className="flex items-center px-5 py-3 bg-ink-700 text-white rounded-xl font-semibold hover:bg-ink-600 transition-all border border-gold-500/30"
+            >
+              <ListChecks className="w-5 h-5 mr-2 text-gold-400" />
+              My Products
+            </Link>
             <Link
               to="/sell/new"
               data-testid="dashboard-add-product-btn"

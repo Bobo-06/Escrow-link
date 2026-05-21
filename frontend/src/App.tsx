@@ -35,6 +35,8 @@ const SellerOnboardingPage = lazy(() => import('./pages/SellerOnboardingPage'));
 const ClientErrorsAdminPage = lazy(() => import('./pages/ClientErrorsAdminPage'));
 const CreateProductPage = lazy(() => import('./pages/CreateProductPage'));
 const ProfileEditPage = lazy(() => import('./pages/ProfileEditPage'));
+const MyProductsPage = lazy(() => import('./pages/MyProductsPage'));
+const EditProductPage = lazy(() => import('./pages/EditProductPage'));
 
 const RouteFallback: React.FC = () => (
   <div className="min-h-[60vh] flex items-center justify-center" data-testid="route-suspense-fallback">
@@ -72,6 +74,8 @@ function App() {
               <Route path="/admin/client-errors" element={<ClientErrorsAdminPage />} />
               <Route path="/onboard/seller" element={<SellerOnboardingPage />} />
               <Route path="/sell/new" element={<CreateProductPage />} />
+              <Route path="/sell/edit/:productId" element={<EditProductPage />} />
+              <Route path="/my-products" element={<MyProductsPage />} />
               <Route path="/profile/edit" element={<ProfileEditPage />} />
             </Routes>
           </Suspense>

@@ -1641,8 +1641,8 @@ async def get_product_public(product_id: str):
     return product
 
 @api_router.get("/products")
-async def get_my_products(request: Request):
-    """Get all products for current seller"""
+async def list_seller_products_legacy(request: Request):
+    """Legacy seller products list (kept for back-compat; new clients use /products/mine which wraps in {products,count})."""
     user = await get_current_user(request)
     
     products = await db.products.find(
@@ -1655,6 +1655,24 @@ async def get_my_products(request: Request):
             p['created_at'] = p['created_at'].isoformat()
     
     return products
+
+@api_router.get("/products/mine")
+async def get_my_products(request: Request):
+    """Authenticated seller's full product list (active + inactive).
+
+    Distinct from `GET /sellers/{seller_id}` (public; active-only). This is the
+    seller's own private inventory view used by `/my-products` in the UI.
+    """
+    user = await get_current_user(request)
+    products = await db.products.find(
+        {"seller_id": user['user_id']},
+        {"_id": 0},
+    ).sort("created_at", -1).to_list(200)
+    for p in products:
+        if isinstance(p.get('created_at'), datetime):
+            p['created_at'] = p['created_at'].isoformat()
+    return {"products": products, "count": len(products)}
+
 
 @api_router.get("/products/{product_id}")
 async def get_product(product_id: str, request: Request):
@@ -1687,6 +1705,80 @@ async def delete_product(product_id: str, request: Request):
         raise HTTPException(status_code=404, detail="Product not found")
     
     return {"message": "Product deleted"}
+
+
+class ProductUpdate(BaseModel):
+    """Partial update payload. Every field optional — seller only sends what they want to change."""
+    name: str | None = None
+    price: float | None = None
+    description: str | None = None
+    image_b64: str | None = None
+    category: str | None = None
+    location: str | None = None
+    is_active: bool | None = None
+
+
+@api_router.patch("/products/{product_id}")
+async def update_product(product_id: str, payload: ProductUpdate, request: Request):
+    """Seller-scoped partial update. Recomputes fee math when `price` changes."""
+    user = await get_current_user(request)
+
+    existing = await db.products.find_one(
+        {"product_id": product_id, "seller_id": user['user_id']},
+        {"_id": 0},
+    )
+    if not existing:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    update_set: dict[str, Any] = {}
+    if payload.name is not None:
+        if not payload.name.strip():
+            raise HTTPException(status_code=400, detail="Jina la bidhaa linahitajika / Product name required")
+        update_set["name"] = payload.name.strip()
+    if payload.price is not None:
+        if payload.price <= 0:
+            raise HTTPException(status_code=400, detail="Bei lazima iwe zaidi ya sifuri / Price must be greater than zero")
+        # Recompute fees + price_tzs using the existing currency.
+        currency = existing.get("currency", "TZS")
+        price_tzs = payload.price * EXCHANGE_RATES.get(currency, 1)
+        fees = calculate_fees(price_tzs, is_international=existing.get("international_shipping", False))
+        update_set.update({
+            "price": payload.price,
+            "price_tzs": price_tzs,
+            "buyer_protection_fee": fees['buyer_protection_fee'],
+            "seller_acquisition_fee": fees['seller_acquisition_fee'],
+            "total_buyer_pays": fees['total_buyer_pays'],
+            "seller_receives": fees['seller_receives'],
+        })
+    if payload.description is not None:
+        update_set["description"] = payload.description
+    if payload.image_b64 is not None:
+        update_set["image_b64"] = payload.image_b64
+    if payload.category is not None:
+        update_set["category"] = payload.category or "general"
+    if payload.location is not None:
+        update_set["location"] = payload.location
+    if payload.is_active is not None:
+        update_set["is_active"] = payload.is_active
+
+    if not update_set:
+        # No-op patch — return current state without touching the DB.
+        if isinstance(existing.get('created_at'), datetime):
+            existing['created_at'] = existing['created_at'].isoformat()
+        return existing
+
+    update_set["updated_at"] = datetime.now(UTC)
+    await db.products.update_one(
+        {"product_id": product_id, "seller_id": user['user_id']},
+        {"$set": update_set},
+    )
+
+    refreshed = await db.products.find_one({"product_id": product_id}, {"_id": 0})
+    if isinstance(refreshed.get('created_at'), datetime):
+        refreshed['created_at'] = refreshed['created_at'].isoformat()
+    if isinstance(refreshed.get('updated_at'), datetime):
+        refreshed['updated_at'] = refreshed['updated_at'].isoformat()
+    return refreshed
 
 # ============== PUBLIC PRODUCT ENDPOINT (BUYER VIEW) ==============
 

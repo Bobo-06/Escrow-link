@@ -1,0 +1,38 @@
+{
+  "summary": "Iter13 — Seller 'My Products' CRUD (GET /products/mine, PATCH /products/{id}, DELETE regression, legacy /products) and frontend pages (/my-products, /sell/edit/:productId, dashboard CTA) verified end-to-end. Backend 14/14 pytest cases pass: GET /products/mine wraps {products,count} and includes inactive products; unauth returns 401; PATCH owner price-change recalculates fees + sets updated_at; empty name and price<=0 yield 400 with i18n message; is_active=false hides from public GET /sellers/{id} but still shows in /products/mine; non-owner PATCH/DELETE returns 404 (no info leak); unauth PATCH returns 401; empty-body PATCH is a true no-op (no updated_at written); image_b64 replacement persists; legacy GET /products still returns a bare list. Smoke (/app/scripts/smoke.sh) all 5 endpoints PASS — no broader regressions. Frontend (390x844 mobile): anonymous /my-products shows signin-to-myproducts-btn; authenticated /my-products renders myproducts-grid with 27 product-card-* cards each exposing edit/toggle-active/copy-link/delete-product testids; dashboard-my-products-btn at /dashboard links to /my-products; /sell/edit/:productId pre-fills edit-name-input + edit-price-input + edit-category-select + edit-location-input + edit-description-input + edit-image-preview; save-product-btn PATCHes and redirects to /my-products; 404 (non-existent product) shows 'Product not found' text + Back-to-my-products button (works but no data-testid — minor).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "EditProductPage (404 state)", "issue": "'Back to my products' button on the notFound branch has no data-testid (only the top-of-page 'Back' button has edit-product-back; the 404-state button is selector-less). Suggest adding data-testid='back-to-myproducts-btn' for selector robustness.", "selector": "EditProductPage.tsx:110", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter13_my_products.py",
+    "/app/test_reports/pytest/iteration_13.xml"
+  ],
+  "action_items": [
+    "Add data-testid='back-to-myproducts-btn' to the button at EditProductPage.tsx:110 (notFound branch) for selector parity with the rest of the page."
+  ],
+  "critical_code_review_comments": [
+    "server.py still 5,918 lines (up from 5,826 in iter12) — past the 700-line guideline. The new product endpoints (1643-1782) plus the PATCH validator are clean extraction candidates into /app/backend/routes/products.py.",
+    "server.py:1742-1752 — `payload.price * EXCHANGE_RATES.get(currency, 1)` produces a float for TZS (whole-shilling currency); same float-rounding concern flagged in iter12 still applies. Recommend int/Decimal for price/price_tzs/total_buyer_pays to avoid 0.0000001 drift on serialization.",
+    "server.py:1776 — after PATCH, refreshed = find_one({'product_id': product_id}) drops the seller_id filter present in the original lookup. Functionally fine here (we just wrote with the filtered update_one), but inconsistent and theoretically vulnerable if a future refactor splits read/write. Keep the seller_id filter on the post-write read for defense-in-depth.",
+    "ProductUpdate.is_active = bool | None = None — there is no way for a seller to distinguish 'don't change' from 'set to None' in JSON, which is fine here, but if a future requirement adds nullable fields, switch to pydantic's Field(default=UNSET) sentinel (or use exclude_unset).",
+    "MyProductsPage (.tsx) — 'copy-link' button copies the payment link to clipboard; verify navigator.clipboard.writeText is wrapped in a try/catch + toast.error fallback for Safari/iOS PWAs where clipboard API can throw if the page wasn't a user gesture (cannot validate from headless tests alone)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter13_my_products.py"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100% (5/5 flows; one minor missing data-testid on 404-back-button)"},
+  "test_credentials": "Primary +255712345678/test1234; Secondary +255712333444/Demo1234! (per /app/memory/test_credentials.md). Secondary user pre-existed; no registration needed.",
+  "seed_data_creation": "Creates TEST_iter13_<scenario>_<uuid> products per test (active by default, currency=TZS, category=general). One product is intentionally hidden (is_active=false) and remains so; one is deleted; one has its image_b64 replaced. No cleanup performed — recommend a sweep that deletes TEST_iter13_* before iter14 to keep /products/mine list manageable (current count is 27+ for primary user).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: pytest /app/backend/tests/test_iter13_my_products.py -v. The secondary user (+255712333444/Demo1234!) is now established in DB. PATCH ownership leak test relies on this secondary user — if you re-create the test environment, the conftest auto-registers if login fails. PATCH no-op semantics: empty body returns the existing doc WITHOUT updated_at — so any test asserting updated_at must include at least one field. Public GET /sellers/{seller_id} now returns active-only via the iter13 PATCH path; if a future iter wants to surface inactive to the seller themselves, that is exactly what /products/mine is for. The legacy GET /api/products endpoint was renamed list_seller_products_legacy but still routes to /api/products (bare list, no wrapping).",
+  "rca of the issue": "No bugs in iter13 scope. All 14 backend assertions and 5 frontend flows succeed. One minor selector-coverage gap: the EditProductPage 404 state's back button lacks data-testid (the 404 message text itself is renderable so does not affect users — only test brittleness)."
+}

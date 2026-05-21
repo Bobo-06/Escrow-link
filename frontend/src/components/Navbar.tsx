@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { Shield, Menu, X, ShoppingBag, LogOut, LayoutDashboard, Users, BellRing } from 'lucide-react';
+import { Shield, Menu, X, ShoppingBag, LogOut, LayoutDashboard, Users, BellRing, Crown } from 'lucide-react';
 import InstallAppButton from './InstallAppButton';
 import BuildBadge from './BuildBadge';
 import { LangToggle, useT } from '../i18n';
 
 const Navbar: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { isAuthenticated, logout } = useAuthStore();
+  const { isAuthenticated, logout, user } = useAuthStore();
+  const isAdmin = user?.role === 'admin';
   const navigate = useNavigate();
   const { t } = useT();
 
@@ -85,6 +86,16 @@ const Navbar: React.FC = () => {
                   <LayoutDashboard className="w-5 h-5" />
                   <span className="hidden lg:inline">{t("nav.dashboard")}</span>
                 </Link>
+                {isAdmin && (
+                  <Link
+                    to="/admin/sellers"
+                    data-testid="nav-admin-link"
+                    className="flex items-center space-x-2 text-gold-400 hover:text-gold-300 transition-colors font-semibold"
+                  >
+                    <Crown className="w-5 h-5" />
+                    <span className="hidden lg:inline">Admin</span>
+                  </Link>
+                )}
                 <button
                   onClick={handleLogout}
                   className="flex items-center space-x-2 text-ink-300 hover:text-white transition-colors"
@@ -188,6 +199,16 @@ const Navbar: React.FC = () => {
                 >
                   {t("nav.watches")}
                 </Link>
+                {isAdmin && (
+                  <Link
+                    to="/admin/sellers"
+                    data-testid="nav-admin-link-mobile"
+                    className="block text-gold-400 hover:text-gold-300 py-2 font-semibold"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    👑 Admin
+                  </Link>
+                )}
                 <button
                   onClick={() => {
                     handleLogout();

@@ -510,3 +510,31 @@ User: "Allow sellers to view their profile and products plus ability to edit inf
 - Smoke (5 public endpoints) all pass — zero regressions.
 - Frontend (390×844 mobile): 27 product cards rendered with all 4 per-card testids; dashboard CTA wires correctly; edit page pre-fills all 5 inputs + preview image; save redirects to `/my-products`; 404 fallback works.
 
+
+
+### Shipped Feb 21, 2026 (iter14) — Admin-Direct Seller Registration
+User: "Allow for admin to register sellers and their profiles and pictures." Choices: all fields + avatar + starter product + KYC docs (all optional); admin can type initial password OR send SMS link; pages at `/admin/sellers` and `/admin/sellers/new`; admin-trusted (immediate `verified`).
+
+**New backend module — `/app/backend/admin_sellers.py`**:
+- `create_seller()` — phone-unique (409 `PHONE_EXISTS:<phone>`) + email-unique check; `auth_type='phone'` when admin types a password, `auth_type='password_pending'` + `password_reset_token` (72h) when SMS-link path. Optional starter product is created inline using existing `calculate_fees`. Optional `documents` map stashes admin-uploaded KYC images on `users.admin_uploaded_documents`. SMS sent via existing `send_sms` (simulated when AT key missing) — link is also returned in the API response so admin can share it manually.
+- `list_sellers()` — `role='seller'` filter with case-insensitive search on name/business_name/phone + bulk product-count aggregation (avoids N+1).
+- `update_seller()` / `resend_set_password_link()` — admin can deactivate/activate, edit profile fields, or regenerate the password-set link.
+
+**Routes (placed BEFORE `app.include_router(api_router)` to avoid late-registration 404s)**:
+- `POST /api/admin/sellers` · `GET /api/admin/sellers` · `PATCH /api/admin/sellers/{id}` · `POST /api/admin/sellers/{id}/resend-password-link` · `POST /api/auth/set-password-with-token` (token-based reset, distinct from existing OTP-based one).
+
+**Frontend pages**:
+- `/admin/sellers` (`AdminSellersPage.tsx`) — searchable seller directory, per-row View / Resend-link (when `password_pending`) / Deactivate-Activate. Empty + 403 + loading states all i18n-aware.
+- `/admin/sellers/new` (`AdminSellerCreatePage.tsx`) — single-screen form: avatar (auto-compressed via `imageUpload.ts`, ≤500 KB), account details, password radios (SMS-link default, "Set yourself" reveals password field), starter product (toggleable), 5 KYC doc slots (each compressed ≤1.5 MB). On success → bilingual confirmation card with copyable set-password link + "Register another" button that resets the form.
+
+**Tests** — `/app/test_reports/iteration_14.json`:
+- 23/23 backend pytest: full CRUD, validation 400s (invalid phone, short password), conflict 409s (duplicate phone + email), 403 for non-admin, 401 unauth, token-reset round-trip + new-password login, document stash, regression on `/products/mine`, `/admin/onboarding/queue`, `/admin/reconciliation`, `/admin/client-errors`.
+- Frontend (390×844 mobile): all 14 testids on the create page; search debounces and filters; success-card flows for both password paths; password_pending sellers expose Resend-link.
+- Smoke + ledger E2E PASS — zero broader regression.
+
+**Operational notes**
+- The pre-existing OTP-based `/api/auth/reset-password` is unchanged. The new `/api/auth/set-password-with-token` is the path used by the SMS link sent by admin onboarding (and by the existing field-rep flow's welcome SMS, indirectly).
+- `set_password_link` is returned in the API response so admin can copy/paste it via WhatsApp if AT SMS is mocked.
+- `list_sellers` only shows users with `role='seller'` — pre-existing users from earlier registrations won't appear unless they were admin-onboarded. Existing field-rep onboardings already create users with `role='seller'`, so both flows share this directory.
+
+

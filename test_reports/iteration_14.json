@@ -1,0 +1,41 @@
+{
+  "summary": "Iter14 — Admin-direct seller registration backend + frontend verified end-to-end. Backend pytest 23/23 PASS (POST/GET/PATCH /api/admin/sellers, resend-password-link, /auth/set-password-with-token, regression on /products/mine, /admin/onboarding/queue, /admin/reconciliation, /admin/client-errors). Frontend (390x844 mobile) /admin/sellers shows 'Sign in as admin' card for anonymous, admin-add-seller-btn + admin-sellers-list + 10 seller-row/seller-view/seller-toggle/seller-resend-link rows for admin; admin-sellers-search debounces and filters (10→8 rows for 'TEST_iter14'). /admin/sellers/new renders all 14 expected testids; default radio is admin-pwd-link-radio; switching to admin-pwd-direct-radio reveals admin-password-input; admin-starter-toggle reveals 4 starter fields; admin-doc-pick-{key} buttons render for KYC docs. Direct-password submit creates seller, shows admin-seller-created-success with admin-view-seller-link + admin-register-another-btn (no link/copy-btn — expected); SMS-link submit shows admin-set-password-link (contains /reset-password?token=) + admin-copy-password-link-btn + admin-view-seller-link; admin-register-another-btn resets all fields back to empty. Newly-created password_pending seller shows seller-resend-link button in /admin/sellers list. Smoke and ledger e2e regression all PASS — no broader regressions.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/auth/me", "issue": "GET /auth/me returns 500 with KeyError 'auth_type' when called by the seed admin user (seed_seller_biz_salama) because that DB record lacks an `auth_type` field. Pre-existing bug — not introduced by iter14. Fix: use user.get('auth_type', 'password') in server.py:1054 OR backfill the seed admin doc with auth_type='password'."},
+      {"endpoint": "/api/admin/sellers?search=<phone-with-+>", "issue": "search query value is passed directly into MongoDB $regex with no re.escape — substrings starting with '+' (e.g. the literal +255 prefix) are interpreted as regex quantifiers and either error or return no results. Frontend works around this by trimming to digits, but the API surface is brittle. Fix: re.escape(search) before building the $regex in admin_sellers.list_sellers."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter14_admin_sellers.py",
+    "/app/test_reports/pytest/iteration_14.xml"
+  ],
+  "action_items": [
+    "(LOW) Backfill auth_type='password' on the seed admin user OR change server.py:1054 to user.get('auth_type','password') so /api/auth/me stops 500-ing for the seed admin. Currently the admin UI never calls /auth/me (it relies on the login response), so no user-facing breakage, but any future code path that does will crash.",
+    "(LOW) Add re.escape on the `search` param in admin_sellers.list_sellers before the $regex construction. Mitigates accidental regex injection / quantifier-on-anchor errors when admin search box is fed a leading '+'."
+  ],
+  "critical_code_review_comments": [
+    "admin_sellers.py:131-134 — admin_uploaded_documents is stored as base64 blobs inline on the user document. With 5 KYC docs each potentially several hundred KB, this bloats the user record (which is read by /api/auth/login etc.). Suggest moving documents to a separate collection (e.g. seller_documents) keyed by user_id, or storing only object-store URLs.",
+    "admin_sellers.py:142 — `sp.price > 0 and sp.name.strip()` silently swallows a starter product whose price is 0 or whose name is whitespace; the admin sees no error in the response. Either reject upstream with a 400 or surface a `starter_product_skipped: true` flag so the UI can warn.",
+    "server.py:5871-5895 — admin_create_seller catches ValueError as 400 but ValueError can also come from bcrypt internal issues (encoding etc.). Consider distinguishing 'business rule failed' from 'unexpected ValueError' by raising a typed exception (e.g. AdminSellerError) instead of generic ValueError/LookupError.",
+    "server.py:5952 — fragile expires comparison: `(expires.tzinfo and expires < datetime.now(UTC)) or (not expires.tzinfo and expires < datetime.now(UTC).replace(tzinfo=None))`. Normalise to UTC once at the top (`expires = expires.astimezone(UTC) if expires.tzinfo else expires.replace(tzinfo=UTC)`) so the comparison is a single line and not duplicated.",
+    "server.py is now 6,021 lines (up from 5,918 in iter13). The new admin-sellers routes (lines 5871-5962) should join /app/backend/routes/admin_sellers.py alongside the module to keep server.py from continuing to grow past the 700-line guideline.",
+    "AdminSellerCreatePage.tsx success card: when the seller was created with a direct password, the success card only shows admin-view-seller-link + admin-register-another-btn (no admin-set-password-link / admin-copy-password-link-btn). The test spec lists these testids as part of the success card universally — clarify in spec that they only appear for the SMS-link flow (verified working) so future testing agents don't flag a false positive."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter14_admin_sellers.py"
+  ],
+  "success_rate": {"backend": "100% (23/23)", "frontend": "100% (all 14 testids + 2 success flows + 1 reset + 1 search filter verified)"},
+  "test_credentials": "Admin +255700000001/AdminPass123!; non-admin +255712345678/test1234. Both pre-existing per /app/memory/test_credentials.md.",
+  "seed_data_creation": "Backend test creates ~8 TEST_iter14_* seller users (random +255712xxxxxxx phones), 1 TEST_iter14 starter product. Frontend test creates 2 more (1 direct-password, 1 SMS-link). No cleanup performed — list /api/admin/sellers will show ~10 TEST_iter14_* entries. Recommend a cleanup sweep that deletes users WHERE name LIKE 'TEST_iter14%' before iter15.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: pytest /app/backend/tests/test_iter14_admin_sellers.py -v. Tests rely on cross-test state (pytest.full_seller_user_id etc.) — run as a class suite, not individually. The SMS-link test consumes the link end-to-end, so the original pending seller becomes auth_type=phone after the run; create a fresh pending seller if you need to verify the resend-link UI again. Auth bug to watch: GET /api/auth/me 500s for seed_seller_biz_salama because the user doc lacks auth_type — do NOT use /auth/me as a smoke-check for admin auth; instead hit /admin/sellers GET. Frontend authStore key is 'biz-salama-auth' (zustand persist) with shape {state:{token,user,isAuthenticated},version:0}.",
+  "rca of the issue": "No iter14 bugs. Pre-existing minor: /auth/me KeyError on missing auth_type for seed admin (not in iter14 scope but flagged); admin_sellers.list_sellers $regex doesn't escape the search input (low-risk because admin-only and search rarely contains regex meta chars, but bad practice)."
+}

@@ -63,6 +63,7 @@ from seller_onboarding import (
 # Browser-side error / debug-log collector — self-hosted Sentry-lite.
 import client_errors as ce_module
 from security import SecurityHeadersMiddleware, login_rate_limiter
+import admin_sellers as adm_sellers
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -5860,6 +5861,107 @@ async def download_seller_pitch_pdf():
     )
 
 
+# ────────────────────────────────────────────────────────────────────────
+# ADMIN-DIRECT SELLER REGISTRATION
+# Distinct from `seller_onboarding.py` (field-rep 5-doc capture flow). Admin
+# trusts their own data → seller is created verified immediately. See
+# /app/backend/admin_sellers.py for the module behind these routes.
+# ────────────────────────────────────────────────────────────────────────
+
+@api_router.post("/admin/sellers")
+async def admin_create_seller(payload: adm_sellers.AdminSellerCreate, request: Request):
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    normalized = normalize_tz_phone(payload.phone)
+    if not normalized:
+        raise HTTPException(
+            status_code=400,
+            detail="Nambari ya simu si sahihi / Invalid phone number",
+        )
+    try:
+        return await adm_sellers.create_seller(
+            db,
+            payload=payload,
+            admin_user_id=user['user_id'],
+            normalized_phone=normalized,
+            base_url=BASE_URL,
+            send_sms=send_sms,
+            calculate_fees=calculate_fees,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except LookupError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+
+
+@api_router.get("/admin/sellers")
+async def admin_list_sellers(request: Request, search: str | None = None, limit: int = 100):
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    sellers = await adm_sellers.list_sellers(db, search=search, limit=max(1, min(limit, 500)))
+    return {"sellers": sellers, "count": len(sellers)}
+
+
+@api_router.patch("/admin/sellers/{user_id}")
+async def admin_update_seller(user_id: str, payload: adm_sellers.AdminSellerUpdate, request: Request):
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    try:
+        return await adm_sellers.update_seller(db, user_id=user_id, payload=payload)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+@api_router.post("/admin/sellers/{user_id}/resend-password-link")
+async def admin_resend_password_link(user_id: str, request: Request):
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    try:
+        return await adm_sellers.resend_set_password_link(
+            db, user_id=user_id, base_url=BASE_URL, send_sms=send_sms,
+        )
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+class SetPasswordWithTokenRequest(BaseModel):
+    token: str
+    phone: str | None = None
+    new_password: str
+
+
+@api_router.post("/auth/set-password-with-token")
+async def set_password_with_token(data: SetPasswordWithTokenRequest):
+    if len(data.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Nenosiri liwe na herufi 6 au zaidi / Password must be at least 6 characters")
+    query: dict[str, Any] = {"password_reset_token": data.token}
+    if data.phone:
+        normalized = normalize_tz_phone(data.phone)
+        if normalized:
+            query["phone"] = normalized
+    user = await db.users.find_one(query, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=400, detail="Kiungo si sahihi / Invalid or expired link")
+    expires = user.get("password_reset_expires")
+    if isinstance(expires, str):
+        expires = datetime.fromisoformat(expires)
+    if not expires or (expires.tzinfo and expires < datetime.now(UTC)) or (not expires.tzinfo and expires < datetime.now(UTC).replace(tzinfo=None)):
+        raise HTTPException(status_code=400, detail="Kiungo kimekwisha muda / Link expired")
+    pw_hash = bcrypt.hashpw(data.new_password.encode(), bcrypt.gensalt()).decode()
+    await db.users.update_one(
+        {"user_id": user['user_id']},
+        {
+            "$set": {"password_hash": pw_hash, "auth_type": "phone", "updated_at": datetime.now(UTC)},
+            "$unset": {"password_reset_token": "", "password_reset_expires": ""},
+        },
+    )
+    return {"ok": True, "message": "Nenosiri limewekwa / Password set"}
+
+
 # Include the router
 app.include_router(api_router)
 
@@ -5892,6 +5994,7 @@ app.add_middleware(
 # on the response leg — meaning the headers it adds survive any later
 # middleware that might rewrite Content-Type or strip headers.
 app.add_middleware(SecurityHeadersMiddleware)
+
 
 @app.on_event("startup")
 async def _startup_ledger_init():

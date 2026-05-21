@@ -70,7 +70,8 @@ def secondary():
         # Try to register a fresh secondary
         r = requests.post(f"{BASE_URL}/api/auth/register",
                           json={"phone": SECONDARY_PHONE, "password": SECONDARY_PASSWORD,
-                                "name": "Iter13 Secondary"})
+                                "name": "Iter13 Secondary"},
+                          timeout=30)
         s, tok = _login(SECONDARY_PHONE, SECONDARY_PASSWORD)
         if not s:
             pytest.skip(f"Secondary login/register failed: register={r.status_code}")
@@ -106,7 +107,7 @@ class TestGetMyProducts:
             assert f in sample, f"missing field {f} in product: {list(sample.keys())}"
 
     def test_unauthenticated_returns_401(self):
-        r = requests.get(f"{BASE_URL}/api/products/mine")
+        r = requests.get(f"{BASE_URL}/api/products/mine", timeout=30)
         assert r.status_code == 401, f"expected 401, got {r.status_code}"
 
     def test_mine_includes_inactive(self, primary):
@@ -156,7 +157,7 @@ class TestPatchProduct:
         me = primary.get(f"{BASE_URL}/api/auth/me").json()
         seller_id = me["user_id"]
         # Pre-hide: product is in public list
-        r0 = requests.get(f"{BASE_URL}/api/sellers/{seller_id}")
+        r0 = requests.get(f"{BASE_URL}/api/sellers/{seller_id}", timeout=30)
         if r0.status_code == 200:
             pre = r0.json()
             pre_products = pre.get("products", []) if isinstance(pre, dict) else pre
@@ -166,7 +167,7 @@ class TestPatchProduct:
         pr = primary.patch(f"{BASE_URL}/api/products/{pid}", json={"is_active": False})
         assert pr.status_code == 200
         # After: not in public list
-        r1 = requests.get(f"{BASE_URL}/api/sellers/{seller_id}")
+        r1 = requests.get(f"{BASE_URL}/api/sellers/{seller_id}", timeout=30)
         if r1.status_code == 200:
             post = r1.json()
             post_products = post.get("products", []) if isinstance(post, dict) else post
@@ -184,7 +185,7 @@ class TestPatchProduct:
 
     def test_unauthenticated_returns_401(self, primary):
         created = _create_product(primary, "anon_patch")
-        r = requests.patch(f"{BASE_URL}/api/products/{created['product_id']}", json={"name": "x"})
+        r = requests.patch(f"{BASE_URL}/api/products/{created['product_id']}", json={"name": "x"}, timeout=30)
         assert r.status_code == 401, f"expected 401, got {r.status_code}"
 
     def test_empty_body_is_noop_returns_current(self, primary):

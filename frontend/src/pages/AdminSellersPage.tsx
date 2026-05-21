@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, Search, Loader2, ShieldCheck, UserCheck, RefreshCw, EyeOff, Eye, Upload, X, FileSpreadsheet } from 'lucide-react';
+import { Plus, Search, Loader2, ShieldCheck, UserCheck, RefreshCw, EyeOff, Eye, Upload, X, FileSpreadsheet, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../lib/api';
 import { useAuthStore } from '../store/authStore';
 import { useT } from '../i18n';
 import SEO from '../components/SEO';
+import { processImageForUpload, type ProcessedImage } from '../lib/imageUpload';
 
 interface Seller {
   user_id: string;
@@ -43,6 +44,7 @@ export default function AdminSellersPage() {
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [importerOpen, setImporterOpen] = useState(false);
+  const [docsModalFor, setDocsModalFor] = useState<Seller | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -212,6 +214,13 @@ export default function AdminSellersPage() {
                   >
                     {lang === 'sw' ? 'Tazama' : 'View'}
                   </Link>
+                  <button
+                    onClick={() => setDocsModalFor(s)}
+                    data-testid={`seller-docs-${s.user_id}`}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 inline-flex items-center gap-1"
+                  >
+                    <FileText className="w-3 h-3" /> {lang === 'sw' ? 'Hati' : 'Docs'}
+                  </button>
                   {s.auth_type === 'password_pending' && (
                     <button
                       onClick={() => resendLink(s)}
@@ -242,6 +251,14 @@ export default function AdminSellersPage() {
           lang={lang}
           onClose={() => setImporterOpen(false)}
           onDone={() => { setImporterOpen(false); void load(); }}
+        />
+      )}
+      {docsModalFor && (
+        <SellerDocsModal
+          seller={docsModalFor}
+          lang={lang}
+          onClose={() => setDocsModalFor(null)}
+          onChanged={() => { void load(); }}
         />
       )}
     </div>
@@ -441,6 +458,164 @@ function BulkImportModal({
                 className="flex-1 px-4 py-2.5 rounded-xl bg-gold-500 text-ink-900 text-sm font-bold hover:bg-gold-400"
               >
                 {lang === 'sw' ? 'Maliza' : 'Done'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+// ──────────────────────────────────────────────────────────────────────────
+// SellerDocsModal — admin attaches / reviews KYC docs for an existing seller
+// ──────────────────────────────────────────────────────────────────────────
+
+interface DocStatus { captured: boolean; uploaded_at?: string; size_bytes?: number; review_status?: string; rejection_reason?: string | null }
+interface DocLabel { en: string; sw: string }
+interface DocsData {
+  kyc_status: string;
+  is_verified: boolean;
+  documents: Record<string, DocStatus>;
+  required: string[];
+  labels: Record<string, DocLabel>;
+}
+
+function SellerDocsModal({
+  seller, lang, onClose, onChanged,
+}: { seller: Seller; lang: 'sw' | 'en'; onClose: () => void; onChanged: () => void }) {
+  const [data, setData] = useState<DocsData | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+  const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const load = useCallback(async () => {
+    try {
+      const res = await api.get(`/admin/sellers/${seller.user_id}/documents`);
+      setData(res.data as DocsData);
+    } catch (err) {
+      const e = err as { response?: { data?: { detail?: string } } };
+      toast.error(e?.response?.data?.detail || 'Failed to load');
+    }
+  }, [seller.user_id]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const upload = async (docKey: string, file?: File) => {
+    if (!file) return;
+    setBusyKey(docKey);
+    try {
+      const img: ProcessedImage = await processImageForUpload(file, { maxEdge: 1600, maxKB: 1500 });
+      await api.post(`/admin/sellers/${seller.user_id}/documents`, { doc_type: docKey, image_b64: img.base64 });
+      toast.success(lang === 'sw' ? 'Imepakiwa' : 'Uploaded');
+      await load();
+      onChanged();
+    } catch (err) {
+      const e = err as { response?: { data?: { detail?: string } } };
+      toast.error(e?.response?.data?.detail || 'Upload failed');
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
+  const review = async (approve: boolean) => {
+    setReviewing(true);
+    try {
+      await api.post(`/admin/sellers/${seller.user_id}/kyc/review`, { approve });
+      toast.success(approve ? (lang === 'sw' ? 'Imethibitishwa' : 'Approved') : (lang === 'sw' ? 'Imekataliwa' : 'Rejected'));
+      await load();
+      onChanged();
+    } catch (err) {
+      const e = err as { response?: { data?: { detail?: string } } };
+      toast.error(e?.response?.data?.detail || 'Review failed');
+    } finally {
+      setReviewing(false);
+    }
+  };
+
+  return (
+    <div
+      data-testid="seller-docs-modal"
+      className="fixed inset-0 z-50 bg-black/70 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div onClick={(e) => e.stopPropagation()} className="bg-ink-800 border border-ink-700 rounded-2xl w-full max-w-2xl my-8">
+        <div className="flex items-center justify-between p-5 border-b border-ink-700">
+          <div>
+            <h2 className="text-white font-bold">{lang === 'sw' ? 'Hati za' : 'Documents for'} {seller.business_name || seller.name}</h2>
+            <p className="text-ink-400 text-xs mt-0.5">{seller.phone}</p>
+          </div>
+          <button onClick={onClose} data-testid="seller-docs-close" className="p-1 rounded hover:bg-ink-700">
+            <X className="w-5 h-5 text-ink-400" />
+          </button>
+        </div>
+        {!data ? (
+          <div className="p-10 text-center"><Loader2 className="w-5 h-5 animate-spin text-gold-400 mx-auto" /></div>
+        ) : (
+          <div className="p-5 space-y-3">
+            <div className="flex items-center gap-2 text-sm" data-testid="seller-docs-kyc-status">
+              <span className="text-ink-400">KYC:</span>
+              <span className={`px-2 py-0.5 rounded-full text-xs ${data.kyc_status === 'approved' ? 'bg-emerald-500/15 text-emerald-300' : data.kyc_status === 'rejected' ? 'bg-rose-500/15 text-rose-300' : data.kyc_status === 'pending_review' ? 'bg-amber-500/15 text-amber-300' : 'bg-ink-700 text-ink-300'}`}>
+                {data.kyc_status}
+              </span>
+              {data.is_verified && <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400">VERIFIED</span>}
+            </div>
+
+            {data.required.map((docKey) => {
+              const doc = data.documents[docKey];
+              const label = data.labels[docKey];
+              const captured = !!doc?.captured;
+              const busy = busyKey === docKey;
+              return (
+                <div key={docKey} data-testid={`admin-doc-card-${docKey}`} className={`flex items-center gap-3 p-3 rounded-xl border ${captured ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-ink-700 bg-ink-900'}`}>
+                  <FileText className={`w-5 h-5 shrink-0 ${captured ? 'text-emerald-400' : 'text-ink-500'}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white text-sm font-semibold truncate">{lang === 'sw' ? label?.sw : label?.en}</p>
+                    <p className="text-ink-500 text-xs">
+                      {captured ? (
+                        <>
+                          {(((doc?.size_bytes || 0) / 1024) | 0)} KB
+                          {doc?.uploaded_at ? ` · ${new Date(doc.uploaded_at).toLocaleDateString()}` : ''}
+                        </>
+                      ) : (lang === 'sw' ? 'Hakuna' : 'Not uploaded')}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => fileRefs.current[docKey]?.click()}
+                    disabled={busy}
+                    data-testid={`admin-doc-upload-${docKey}`}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-gold-500/15 text-gold-300 hover:bg-gold-500/25 disabled:opacity-50 inline-flex items-center gap-1"
+                  >
+                    {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                    {captured ? (lang === 'sw' ? 'Badili' : 'Replace') : (lang === 'sw' ? 'Pakia' : 'Upload')}
+                  </button>
+                  <input
+                    ref={(el) => { fileRefs.current[docKey] = el; }}
+                    type="file" accept="image/*,.heic,.heif" className="hidden"
+                    onChange={(e) => { void upload(docKey, e.target.files?.[0]); e.currentTarget.value = ''; }}
+                    data-testid={`admin-doc-input-${docKey}`}
+                  />
+                </div>
+              );
+            })}
+
+            <div className="flex gap-2 pt-3 border-t border-ink-700">
+              <button
+                onClick={() => review(true)}
+                disabled={reviewing || data.kyc_status === 'approved'}
+                data-testid="seller-docs-approve-btn"
+                className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-500 text-white text-sm font-bold hover:bg-emerald-400 disabled:opacity-50"
+              >
+                {reviewing ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : (lang === 'sw' ? 'Thibitisha' : 'Approve KYC')}
+              </button>
+              <button
+                onClick={() => review(false)}
+                disabled={reviewing || data.kyc_status === 'rejected'}
+                data-testid="seller-docs-reject-btn"
+                className="flex-1 px-4 py-2.5 rounded-xl bg-rose-500/15 text-rose-300 text-sm font-bold hover:bg-rose-500/25 disabled:opacity-50"
+              >
+                {lang === 'sw' ? 'Kataa' : 'Reject'}
               </button>
             </div>
           </div>

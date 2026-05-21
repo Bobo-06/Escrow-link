@@ -64,6 +64,7 @@ from seller_onboarding import (
 import client_errors as ce_module
 from security import SecurityHeadersMiddleware, login_rate_limiter
 import admin_sellers as adm_sellers
+import kyc_docs as kyc_module
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -5989,6 +5990,110 @@ async def set_password_with_token(data: SetPasswordWithTokenRequest):
         },
     )
     return {"ok": True, "message": "Nenosiri limewekwa / Password set"}
+
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# SELF-SERVICE & ADMIN KYC DOCUMENTS (stored on the user record)
+# Distinct from `seller_onboarding.py` (pre-account field-rep flow).
+# ──────────────────────────────────────────────────────────────────────────
+
+@api_router.get("/auth/kyc/documents")
+async def my_kyc_documents(request: Request):
+    user = await get_current_user(request)
+    try:
+        return await kyc_module.list_docs(db, user_id=user['user_id'])
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+@api_router.post("/auth/kyc/documents")
+async def upload_my_kyc_document(payload: kyc_module.DocumentUpload, request: Request):
+    user = await get_current_user(request)
+    try:
+        return await kyc_module.upload_doc(
+            db,
+            user_id=user['user_id'],
+            doc_type=payload.doc_type,
+            image_b64=payload.image_b64,
+            note=payload.note,
+            uploader_id=user['user_id'],
+            is_admin_upload=False,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+@api_router.post("/auth/kyc/submit")
+async def submit_my_kyc(request: Request):
+    user = await get_current_user(request)
+    try:
+        return await kyc_module.submit_for_review(db, user_id=user['user_id'])
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+@api_router.get("/admin/sellers/{user_id}/documents")
+async def admin_get_seller_documents(user_id: str, request: Request):
+    me = await get_current_user(request)
+    if me.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    try:
+        return await kyc_module.list_docs(db, user_id=user_id)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+@api_router.post("/admin/sellers/{user_id}/documents")
+async def admin_upload_seller_document(user_id: str, payload: kyc_module.DocumentUpload, request: Request):
+    me = await get_current_user(request)
+    if me.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    try:
+        return await kyc_module.upload_doc(
+            db,
+            user_id=user_id,
+            doc_type=payload.doc_type,
+            image_b64=payload.image_b64,
+            note=payload.note,
+            uploader_id=me['user_id'],
+            is_admin_upload=True,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+class KycReviewRequest(BaseModel):
+    doc_type: str | None = None
+    approve: bool
+    rejection_reason: str | None = None
+
+
+@api_router.post("/admin/sellers/{user_id}/kyc/review")
+async def admin_review_seller_kyc(user_id: str, payload: KycReviewRequest, request: Request):
+    me = await get_current_user(request)
+    if me.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    try:
+        return await kyc_module.admin_review(
+            db,
+            user_id=user_id,
+            doc_type=payload.doc_type,
+            approve=payload.approve,
+            rejection_reason=payload.rejection_reason,
+            reviewer_id=me['user_id'],
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
 
 
 # Include the router

@@ -1,0 +1,37 @@
+{
+  "summary": "Iter16 KYC self-service + admin docs: 14/14 backend tests PASS, all frontend testids verified on /my-documents, /dashboard, and /admin/sellers (seller-docs modal). Regression: smoke.sh + ledger e2e + onboarding queue all PASS.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "SellerDocsModal (admin)", "issues": ["Status row reads 'KYC: verified VERIFIED' — the literal status string and the colored badge both render, slight visual duplication. Cosmetic only."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter16_kyc_docs.py",
+    "/app/test_reports/pytest/iteration_16.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "kyc_docs.py correctly uses `user is None` (not truthy check) because Mongo projection of missing fields returns {} — verified and confirmed safe.",
+    "image_b64 is stripped from list_docs() responses via _serialize_docs() — admin GET /admin/sellers/{id}/documents confirmed to NOT leak raw base64.",
+    "Whole-batch approve sets is_verified=true; per-doc rejection only mutates that doc's review_status and rejection_reason. Both behaviors verified.",
+    "Admin-direct upload sets review_status='approved' and preserves prior kyc_status (does NOT auto-promote to pending_review) — confirmed working.",
+    "MyDocumentsPage uses `useAuthStore.isAuthenticated` for gating — raw `fetch+cookie` login does NOT hydrate Zustand store, so the page shows 'Sign in to upload documents'. UI login flow correctly hydrates store and unlocks the 5-card grid. Behavior is correct; just noted for the next testing agent.",
+    "Mongo projection `{kyc_status:1, kyc_documents:1}` against a user without those fields returns {} — confirmed by the smoke uploads."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter16_kyc_docs.py (new)"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100% (all testids present & functional)"},
+  "test_credentials": "Primary test user +255712345678 / test1234 (now kyc_status=approved after this run). Admin +255700000001 / AdminPass123!. New fresh user auto-created per run for empty-submit test.",
+  "seed_data_creation": "test_submit_with_missing_docs_returns_400 creates a fresh user each run via /api/auth/register with a uuid-suffixed phone. No long-lived TEST_* artifacts beyond what already existed in iter15.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Primary test user (+255712345678) ends each run with kyc_status='approved' + is_verified=true because the admin-batch-approve test runs last. If you need to re-test pending_review flow, re-upload any of the 5 docs (POST /auth/kyc/documents) which flips status back to pending_review. /my-documents requires UI-based login (filling the form + clicking submit) — direct API login + cookie won't hydrate the Zustand store; this is correct app behavior, not a bug. seller-docs-* testids on /admin/sellers use pattern `seller-docs-{user_id}` for the row button.",
+  "rca of the issue": "N/A — feature addition, no regressions found. Original user complaint ('Seller cant see option to load documents') is resolved: dashboard now shows 'Verify Account' CTA (data-testid=dashboard-my-documents-btn) → /my-documents → 5-card upload grid with camera + gallery + submit. Admin has parallel path via /admin/sellers row 'Docs' button → SellerDocsModal with per-doc upload + approve/reject."
+}

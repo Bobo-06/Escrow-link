@@ -1,0 +1,46 @@
+{
+  "summary": "Iter15 — admin bulk-CSV seller import. Backend pytest 15/15 PASS (3-row happy path, mixed valid+invalid+duplicate, missing header, empty 400, oversized 413, non-admin 403, unauth 401, case-insensitive headers, created-visible-in-list, plus iter14 regression: single POST, GET list, PATCH, resend-link, set-password-with-token). Smoke + ledger e2e PASS. Frontend bulk-import modal flow VERIFIED on /admin/sellers desktop: admin-bulk-import-btn opens bulk-import-modal; bulk-import-sample-btn populates 217-char sample; bulk-import-submit posts 2-row CSV → bulk-import-result shows created=2 failed=0; bulk-import-file-input uploads real .csv File and populates the textarea via file.text() (verified 'TEST_iter15_uifile,07xxxxxx' appears); bulk-import-done-btn closes modal and refreshes list (rows 26→27). Anonymous correctly sees the 'Sign in as admin' fallback (no bulk-import button visible). HOWEVER: the entire admin UI is gated by user.role==='admin', but the backend POST /api/auth/login response object omits a 'role' field, so a real admin who logs in via the UI ends up with user.role===undefined in the zustand store and is permanently shown 'Sign in as admin' on /admin/sellers — the bulk-import button (and Register seller button) are unreachable in production via the UI. The frontend test only proceeded by patching localStorage manually. This is a HIGH-priority regression introduced before iter15 (contradicts iter14's claim that admin UI worked) but blocks the new feature delivered in iter15.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/auth/login", "issue": "Response payload omits the user's 'role' field. The seed admin (seed_seller_biz_salama) has role='admin' in MongoDB but it's not surfaced in the login response, breaking every admin-only frontend gate (AdminSellersPage.tsx line 67: `user?.role !== 'admin'`). Fix: add `\"role\": user.get('role', 'user'),` to the login response dict at server.py:773-787.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "/api/auth/me", "issue": "STILL 500s for the seed admin because doc lacks 'auth_type' (carried over from iter14). Fix: user.get('auth_type','password')."},
+      {"endpoint": "GET /api/admin/sellers", "issue": "search param not re.escape'd (carried over from iter14)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Admin login → /admin/sellers", "issue": "After successful login as admin (+255700000001/AdminPass123!), the page renders the 'Sign in as admin' fallback because login response omits role. The new admin-bulk-import-btn is therefore unreachable for the real admin. Bug is in backend response, but it blocks the iter15 deliverable end-to-end via UI.", "affected_selectors": ["[data-testid='admin-bulk-import-btn']", "[data-testid='admin-add-seller-btn']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter15_bulk_csv.py",
+    "/app/test_reports/pytest/iteration_15.xml"
+  ],
+  "action_items": [
+    "(HIGH) Add `\"role\": user.get('role', 'user')` to the POST /api/auth/login response dict in server.py (lines 773-787). Without this, no real admin can reach /admin/sellers via the UI, so the bulk-import modal is unreachable in production. After fix, retest /admin/sellers as +255700000001/AdminPass123! and confirm admin-bulk-import-btn renders without manual localStorage patching.",
+    "(LOW) Carry-over iter14: fix /auth/me KeyError on missing auth_type, and re.escape on admin_sellers search."
+  ],
+  "critical_code_review_comments": [
+    "server.py:773-787 — login response shape diverges from what the React store needs (role missing). Either return the full sanitized user doc (minus password_hash, _id) or explicitly add 'role'. Currently every admin-only UI gate is broken for real admins.",
+    "admin_sellers.py:357 (parse_bulk_csv) — row_n is stored as a string ('2','3',...) so the JSON errors[] returns {\"row\":\"2\",...} for per-row errors but {\"row\":0,...} for the parse-error path. Inconsistent type (str vs int) will trip downstream consumers. Coerce to int.",
+    "admin_sellers.py:413 — broad `except Exception as e` swallows programming errors (TypeError, AttributeError) into a per-row 'error' string. Keep the catch for LookupError/ValueError and let unexpected exceptions bubble so a 500 is observable.",
+    "server.py:5940 — `if not payload.csv_text or not payload.csv_text.strip()` raises 400 'csv_text is empty' which is correct, but the 413 cap is checked AFTER the strip — a 256KB payload of all whitespace would 413 instead of 400. Re-order: check size first, then emptiness.",
+    "AdminSellersPage.tsx BulkImportModal: the sample populates textarea but there's no visible CSV header validation client-side. Users will see 'Missing required column(s)' only after submitting. Consider a quick client-side header check before POSTing.",
+    "AdminSellersPage.tsx BulkImportModal: per-row errors are rendered in the result panel — confirm errors list has a data-testid for individual error rows so future automated tests can introspect (currently only [data-testid='bulk-import-result'] + counts are testable).",
+    "server.py is now > 6000 lines; admin-sellers routes should be moved to /app/backend/routes/admin_sellers.py."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter15_bulk_csv.py"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% of new bulk-import flow testids reachable AFTER manual role patch; 0% reachable for real admin via vanilla login flow due to login-response role-missing bug"},
+  "test_credentials": "Admin +255700000001/AdminPass123!; non-admin +255712345678/test1234.",
+  "seed_data_creation": "Backend test creates ~7 TEST_iter15_* seller users via bulk endpoint (3 from happy path, 2 from mixed, 1 from case-insensitive, 1 from regression single-POST) + 1 from set-password-with-token regression (password rotated to NewPass123!). Frontend test created 3 additional TEST_iter15_ui_* sellers (2 from CSV paste, 1 from file upload). Total ~10 TEST_iter15_* docs in users collection. No cleanup performed.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: pytest /app/backend/tests/test_iter15_bulk_csv.py -v. Random phone generator uses 0712+6 digits (10 total) to match TZ format — DO NOT use 7 random digits, normalize_tz_phone rejects 11-digit strings. GET /api/admin/sellers returns {count, sellers:[...]} (a dict) not a list. The whole admin UI is currently blocked unless you patch localStorage 'biz-salama-auth' .state.user.role='admin' after login — the proper fix is one line in server.py login response.",
+  "rca of the issue": "Root cause: server.py POST /api/auth/login (lines 773-787) explicitly constructs a sanitized response dict that lists individual user fields but forgot to include 'role'. AdminSellersPage.tsx gates on `user?.role !== 'admin'` so the admin UI is inaccessible. Reproduction: login as +255700000001/AdminPass123! via UI → go to /admin/sellers → see 'Sign in as admin' card despite being logged in. Mitigation: add `\"role\": user.get('role'),` (or full sanitized user via {**user, '_id': None, 'password_hash': None}) to the login return dict; existing zustand User type already declares role?:string."
+}

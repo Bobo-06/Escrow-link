@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, Search, Loader2, ShieldCheck, UserCheck, RefreshCw, EyeOff, Eye } from 'lucide-react';
+import { Plus, Search, Loader2, ShieldCheck, UserCheck, RefreshCw, EyeOff, Eye, Upload, X, FileSpreadsheet } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../lib/api';
 import { useAuthStore } from '../store/authStore';
@@ -42,6 +42,7 @@ export default function AdminSellersPage() {
   const [sellers, setSellers] = useState<Seller[] | null>(null);
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  const [importerOpen, setImporterOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -124,13 +125,22 @@ export default function AdminSellersPage() {
               {lang === 'sw' ? 'Sajili na hudumia wauzaji.' : 'Register and manage seller accounts.'}
             </p>
           </div>
-          <Link
-            to="/admin/sellers/new"
-            data-testid="admin-add-seller-btn"
-            className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-gold-500 text-ink-900 font-bold hover:bg-gold-400 transition"
-          >
-            <Plus className="w-4 h-4" /> {lang === 'sw' ? 'Sajili muuzaji' : 'Register seller'}
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setImporterOpen(true)}
+              data-testid="admin-bulk-import-btn"
+              className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-ink-700 text-white font-semibold hover:bg-ink-600 transition border border-gold-500/30"
+            >
+              <Upload className="w-4 h-4 text-gold-400" /> {lang === 'sw' ? 'Pakia CSV' : 'Import CSV'}
+            </button>
+            <Link
+              to="/admin/sellers/new"
+              data-testid="admin-add-seller-btn"
+              className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-gold-500 text-ink-900 font-bold hover:bg-gold-400 transition"
+            >
+              <Plus className="w-4 h-4" /> {lang === 'sw' ? 'Sajili muuzaji' : 'Register seller'}
+            </Link>
+          </div>
         </div>
 
         <div className="bg-ink-800 border border-ink-700 rounded-2xl p-4 mb-5">
@@ -224,6 +234,215 @@ export default function AdminSellersPage() {
                 </div>
               </motion.div>
             ))}
+          </div>
+        )}
+      </div>
+      {importerOpen && (
+        <BulkImportModal
+          lang={lang}
+          onClose={() => setImporterOpen(false)}
+          onDone={() => { setImporterOpen(false); void load(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Bulk CSV import modal
+// ──────────────────────────────────────────────────────────────────────────
+const SAMPLE_CSV = `name,phone,business_name,location,bio
+Mama Asha,0712111222,Asha Mavazi,Kariakoo,
+John Mwambapa,+255713555666,Mwambapa Electronics,Mwanza,Vifaa vya umeme
+Neema Boutique,0754999888,Neema Boutique,Arusha,Mavazi ya kisasa`;
+
+interface BulkImportResult {
+  created: { user_id: string; name: string; phone: string; set_password_link?: string | null }[];
+  errors: { row?: string | number; phone?: string; error: string }[];
+  summary: { created: number; failed: number; total_rows?: number };
+}
+
+function BulkImportModal({
+  lang, onClose, onDone,
+}: { lang: 'sw' | 'en'; onClose: () => void; onDone: () => void }) {
+  const [csvText, setCsvText] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<BulkImportResult | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const onFile = async (file?: File) => {
+    if (!file) return;
+    if (file.size > 256 * 1024) {
+      toast.error(lang === 'sw' ? 'Faili ni kubwa sana (zaidi ya 256 KB)' : 'File too large (>256 KB)');
+      return;
+    }
+    const text = await file.text();
+    setCsvText(text);
+  };
+
+  const submit = async () => {
+    if (!csvText.trim()) {
+      toast.error(lang === 'sw' ? 'Weka CSV kwanza' : 'Paste or upload a CSV first');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await api.post('/admin/sellers/bulk-csv', { csv_text: csvText });
+      setResult(res.data as BulkImportResult);
+      toast.success(
+        lang === 'sw'
+          ? `Wamesajiliwa ${res.data.summary.created} / ${res.data.summary.total_rows ?? '?'}`
+          : `Created ${res.data.summary.created} / ${res.data.summary.total_rows ?? '?'} sellers`,
+      );
+    } catch (err) {
+      const e = err as { response?: { data?: { detail?: string } } };
+      toast.error(e?.response?.data?.detail || 'Import failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      data-testid="bulk-import-modal"
+      className="fixed inset-0 z-50 bg-black/70 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-ink-800 border border-ink-700 rounded-2xl w-full max-w-2xl my-8"
+      >
+        <div className="flex items-center justify-between p-5 border-b border-ink-700">
+          <div className="flex items-center gap-2">
+            <FileSpreadsheet className="w-5 h-5 text-gold-400" />
+            <h2 className="text-white font-bold">
+              {lang === 'sw' ? 'Pakia wauzaji kupitia CSV' : 'Bulk-import sellers via CSV'}
+            </h2>
+          </div>
+          <button onClick={onClose} data-testid="bulk-import-close" className="p-1 rounded hover:bg-ink-700">
+            <X className="w-5 h-5 text-ink-400" />
+          </button>
+        </div>
+
+        {!result ? (
+          <div className="p-5 space-y-4">
+            <p className="text-ink-300 text-sm">
+              {lang === 'sw'
+                ? 'Safu zinazohitajika: '
+                : 'Required columns: '}
+              <code className="text-gold-300">name, phone</code>.{' '}
+              {lang === 'sw' ? 'Hiari: ' : 'Optional: '}
+              <code className="text-ink-400">email, business_name, location, bio</code>.{' '}
+              {lang === 'sw'
+                ? 'Kila muuzaji atapata SMS yenye kiungo cha kuweka nenosiri.'
+                : 'Each seller gets an SMS with a set-password link.'}
+            </p>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => fileRef.current?.click()}
+                data-testid="bulk-import-file-btn"
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-gold-500/15 text-gold-300 hover:bg-gold-500/25 text-sm font-semibold"
+              >
+                <Upload className="w-4 h-4" /> {lang === 'sw' ? 'Pakia .csv' : 'Upload .csv'}
+              </button>
+              <button
+                onClick={() => setCsvText(SAMPLE_CSV)}
+                data-testid="bulk-import-sample-btn"
+                className="text-xs text-ink-400 hover:text-gold-400 underline"
+              >
+                {lang === 'sw' ? 'Tumia mfano' : 'Use sample'}
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                data-testid="bulk-import-file-input"
+                onChange={(e) => { void onFile(e.target.files?.[0]); e.currentTarget.value = ''; }}
+              />
+            </div>
+
+            <textarea
+              value={csvText}
+              onChange={(e) => setCsvText(e.target.value)}
+              rows={10}
+              placeholder={`name,phone,business_name,location,bio\nMama Asha,0712111222,Asha Mavazi,Kariakoo,`}
+              data-testid="bulk-import-textarea"
+              className="w-full bg-ink-900 border border-ink-700 rounded-xl px-3 py-2.5 text-white text-xs font-mono outline-none focus:border-gold-500/60 resize-y"
+            />
+
+            <button
+              onClick={submit}
+              disabled={submitting || !csvText.trim()}
+              data-testid="bulk-import-submit"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gold-500 text-ink-900 font-bold hover:bg-gold-400 transition disabled:opacity-50"
+            >
+              {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> {lang === 'sw' ? 'Inapakia…' : 'Importing…'}</>
+                : <><Upload className="w-4 h-4" /> {lang === 'sw' ? 'Pakia wauzaji' : 'Import sellers'}</>}
+            </button>
+          </div>
+        ) : (
+          <div className="p-5 space-y-4" data-testid="bulk-import-result">
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3">
+                <p className="text-emerald-300 text-2xl font-bold" data-testid="bulk-import-created-count">{result.summary.created}</p>
+                <p className="text-emerald-400 text-xs uppercase mt-1">{lang === 'sw' ? 'Imefanikiwa' : 'Created'}</p>
+              </div>
+              <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3">
+                <p className="text-rose-300 text-2xl font-bold" data-testid="bulk-import-failed-count">{result.summary.failed}</p>
+                <p className="text-rose-400 text-xs uppercase mt-1">{lang === 'sw' ? 'Imeshindwa' : 'Failed'}</p>
+              </div>
+              <div className="bg-ink-900 border border-ink-700 rounded-xl p-3">
+                <p className="text-white text-2xl font-bold">{result.summary.total_rows ?? (result.created.length + result.errors.length)}</p>
+                <p className="text-ink-400 text-xs uppercase mt-1">{lang === 'sw' ? 'Jumla' : 'Total'}</p>
+              </div>
+            </div>
+
+            {result.errors.length > 0 && (
+              <div className="bg-ink-900 border border-rose-500/20 rounded-xl p-3 max-h-40 overflow-y-auto">
+                <p className="text-rose-300 text-xs font-bold uppercase mb-2">{lang === 'sw' ? 'Makosa' : 'Errors'}</p>
+                <ul className="space-y-1 text-xs">
+                  {result.errors.map((e, i) => (
+                    <li key={`${e.row || i}-${e.phone || ''}`} className="text-ink-300">
+                      <span className="text-ink-500">{lang === 'sw' ? 'Mstari' : 'Row'} {e.row ?? '?'}:</span>{' '}
+                      {e.phone && <span className="text-ink-400">{e.phone} · </span>}
+                      <span className="text-rose-300">{e.error}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {result.created.length > 0 && (
+              <div className="bg-ink-900 border border-emerald-500/20 rounded-xl p-3 max-h-40 overflow-y-auto">
+                <p className="text-emerald-300 text-xs font-bold uppercase mb-2">{lang === 'sw' ? 'Wamesajiliwa' : 'Newly created'}</p>
+                <ul className="space-y-1 text-xs">
+                  {result.created.map((c) => (
+                    <li key={c.user_id} className="text-ink-200 truncate">
+                      {c.name} · <span className="text-ink-500">{c.phone}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setResult(null); setCsvText(''); }}
+                data-testid="bulk-import-again-btn"
+                className="flex-1 px-4 py-2.5 rounded-xl bg-ink-700 text-white text-sm font-semibold hover:bg-ink-600"
+              >
+                {lang === 'sw' ? 'Pakia tena' : 'Import another'}
+              </button>
+              <button
+                onClick={onDone}
+                data-testid="bulk-import-done-btn"
+                className="flex-1 px-4 py-2.5 rounded-xl bg-gold-500 text-ink-900 text-sm font-bold hover:bg-gold-400"
+              >
+                {lang === 'sw' ? 'Maliza' : 'Done'}
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -538,3 +538,29 @@ User: "Allow for admin to register sellers and their profiles and pictures." Cho
 - `list_sellers` only shows users with `role='seller'` — pre-existing users from earlier registrations won't appear unless they were admin-onboarded. Existing field-rep onboardings already create users with `role='seller'`, so both flows share this directory.
 
 
+
+
+### Shipped Feb 21, 2026 (iter15) — Bulk CSV Seller Import + Admin-gate login fix
+User accepted the enhancement. Two related shipments:
+
+**1) Bulk CSV import — onboard a whole street market in one paste**
+- Backend: new `parse_bulk_csv()` + `bulk_import()` in `admin_sellers.py`. New route `POST /api/admin/sellers/bulk-csv` (admin-only, 256 KB cap). Required headers `name,phone` + optional `email/business_name/location/bio`, case-insensitive. Per-row failures (invalid TZ phone, duplicate `PHONE_EXISTS:`, missing fields) captured in `errors[]` with the original CSV line number so a single bad row never blocks the batch. SMS-link password path used for every imported seller.
+- Frontend: new `BulkImportModal` reachable via `admin-bulk-import-btn` on `/admin/sellers`. Supports paste-CSV, upload-`.csv`, fill-with-sample. Result panel shows `created / failed / total` counters + per-row error log + list of newly-created sellers.
+
+**2) HIGH-PRIORITY bug found by testing agent — login response omitted `role`**
+- The seed admin (`role='admin'` in MongoDB) was logging in successfully but the React store ended up with `user.role === undefined`. `AdminSellersPage.tsx` gates on `user?.role !== 'admin'`, so a real admin was permanently shown the "Sign in as admin" card and the bulk-import button was **unreachable in the real UI flow**. The testing agent only exercised it by patching localStorage.
+- Fix: added `"role": user.get('role')` to the response dicts of `POST /api/auth/login`, `GET /api/auth/me`, and `PUT /api/auth/profile`. Verified by logging in through the real form → store now persists `user.role='admin'` → admin-bulk-import-btn and admin-add-seller-btn render correctly.
+- Side fix: `/auth/me` 500 for users missing `auth_type` (default to `'password'`).
+
+**Other minor cleanups (also flagged in iter15)**:
+- `parse_bulk_csv` row numbers now `int` everywhere (was inconsistent str/int).
+- Bare `except Exception` in `bulk_import` narrowed to `(LookupError, ValueError)`.
+- Size check now happens BEFORE `strip()` so whitespace-padded oversized payloads return 413 (not 400).
+- `list_sellers` search now uses `re.escape()` to avoid regex injection.
+
+**Tests** — `/app/test_reports/iteration_15.json`:
+- 15/15 backend pytest: happy path, mixed valid+invalid+duplicate, missing header, empty, oversized, 401/403, case-insensitive headers, all regression suites.
+- Frontend manual playwright: modal opens, sample fills, submit POSTs and renders result, file upload populates textarea, done refreshes list, non-admin sees sign-in fallback.
+- Ledger E2E + smoke still green.
+
+

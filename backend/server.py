@@ -782,6 +782,7 @@ async def login(credentials: UserLogin, request: Request, response: Response):
         "business_type": user.get('business_type'),
         "export_enabled": user.get('export_enabled', False),
         "auth_type": user.get('auth_type', 'password'),
+        "role": user.get('role'),
         "created_at": user['created_at'].isoformat() if isinstance(user.get('created_at'), datetime) else user.get('created_at'),
         "session_token": session_token
     }
@@ -1051,8 +1052,9 @@ async def get_me(request: Request):
         "is_women_owned": user.get('is_women_owned', True),
         "business_type": user.get('business_type'),
         "export_enabled": user.get('export_enabled', False),
-        "auth_type": user['auth_type'],
-        "created_at": user['created_at'].isoformat() if isinstance(user['created_at'], datetime) else user['created_at'],
+        "auth_type": user.get('auth_type', 'password'),
+        "role": user.get('role'),
+        "created_at": user['created_at'].isoformat() if isinstance(user.get('created_at'), datetime) else user.get('created_at'),
         "trade_metrics": trade_metrics
     }
 
@@ -1086,7 +1088,8 @@ async def update_profile(request: Request):
         "is_women_owned": updated_user.get('is_women_owned', True),
         "business_type": updated_user.get('business_type'),
         "export_enabled": updated_user.get('export_enabled', False),
-        "auth_type": updated_user['auth_type'],
+        "auth_type": updated_user.get('auth_type', 'password'),
+        "role": updated_user.get('role'),
         "created_at": updated_user['created_at'].isoformat() if isinstance(updated_user['created_at'], datetime) else updated_user['created_at']
     }
 
@@ -5926,6 +5929,32 @@ async def admin_resend_password_link(user_id: str, request: Request):
         )
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+class BulkSellersCsvRequest(BaseModel):
+    csv_text: str
+
+
+@api_router.post("/admin/sellers/bulk-csv")
+async def admin_bulk_csv(payload: BulkSellersCsvRequest, request: Request):
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    # Size check FIRST (before strip()) so whitespace-padded oversized payloads
+    # return 413 rather than 400.
+    if len(payload.csv_text) > 256 * 1024:
+        raise HTTPException(status_code=413, detail="CSV too large (max 256 KB)")
+    if not payload.csv_text or not payload.csv_text.strip():
+        raise HTTPException(status_code=400, detail="csv_text is empty")
+    return await adm_sellers.bulk_import(
+        db,
+        csv_text=payload.csv_text,
+        admin_user_id=user['user_id'],
+        base_url=BASE_URL,
+        send_sms=send_sms,
+        calculate_fees=calculate_fees,
+        normalize_tz_phone=normalize_tz_phone,
+    )
 
 
 class SetPasswordWithTokenRequest(BaseModel):

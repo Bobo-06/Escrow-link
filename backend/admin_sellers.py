@@ -10,6 +10,8 @@ a starter product, and a fully-verified seller account exists immediately.
 """
 from __future__ import annotations
 
+import csv
+import io
 import secrets
 import uuid
 from datetime import UTC, datetime
@@ -207,10 +209,13 @@ async def create_seller(
 
 async def list_sellers(db, *, search: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
     """All users with role='seller', with their product counts."""
+    import re
     query: dict[str, Any] = {"role": "seller"}
     if search:
         # Case-insensitive substring match on name / business_name / phone.
-        regex = {"$regex": search, "$options": "i"}
+        # Escape regex metacharacters so admin can't accidentally craft a slow
+        # or injected pattern (e.g. searching for "$" would break the query).
+        regex = {"$regex": re.escape(search), "$options": "i"}
         query["$or"] = [
             {"name": regex},
             {"business_name": regex},
@@ -299,3 +304,122 @@ async def resend_set_password_link(
             f"Biz-Salama: Set your password here: {link} (Valid for 72 hours)",
         )
     return {"sent": True, "set_password_link": link}
+
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Bulk CSV import
+# ──────────────────────────────────────────────────────────────────────────
+BULK_CSV_REQUIRED = ("name", "phone")
+BULK_CSV_OPTIONAL = ("email", "business_name", "location", "bio")
+BULK_CSV_HEADERS = BULK_CSV_REQUIRED + BULK_CSV_OPTIONAL
+
+
+def parse_bulk_csv(csv_text: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Parse the admin's pasted/uploaded CSV.
+
+    Returns (`rows`, `errors`). Each row is a dict with stripped values plus a
+    `_row` int holding the CSV line number. Errors are per-row dicts
+    `{row, error}` (row 0 = header-level fatal error).
+    """
+    rows: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+
+    if csv_text.startswith("\ufeff"):
+        csv_text = csv_text.lstrip("\ufeff")
+    reader = csv.DictReader(io.StringIO(csv_text))
+    if not reader.fieldnames:
+        errors.append({"row": 0, "error": "CSV has no header row"})
+        return rows, errors
+
+    header_map = {(h or "").strip().lower(): (h or "") for h in reader.fieldnames}
+    missing = [c for c in BULK_CSV_REQUIRED if c not in header_map]
+    if missing:
+        errors.append({
+            "row": 0,
+            "error": f"Missing required column(s): {', '.join(missing)}. "
+                     f"Expected headers: {', '.join(BULK_CSV_HEADERS)}",
+        })
+        return rows, errors
+
+    for i, raw in enumerate(reader, start=2):  # row 1 is the header
+        clean: dict[str, str] = {}
+        for col in BULK_CSV_HEADERS:
+            actual = header_map.get(col)
+            if actual is not None:
+                v = (raw.get(actual) or "").strip()
+                if v:
+                    clean[col] = v
+        if not clean.get("name") or not clean.get("phone"):
+            errors.append({"row": i, "error": "Empty name or phone"})
+            continue
+        clean["_row"] = i  # int, not str — consistent with row-0 header errors
+        rows.append(clean)
+    return rows, errors
+
+
+async def bulk_import(
+    db,
+    *,
+    csv_text: str,
+    admin_user_id: str,
+    base_url: str | None,
+    send_sms,
+    calculate_fees,
+    normalize_tz_phone,
+) -> dict[str, Any]:
+    """Create one verified seller per CSV row (SMS-link password path).
+
+    Per-row failures (invalid phone, duplicate, etc.) are collected so the
+    batch doesn't bail on the first bad row.
+    """
+    rows, parse_errors = parse_bulk_csv(csv_text)
+    created: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = list(parse_errors)
+    if parse_errors and any(e.get("row") == 0 for e in parse_errors):
+        return {"created": created, "errors": errors, "summary": {"created": 0, "failed": len(errors), "total_rows": 0}}
+
+    for r in rows:
+        row_n = r.get("_row")
+        try:
+            normalized = normalize_tz_phone(r["phone"])
+            if not normalized:
+                errors.append({"row": row_n, "phone": r.get("phone"), "error": "Invalid TZ phone"})
+                continue
+            payload = AdminSellerCreate(
+                name=r["name"],
+                phone=normalized,
+                email=r.get("email"),
+                business_name=r.get("business_name"),
+                location=r.get("location"),
+                bio=r.get("bio"),
+                send_set_password_link=True,
+            )
+            result = await create_seller(
+                db,
+                payload=payload,
+                admin_user_id=admin_user_id,
+                normalized_phone=normalized,
+                base_url=base_url,
+                send_sms=send_sms,
+                calculate_fees=calculate_fees,
+            )
+            created.append({
+                "user_id": result["user_id"],
+                "name": result["name"],
+                "phone": result["phone"],
+                "set_password_link": result.get("set_password_link"),
+            })
+        except (LookupError, ValueError) as e:
+            errors.append({"row": row_n, "phone": r.get("phone"), "error": str(e)})
+
+    return {
+        "created": created,
+        "errors": errors,
+        "summary": {
+            "created": len(created),
+            "failed": len(errors),
+            "total_rows": len(rows),
+        },
+    }
+

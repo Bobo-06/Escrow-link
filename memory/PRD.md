@@ -564,3 +564,28 @@ User accepted the enhancement. Two related shipments:
 - Ledger E2E + smoke still green.
 
 
+
+
+### Shipped Feb 21, 2026 (iter16) — Seller Self-Service KYC + Admin Doc Attach
+User on production: "Seller cant see option to load documents." Clarified: needed self-service KYC for already-registered sellers (was missing), keep field-rep `/onboard/seller` intact, and let admin attach docs to existing sellers.
+
+**New backend module — `/app/backend/kyc_docs.py`**:
+- Storage shape: `users.kyc_documents.{doc_type} = {image_b64, uploaded_at, uploaded_by, review_status, rejection_reason}` plus `users.kyc_status` flow (`unsubmitted → pending_review → approved/rejected`). Stored on the user record so it's discoverable without joining the `seller_onboarding` collection.
+- 5 endpoints: `GET /api/auth/kyc/documents` (self), `POST /api/auth/kyc/documents` (self upload one), `POST /api/auth/kyc/submit` (self submit batch — requires all 5), `GET /api/admin/sellers/{id}/documents` (admin), `POST /api/admin/sellers/{id}/documents` (admin attach), `POST /api/admin/sellers/{id}/kyc/review` (approve/reject — either a single doc or the whole batch; whole-batch approve flips `is_verified=true`).
+- Admin-direct uploads land with `review_status='approved'`; seller self-uploads kick `kyc_status='pending_review'`.
+
+**Bug found & fixed in own code**: used `if not user` after a projection that only requested missing fields → returns `{}` (truthy as empty dict, but falsy in Python). Fixed by switching to `user is None` checks throughout (Mongo idiomatic). Caught during my own curl smoke before testing agent.
+
+**Frontend**:
+- New `/my-documents` (`MyDocumentsPage.tsx`) — KYC status banner with capture progress, 5 cards (camera + gallery upload, auto-compressed via `imageUpload.ts` ≤1.5 MB), rejection reasons shown inline. **Submit for review** button enabled only when all 5 captured.
+- `SellerDashboard` exposes new **Verify Account** CTA (`dashboard-my-documents-btn` → `/my-documents`).
+- `AdminSellersPage` gained a **Docs** button per row (`seller-docs-{user_id}`) that opens a `SellerDocsModal` with: KYC status badge, 5 admin upload rows, **Approve / Reject KYC** actions.
+
+**Tests** — `/app/test_reports/iteration_16.json`:
+- 14/14 backend pytest: full CRUD + validation (invalid doc_type, tiny image, oversized image, partial-submit 400, missing user 404), admin-attach-vs-self-upload status flow, single-doc reject preserves batch, 401/403, regression on `/api/onboarding/seller/*` field-rep flow + `/admin/onboarding/queue`.
+- Frontend mobile 390×844: 5 cards render, dashboard CTA links correctly, admin SellerDocsModal opens with all expected testids.
+- Smoke + ledger E2E still PASS.
+
+**Production impact**: this closes the user's reported gap on `www.biz-salama.co.tz` — but production needs a redeploy to pick up the new module + frontend pages. Until redeployed, the issue persists in production.
+
+

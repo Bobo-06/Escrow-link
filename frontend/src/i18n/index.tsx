@@ -212,6 +212,14 @@ export const TRANSLATIONS: Dict = {
   "reg.privacy": { sw: "Sera ya Faragha", en: "Privacy Policy" },
   "reg.have_account": { sw: "Una akaunti tayari?", en: "Already have an account?" },
   "reg.login_link": { sw: "Ingia", en: "Sign in" },
+  "reg.field_rep_hint": {
+    sw: "Unasajili kwa niaba ya muuzaji mwingine? (kwa wawakilishi & freelancer)",
+    en: "Registering on behalf of another seller? (for field reps & freelancers)",
+  },
+  "reg.field_rep_link": {
+    sw: "Tumia fomu ya mwakilishi",
+    en: "Use the field-rep form",
+  },
   "reg.error_fill": { sw: "Tafadhali jaza sehemu zote", en: "Please fill in all fields" },
   "reg.error_match": { sw: "Manenosiri hayalingani", en: "Passwords do not match" },
   "reg.error_terms": { sw: "Tafadhali kubali masharti", en: "Please accept the terms and conditions" },

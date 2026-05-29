@@ -254,13 +254,25 @@ const Register: React.FC = () => {
                 </button>
               </form>
 
-              <div className="mt-6 text-center">
+              <div className="mt-6 text-center space-y-3">
                 <p className="text-ink-400">
                   {t("reg.have_account")}{' '}
                   <Link to="/login" className="text-gold-400 font-medium hover:underline">
                     {t("reg.login_link")}
                   </Link>
                 </p>
+                <div className="pt-3 border-t border-ink-700">
+                  <p className="text-ink-500 text-xs">
+                    {t("reg.field_rep_hint")}
+                  </p>
+                  <Link
+                    to="/onboard/seller"
+                    data-testid="register-fieldrep-link"
+                    className="mt-1 inline-block text-emerald-400 text-sm font-semibold hover:underline"
+                  >
+                    {t("reg.field_rep_link")} →
+                  </Link>
+                </div>
               </div>
             </div>
           </motion.div>

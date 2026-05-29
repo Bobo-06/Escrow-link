@@ -8,6 +8,7 @@ import { LangToggle, useT } from '../i18n';
 
 const Navbar: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(false);
   const { isAuthenticated, logout, user } = useAuthStore();
   const isAdmin = user?.role === 'admin';
   const navigate = useNavigate();
@@ -87,14 +88,39 @@ const Navbar: React.FC = () => {
                   <span className="hidden lg:inline">{t("nav.dashboard")}</span>
                 </Link>
                 {isAdmin && (
-                  <Link
-                    to="/admin/sellers"
-                    data-testid="nav-admin-link"
-                    className="flex items-center space-x-2 text-gold-400 hover:text-gold-300 transition-colors font-semibold"
-                  >
-                    <Crown className="w-5 h-5" />
-                    <span className="hidden lg:inline">Admin</span>
-                  </Link>
+                  <div className="relative">
+                    <button
+                      onClick={() => setIsAdminMenuOpen(!isAdminMenuOpen)}
+                      data-testid="nav-admin-link"
+                      className="flex items-center space-x-2 text-gold-400 hover:text-gold-300 transition-colors font-semibold"
+                    >
+                      <Crown className="w-5 h-5" />
+                      <span className="hidden lg:inline">Admin</span>
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                    {isAdminMenuOpen && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setIsAdminMenuOpen(false)} />
+                        <div className="absolute right-0 mt-2 w-56 bg-ink-800 border border-ink-700 rounded-xl shadow-2xl z-50 overflow-hidden" data-testid="nav-admin-dropdown">
+                          <Link to="/admin/sellers" data-testid="nav-admin-sellers" onClick={() => setIsAdminMenuOpen(false)} className="block px-4 py-2.5 text-sm text-white hover:bg-ink-700">
+                            👥 Sellers
+                          </Link>
+                          <Link to="/admin/sellers/new" data-testid="nav-admin-register-seller" onClick={() => setIsAdminMenuOpen(false)} className="block px-4 py-2.5 text-sm text-white hover:bg-ink-700">
+                            ➕ Register seller
+                          </Link>
+                          <Link to="/admin/onboarding/queue" data-testid="nav-admin-onboarding-queue" onClick={() => setIsAdminMenuOpen(false)} className="block px-4 py-2.5 text-sm text-white hover:bg-ink-700">
+                            📋 Onboarding queue
+                          </Link>
+                          <Link to="/admin/ledger" data-testid="nav-admin-ledger" onClick={() => setIsAdminMenuOpen(false)} className="block px-4 py-2.5 text-sm text-white hover:bg-ink-700 border-t border-ink-700">
+                            💰 Ledger
+                          </Link>
+                          <Link to="/admin/client-errors" data-testid="nav-admin-errors" onClick={() => setIsAdminMenuOpen(false)} className="block px-4 py-2.5 text-sm text-white hover:bg-ink-700">
+                            🐛 Client errors
+                          </Link>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 )}
                 <button
                   onClick={handleLogout}
@@ -200,14 +226,21 @@ const Navbar: React.FC = () => {
                   {t("nav.watches")}
                 </Link>
                 {isAdmin && (
-                  <Link
-                    to="/admin/sellers"
-                    data-testid="nav-admin-link-mobile"
-                    className="block text-gold-400 hover:text-gold-300 py-2 font-semibold"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    👑 Admin
-                  </Link>
+                  <div className="pt-2 border-t border-ink-700">
+                    <p className="text-gold-400 text-xs uppercase font-bold tracking-wider px-1 py-1">👑 Admin</p>
+                    <Link to="/admin/sellers" data-testid="nav-admin-link-mobile" className="block text-gold-400 hover:text-gold-300 py-2 pl-3 text-sm" onClick={() => setIsMenuOpen(false)}>
+                      👥 Sellers
+                    </Link>
+                    <Link to="/admin/sellers/new" className="block text-gold-400 hover:text-gold-300 py-2 pl-3 text-sm" onClick={() => setIsMenuOpen(false)}>
+                      ➕ Register seller
+                    </Link>
+                    <Link to="/admin/onboarding/queue" data-testid="nav-admin-onboarding-queue-mobile" className="block text-gold-400 hover:text-gold-300 py-2 pl-3 text-sm" onClick={() => setIsMenuOpen(false)}>
+                      📋 Onboarding queue
+                    </Link>
+                    <Link to="/admin/ledger" className="block text-gold-400 hover:text-gold-300 py-2 pl-3 text-sm" onClick={() => setIsMenuOpen(false)}>
+                      💰 Ledger
+                    </Link>
+                  </div>
                 )}
                 <button
                   onClick={() => {

@@ -39,6 +39,7 @@ const MyProductsPage = lazy(() => import('./pages/MyProductsPage'));
 const EditProductPage = lazy(() => import('./pages/EditProductPage'));
 const AdminSellersPage = lazy(() => import('./pages/AdminSellersPage'));
 const AdminSellerCreatePage = lazy(() => import('./pages/AdminSellerCreatePage'));
+const AdminOnboardingQueuePage = lazy(() => import('./pages/AdminOnboardingQueuePage'));
 const MyDocumentsPage = lazy(() => import('./pages/MyDocumentsPage'));
 
 const RouteFallback: React.FC = () => (
@@ -82,6 +83,7 @@ function App() {
               <Route path="/profile/edit" element={<ProfileEditPage />} />
               <Route path="/admin/sellers" element={<AdminSellersPage />} />
               <Route path="/admin/sellers/new" element={<AdminSellerCreatePage />} />
+              <Route path="/admin/onboarding/queue" element={<AdminOnboardingQueuePage />} />
               <Route path="/my-documents" element={<MyDocumentsPage />} />
             </Routes>
           </Suspense>

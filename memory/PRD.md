@@ -589,3 +589,37 @@ User on production: "Seller cant see option to load documents." Clarified: neede
 **Production impact**: this closes the user's reported gap on `www.biz-salama.co.tz` — but production needs a redeploy to pick up the new module + frontend pages. Until redeployed, the issue persists in production.
 
 
+
+
+### Shipped Feb 29, 2026 (iter17) — Admin discoverability + Edit Seller + Onboarding queue UI + Contact phone
+User: "Admin login button?cant see it" + "Add the option for admin to add new sellers on their own discretion" + "Put mob contacts on app as 0754710139". Built four coordinated surfaces so admins can drive all three seller-registration paths without typing URLs.
+
+**Navbar — 👑 Admin dropdown** (`Navbar.tsx`)
+- The single Admin link now expands into a dropdown (`data-testid="nav-admin-link"` + `nav-admin-dropdown`) with five entries: Sellers, Register seller, Onboarding queue, Ledger, Client errors. Renders only when `user.role === 'admin'`. Mobile sheet also shows the same items under a "👑 Admin" header. Outside-click closes the dropdown.
+
+**Edit Seller modal** (`AdminSellersPage.tsx`)
+- New per-row ✏️ **Edit** button (`seller-edit-{user_id}`) opens an `EditSellerModal` with: avatar upload (auto-compressed via `imageUpload.ts`), name, business_name, location, bio, Active/Verified toggles. PATCHes `/api/admin/sellers/{user_id}` (backend route from iter14) and refreshes the list.
+
+**Onboarding queue page** (`AdminOnboardingQueuePage.tsx`)
+- Brand-new `/admin/onboarding/queue` route surfacing field-rep submissions from `/onboard/seller`. Tabs filter by `submitted / verified / rejected`. Each row expands to show all 5 docs with **Preview** buttons (loads image_b64 via `GET /api/admin/onboarding/{id}/doc/{doc_type}`) and **Approve / Reject** actions (POSTs `/api/admin/onboarding/{id}/review`; reject prompts for a reason). Approve fires the existing SMS notification to the new seller. Backend endpoints existed since iter? but had no UI — now they do.
+
+**Field-rep flow more discoverable** (`Register.tsx`)
+- Added a "Registering on behalf of another seller? Use the field-rep form →" link below the standard "Already have an account?" line. Targets `/onboard/seller`. Bilingual via new i18n keys `reg.field_rep_hint` + `reg.field_rep_link`.
+
+**Contact phone replaced everywhere**
+- `Footer.tsx` — `+255 700 123 456` → `+255 754 710 139` (now a clickable `tel:` link with `footer-phone-link` testid)
+- `Footer.tsx` — `support@biz-salama.co.tz` now a clickable `mailto:` link
+- `EscrowVerifyPublic.tsx` — `+255 7XX XXX XXX` placeholder → real `+255 754 710 139`
+- Login placeholder hint `0712345678` left alone (it's an example format, not a contact)
+
+**.env de-ignored** — root `.gitignore` was again blocking `*.env` (regression from earlier in the session). Removed those lines so Save-to-GitHub picks up `backend/.env` and `frontend/.env`. **This was blocking production from picking up env-driven config changes.**
+
+**Production secret fix flagged by Support**: `REACT_APP_BACKEND_URL` was set to `https://salama-secure.emergent.host` in the deployment secrets — needs to be `https://www.biz-salama.co.tz`. Until that's fixed in the Emergent dashboard Secrets tab, the frontend may hit CORS/cookie issues talking to the backend from the custom domain.
+
+**Tests done in-session**: backend curl tests for all new admin endpoints (PATCH seller verified=true → 200; onboarding queue listing → 1 pending; onboarding review approve/reject; dropdown navigation smoke screenshot ✅).
+
+**Operational notes**
+- Three seller-registration paths now fully discoverable: `/register` (self), `/onboard/seller` (field rep, linked from register page), `/admin/sellers/new` (admin direct, in 👑 Admin dropdown).
+- Field-rep approvals trigger an Africa's Talking SMS to the new seller — mocked when AT_API_KEY missing.
+
+

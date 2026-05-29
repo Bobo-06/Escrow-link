@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, Search, Loader2, ShieldCheck, UserCheck, RefreshCw, EyeOff, Eye, Upload, X, FileSpreadsheet, FileText } from 'lucide-react';
+import { Plus, Search, Loader2, ShieldCheck, UserCheck, RefreshCw, EyeOff, Eye, Upload, X, FileSpreadsheet, FileText, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../lib/api';
 import { useAuthStore } from '../store/authStore';
@@ -45,6 +45,7 @@ export default function AdminSellersPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [importerOpen, setImporterOpen] = useState(false);
   const [docsModalFor, setDocsModalFor] = useState<Seller | null>(null);
+  const [editFor, setEditFor] = useState<Seller | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -215,6 +216,13 @@ export default function AdminSellersPage() {
                     {lang === 'sw' ? 'Tazama' : 'View'}
                   </Link>
                   <button
+                    onClick={() => setEditFor(s)}
+                    data-testid={`seller-edit-${s.user_id}`}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-gold-500/15 text-gold-300 hover:bg-gold-500/25 inline-flex items-center gap-1"
+                  >
+                    <Pencil className="w-3 h-3" /> {lang === 'sw' ? 'Hariri' : 'Edit'}
+                  </button>
+                  <button
                     onClick={() => setDocsModalFor(s)}
                     data-testid={`seller-docs-${s.user_id}`}
                     className="text-xs px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 inline-flex items-center gap-1"
@@ -259,6 +267,14 @@ export default function AdminSellersPage() {
           lang={lang}
           onClose={() => setDocsModalFor(null)}
           onChanged={() => { void load(); }}
+        />
+      )}
+      {editFor && (
+        <EditSellerModal
+          seller={editFor}
+          lang={lang}
+          onClose={() => setEditFor(null)}
+          onSaved={() => { setEditFor(null); void load(); }}
         />
       )}
     </div>
@@ -624,3 +640,152 @@ function SellerDocsModal({
     </div>
   );
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// EditSellerModal — admin edits a seller's profile + avatar + active/verified state
+// ──────────────────────────────────────────────────────────────────────────
+function EditSellerModal({
+  seller, lang, onClose, onSaved,
+}: { seller: Seller; lang: 'sw' | 'en'; onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState({
+    name: seller.name || '',
+    business_name: seller.business_name || '',
+    location: seller.location || '',
+    bio: seller.bio || '',
+    is_active: seller.is_active !== false,
+    is_verified: !!seller.is_verified,
+  });
+  const [avatar, setAvatar] = useState<ProcessedImage | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const avatarRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatar = async (file?: File) => {
+    if (!file) return;
+    try {
+      const r = await processImageForUpload(file, { maxEdge: 800, maxKB: 500 });
+      setAvatar(r);
+      toast.success(lang === 'sw' ? 'Picha tayari' : 'Photo ready');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Image failed');
+    }
+  };
+
+  const submit = async () => {
+    if (!form.name.trim()) {
+      return toast.error(lang === 'sw' ? 'Jina linahitajika' : 'Name required');
+    }
+    setSubmitting(true);
+    try {
+      const payload: Record<string, unknown> = {
+        name: form.name.trim(),
+        business_name: form.business_name.trim() || null,
+        location: form.location.trim() || null,
+        bio: form.bio.trim() || null,
+        is_active: form.is_active,
+        is_verified: form.is_verified,
+      };
+      if (avatar?.dataUrl) payload.picture = avatar.dataUrl;
+      await api.patch(`/admin/sellers/${seller.user_id}`, payload);
+      toast.success(lang === 'sw' ? 'Imehifadhiwa' : 'Saved');
+      onSaved();
+    } catch (err) {
+      const e = err as { response?: { data?: { detail?: string } } };
+      toast.error(e?.response?.data?.detail || 'Save failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const previewSrc = avatar?.dataUrl || seller.picture || '';
+
+  return (
+    <div
+      data-testid="edit-seller-modal"
+      className="fixed inset-0 z-50 bg-black/70 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div onClick={(e) => e.stopPropagation()} className="bg-ink-800 border border-ink-700 rounded-2xl w-full max-w-lg my-8">
+        <div className="flex items-center justify-between p-5 border-b border-ink-700">
+          <div>
+            <h2 className="text-white font-bold">{lang === 'sw' ? 'Hariri muuzaji' : 'Edit seller'}</h2>
+            <p className="text-ink-400 text-xs mt-0.5">{seller.phone}</p>
+          </div>
+          <button onClick={onClose} data-testid="edit-seller-close" className="p-1 rounded hover:bg-ink-700">
+            <X className="w-5 h-5 text-ink-400" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-ink-900 border border-ink-700 overflow-hidden flex items-center justify-center shrink-0" data-testid="edit-seller-avatar-preview">
+              {previewSrc ? <img src={previewSrc} alt="avatar" className="w-full h-full object-cover" /> : <span className="text-2xl text-ink-500">{(form.name || 'S').slice(0, 1).toUpperCase()}</span>}
+            </div>
+            <button
+              type="button"
+              onClick={() => avatarRef.current?.click()}
+              data-testid="edit-seller-avatar-btn"
+              className="text-xs px-3 py-2 rounded-xl bg-gold-500/15 text-gold-300 hover:bg-gold-500/25 font-semibold inline-flex items-center gap-1"
+            >
+              <Upload className="w-3.5 h-3.5" /> {avatar ? (lang === 'sw' ? 'Picha mpya' : 'New photo') : (lang === 'sw' ? 'Badili picha' : 'Change photo')}
+            </button>
+            <input
+              ref={avatarRef}
+              type="file" accept="image/*,.heic,.heif" className="hidden"
+              onChange={(e) => { void handleAvatar(e.target.files?.[0]); e.currentTarget.value = ''; }}
+              data-testid="edit-seller-avatar-input"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-ink-400 uppercase tracking-wider">{lang === 'sw' ? 'Jina kamili' : 'Full name'} *</label>
+            <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              data-testid="edit-seller-name-input"
+              className="mt-1 w-full bg-ink-900 border border-ink-700 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-gold-500/60" />
+          </div>
+          <div>
+            <label className="text-xs text-ink-400 uppercase tracking-wider">{lang === 'sw' ? 'Jina la biashara' : 'Business name'}</label>
+            <input value={form.business_name} onChange={(e) => setForm((f) => ({ ...f, business_name: e.target.value }))}
+              data-testid="edit-seller-business-input"
+              className="mt-1 w-full bg-ink-900 border border-ink-700 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-gold-500/60" />
+          </div>
+          <div>
+            <label className="text-xs text-ink-400 uppercase tracking-wider">{lang === 'sw' ? 'Eneo' : 'Location'}</label>
+            <input value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
+              data-testid="edit-seller-location-input"
+              className="mt-1 w-full bg-ink-900 border border-ink-700 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-gold-500/60" />
+          </div>
+          <div>
+            <label className="text-xs text-ink-400 uppercase tracking-wider">{lang === 'sw' ? 'Maelezo' : 'Bio'}</label>
+            <textarea value={form.bio} onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))}
+              rows={2} data-testid="edit-seller-bio-input"
+              className="mt-1 w-full bg-ink-900 border border-ink-700 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-gold-500/60 resize-none" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <label className="flex items-center gap-2 p-3 rounded-xl border border-ink-700 cursor-pointer hover:border-gold-500/40">
+              <input type="checkbox" checked={form.is_active} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))}
+                data-testid="edit-seller-active-toggle" />
+              <span className="text-white text-sm">{lang === 'sw' ? 'Inafanya kazi' : 'Active'}</span>
+            </label>
+            <label className="flex items-center gap-2 p-3 rounded-xl border border-ink-700 cursor-pointer hover:border-emerald-500/40">
+              <input type="checkbox" checked={form.is_verified} onChange={(e) => setForm((f) => ({ ...f, is_verified: e.target.checked }))}
+                data-testid="edit-seller-verified-toggle" />
+              <span className="text-white text-sm">{lang === 'sw' ? 'Imethibitishwa' : 'Verified'}</span>
+            </label>
+          </div>
+
+          <button
+            onClick={submit}
+            disabled={submitting || !form.name.trim()}
+            data-testid="edit-seller-save-btn"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gold-500 text-ink-900 font-bold hover:bg-gold-400 transition disabled:opacity-50"
+          >
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pencil className="w-4 h-4" />}
+            {submitting ? (lang === 'sw' ? 'Inahifadhi…' : 'Saving…') : (lang === 'sw' ? 'Hifadhi mabadiliko' : 'Save changes')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+

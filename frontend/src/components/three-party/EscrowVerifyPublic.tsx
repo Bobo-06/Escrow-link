@@ -171,7 +171,7 @@ export default function EscrowVerifyPublic({ txId, onClose }: Props) {
         )}
 
         <div style={{ marginTop: 14, textAlign: "center", fontSize: 11, color: C.muted }}>
-          Je, una maswali? Piga simu: +255 7XX XXX XXX au barua pepe: info@biz-salama.co.tz
+          Je, una maswali? Piga simu: <a href="tel:+255754710139" className="text-gold-400 hover:underline">+255 754 710 139</a> au barua pepe: <a href="mailto:support@biz-salama.co.tz" className="text-gold-400 hover:underline">support@biz-salama.co.tz</a>
         </div>
       </div>
     </div>

@@ -74,8 +74,9 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# JWT Secret
-JWT_SECRET = os.environ.get('JWT_SECRET', 'crafther-secret-key-change-in-production')
+# JWT Secret — required. No fallback so that misconfiguration fails fast at
+# boot rather than silently signing tokens with a leaked dev string.
+JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALGORITHM = 'HS256'
 
 # Emergent LLM Key for Claude AI
@@ -860,11 +861,14 @@ async def forgot_password(data: ForgotPasswordRequest):
         except Exception as e:
             logger.warning(f"SMS send failed: {e}")
     
+    # `demo_otp` is exposed only when Africa's Talking is not wired up (dev /
+    # preview). The boot-time guard in `_assert_prod_safety()` refuses to
+    # start in ENV=production without AT_API_KEY, so this can never reach a
+    # production response.
     return {
-        "ok": True, 
+        "ok": True,
         "message": "Nambari ya kubadilisha nenosiri imetumwa / Reset code has been sent",
-        # DEMO ONLY - remove in production!
-        "demo_otp": otp if not AT_API_KEY else None
+        "demo_otp": otp if not AT_API_KEY else None,
     }
 
 @api_router.post("/auth/reset-password")
@@ -6151,6 +6155,42 @@ app.add_middleware(
 # on the response leg — meaning the headers it adds survive any later
 # middleware that might rewrite Content-Type or strip headers.
 app.add_middleware(SecurityHeadersMiddleware)
+
+
+@app.on_event("startup")
+async def _assert_prod_safety():
+    """Refuse to boot in production with unsafe demo defaults still active.
+
+    Guards against three known footguns surfaced during the URL/log security
+    audit (see /app/scripts/security_lint.py + handoff notes):
+
+      • `demo_otp` would leak in /auth/forgot-password responses if Africa's
+        Talking is not configured.
+      • Missing JWT_SECRET would previously fall back to a hardcoded dev
+        string (already removed; this is belt-and-braces).
+      • CORS / BASE_URL misconfiguration can let preview hosts impersonate
+        production.
+
+    Trigger via env: ENV=production (set in the prod deploy only).
+    Preview / local untouched.
+    """
+    env = (os.environ.get("ENV") or "").strip().lower()
+    if env not in {"prod", "production"}:
+        return
+    problems: list[str] = []
+    if not os.environ.get("AT_API_KEY"):
+        problems.append("AT_API_KEY missing — demo_otp would leak in responses")
+    if not os.environ.get("BASE_URL"):
+        problems.append("BASE_URL missing — magic-links will render relative paths")
+    if not os.environ.get("JWT_SECRET") or len(os.environ.get("JWT_SECRET", "")) < 16:
+        problems.append("JWT_SECRET missing or shorter than 16 chars")
+    if problems:
+        # Fail loudly. Supervisor will surface this in backend.err.log.
+        msg = "PROD SAFETY GUARD FAILED:\n  - " + "\n  - ".join(problems)
+        logger.critical(msg)
+        # Do not raise — supervisor would restart-loop. Surface clearly and
+        # leave the operator to fix env and redeploy.
+        raise RuntimeError(msg)
 
 
 @app.on_event("startup")

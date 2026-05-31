@@ -1,0 +1,29 @@
+name: Security Lint
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+  workflow_dispatch: {}
+
+jobs:
+  security-lint:
+    name: Backend log-leak & prod-config guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run security_lint.py against backend tree
+        run: python3 scripts/security_lint.py backend
+
+      - name: Run security_lint unit tests
+        run: |
+          pip install pytest
+          python3 -m pytest backend/tests/test_security_lint.py -v

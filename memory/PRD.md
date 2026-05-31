@@ -1,625 +1,90 @@
-# Biz-Salama - Secure Escrow Marketplace for Tanzania
+# Biz-Salama — Product Requirements & Status
 
-## Original Problem Statement
-Recreate the Biz-Salama escrow marketplace as a **React web app** (not Expo mobile) so that
-custom domain `www.biz-salama.co.tz` can be linked and the app can be deployed natively on Emergent.
-Source code previously built and saved at: https://github.com/Bobo-06/Escrow-link
+## Original problem statement
+React web app for Biz-Salama, a secure escrow marketplace for Tanzania, with custom-domain support. Core requirements:
 
-## User Choices (Apr 23, 2026 re-setup)
-- **1a** Clone & restore from GitHub `Bobo-06/Escrow-link`
-- **2a** Payments: Stripe + ClickPesa + Selcom + NALA (environment-variable driven; keys optional)
-- **3c** Auth: Custom JWT (phone/email + password) AND Emergent-managed Google OAuth
-- **4a–f** All features: Marketplace, Seller Dashboard, Buyer Escrow Checkout, Dispute Resolution, Admin, Ratings/Reviews
-- **5b** Design preserved exactly from GitHub (dark + gold Biz-Salama theme)
+- Standard marketplace with product listings
+- 3-Party Escrow (Hawker ↔ Shop ↔ Buyer), HMAC-segregated views, unlimited 2-way counter-offers
+- Direct 2-Party Escrow (Seller ↔ Buyer)
+- Bilingual Swahili / English toggle
+- Voice search + voice product listing
+- PWA install + service worker
+- SEO via prerendering bot-intercepts
 
-## Tech Stack
-- **Frontend**: React 19 + TypeScript, Tailwind v3.4, Framer Motion, Zustand, Axios, Lucide, React Router v6, react-helmet-async
-- **Backend**: FastAPI, MongoDB (motor), JWT + bcrypt, emergentintegrations (Claude), Stripe SDK
-- **Payments**: Selcom, M-Pesa Daraja, Stripe, NALA, Click-Pesa (env-key driven, graceful fallback)
-- **AI**: Claude Sonnet 4 + OpenAI Whisper + TTS via Emergent LLM key
+## Tech stack
+React 18 (lazy-loaded), TypeScript, Tailwind, FastAPI, MongoDB, JWT auth, brute-force rate limiting, Cloudflare/DNS, Africa's Talking SMS.
 
-## Completed Features
+## Recent sessions
 
-### SEO + Link Previews (Apr 23, 2026)
-- [x] Branded 1200×630 OG image at `/public/og-image.png`
-- [x] Full Open Graph + Twitter + JSON-LD schema in `index.html`
-- [x] `react-helmet-async` wired for per-route dynamic tags via `<SEO>` component
-- [x] `robots.txt` + `sitemap.xml` published
-- [x] (Deferred) `react-snap` removed due to K8s 502 at CI rollout — will re-solve via bot-UA prerender shim
+### 2026-05-31 — URL/log security audit + CI guard
+**Audit findings (live, against Preview):**
+- All 134 backend routes use FastAPI path parameters (`/api/.../{id}`). Zero use of `Query()` or `request.query_params` for sensitive data. (PASS)
+- Magic-link tokens (`/reset-password?token=…`) are strictly single-use — verified end-to-end. (PASS)
+- Path-traversal payloads (`../../etc/passwd`, null byte, overlong ids, Mongo `$ne`, 5000-char ids) all returned safe 404/400, no 500s, no file disclosure. (PASS)
+- One real log leak found and fixed: `server.py:841` was logging plaintext OTP + phone into `backend.err.log`. Now logs only `user_id`.
 
-### Three-Party Escrow (Hawker ↔ Supplier ↔ Buyer)
-- [x] 5 React components in `src/components/three-party/`: Creator wizard, Letter of Comfort, Public Verify, Supplier Confirmation, Supplier Portal
-- [x] Routes: `/hawker/new`, `/verify/:txId`, `/supplier-confirm/:txId`, `/supplier/portal`, `/hawker/edit/:txId`
-- [x] **Fee split**: 2% supply-side (from supplier payout) + 3% buyer-side (from buyer price). Invariant enforced by `_compute_three_party_split()`
-- [x] **HMAC signed role tokens** (`_sign_verify_token`) — scoped views for Public / Supplier / Buyer on `/api/escrow/verify/{tx_id}`
-- [x] **Counter-offer flow** + hawker edit + immutable approval snapshot (Swahili terms accepted)
-- [x] Landing page showcase updated with live fee breakdown example
+**Hardenings shipped:**
+- Removed hardcoded fallback `JWT_SECRET` in `server.py:78`; now `os.environ['JWT_SECRET']` (fail-fast at import).
+- Added boot-time `_assert_prod_safety()` startup hook that refuses to launch when `ENV=production` if any of `AT_API_KEY`, `BASE_URL`, or strong (≥16 char) `JWT_SECRET` is missing.
+- New CI guard: `/app/scripts/security_lint.py` — scans for log-leaks of `otp/password/token/secret/jwt/nin/pin/api_key/session_token`, `demo_*` response keys, hardcoded fallback secrets, `DEBUG=True`, leftover `# remove in production` markers.
+- `/app/backend/tests/test_security_lint.py` — 8 regression tests including the exact pre-fix OTP-leak pattern.
+- `/app/.github/workflows/security-lint.yml` — CI workflow on push/PR.
 
-### Auth + Login (Apr 23, 2026 — phone normalization fix)
-- [x] `normalize_tz_phone()` accepts `+255XXXXXXXXX`, `255…`, `07…`, `71…`, spaced forms — all normalized to `+255XXXXXXXXX`
-- [x] Last-9-digit regex fallback for legacy DB records
-- [x] All 5 phone formats verified to authenticate same user (15/15 backend tests PASS)
-- [x] Custom JWT session (`session_token` in HttpOnly cookie + `Authorization: Bearer` header) + Emergent Google OAuth
+### 2026-04 / 2026-05 — Seller + Admin feature blitz
+- Seller add-product, profile edit, send-link (iter 12)
+- Seller inventory CRUD (`MyProductsPage.tsx`, `EditProductPage.tsx`, `PATCH /products/{id}`) (iter 13)
+- Admin direct seller registration (`admin_sellers.py`, `AdminSellersPage.tsx`) (iter 14)
+- Bulk CSV seller import (iter 15)
+- Seller self-service KYC docs + admin doc-attach modal (`kyc_docs.py`, `MyDocumentsPage.tsx`) (iter 16)
+- Admin onboarding queue + edit-seller modal (iter 17)
+- Login brute-force tuning: 8 attempts / 15 min lockout, `POST /api/admin/auth/unlock` (iter 18)
+- `.gitignore` fix so `.env` deploys correctly
 
-### PWA / Install App (Apr 23, 2026)
-- [x] `manifest.json` rewritten: name="Biz-Salama", gold theme (#F59E0B), ink background (#0F172A)
-- [x] `InstallAppButton.tsx` with **emerald "Why install?"** + **amber "Seeing React App?"** uninstall-and-reinstall warning (fixes cached-manifest confusion)
-- [x] Install button in Navbar + landing page CTA section
-
-## In Progress / Next Up (Apr 24, 2026)
-- [x] **P1a** SEO prerender shim — `/api/seo/render/{landing,marketplace,product/:id}` endpoints return full HTML with Open Graph + JSON-LD for bots. Deployment-safe Cloudflare Worker snippet included below (rewrites bot User-Agents to these API paths; humans still get the React SPA). (Apr 24, 2026)
-- [ ] **P1b** Click-Pesa integration — DEFERRED pending API credentials from client
-- [x] **P1c** Marketplace seed — 29 realistic Tanzanian products across fashion/electronics/home/beauty/food/agriculture via `/app/backend/scripts/seed_marketplace.py`. Idempotent upsert; seed seller `Biz-Salama Verified Collective`. (Apr 24, 2026)
-- [x] **P1d** Voice features — Whisper STT via Emergent LLM key. `/api/voice/transcribe` backend endpoint; `<VoiceRecorder>` mic on Marketplace search; `<VoiceProductListingModal>` on SellerDashboard transcribes seller's spoken description, heuristic-parses name/price/category, and publishes via `/api/products`. Supports Swahili + English auto-detect. (Apr 24, 2026)
-
-### Cloudflare Worker — Bot Prerender (deploy after attaching `www.biz-salama.co.tz`)
-```js
-// Rewrites bot UA requests to the backend SEO render endpoints.
-const BOT_UA = /(facebookexternalhit|WhatsApp|Twitterbot|LinkedInBot|Slackbot|Discordbot|TelegramBot|Googlebot|Bingbot|DuckDuckBot|Applebot|Embedly)/i;
-const BACKEND = "https://salama-secure.preview.emergentagent.com";
-export default {
-  async fetch(req) {
-    const url = new URL(req.url);
-    const ua = req.headers.get("user-agent") || "";
-    if (!BOT_UA.test(ua)) return fetch(req); // human → React SPA
-    let target = null;
-    if (url.pathname === "/" || url.pathname === "") target = "/api/seo/render/landing";
-    else if (url.pathname === "/marketplace") target = "/api/seo/render/marketplace";
-    else if (url.pathname.startsWith("/product/")) target = "/api/seo/render/product/" + url.pathname.split("/")[2];
-    if (!target) return fetch(req);
-    return fetch(BACKEND + target, { headers: { "accept": "text/html" } });
-  },
-};
+## Architecture
+```
+/app
+├── backend/
+│   ├── server.py                 # monolith, 6.1k lines — to be split
+│   ├── admin_sellers.py
+│   ├── kyc_docs.py
+│   ├── seller_onboarding.py
+│   ├── security.py               # brute-force / rate limit
+│   ├── ledger.py
+│   ├── kyc.py
+│   ├── fraud.py
+│   ├── client_errors.py
+│   └── tests/                    # pytest regression suite
+├── frontend/src/                 # React 18 SPA
+├── scripts/
+│   ├── security_lint.py          # NEW — CI guard
+│   └── smoke.sh
+└── .github/workflows/
+    └── security-lint.yml         # NEW — runs on push/PR
 ```
 
-## Backlog (P2–P3)
-- Discovery UI layer — related products, trending sellers, compare drawer, "lowest price" badge on search
-- Admin moderator panel + user role `admin`
-- Ratings / reviews surfaced on SellerProfile + ProductDetail
-- Voice AI assistant loop (STT → Claude → Web Speech API TTS) for in-app support
-- Tighten CORS (replace `*` with explicit origins when `allow_credentials=True`)
-- Add Pydantic `min_length=6` validator on `UserCreate.password`
-- Refactor `server.py` (~3,800 lines) into routers (`auth.py`, `escrow_2p.py`, `escrow_3p.py`, `voice.py`, `seo.py`, `payments.py`, `audit.py`)
-- Native app wrapper (Capacitor → Play Store / App Store)
-- Optional category dropdown inside voice-listing modal (currently auto-detected, defaults to 'general')
-
-## Shipped Apr 24, 2026 (post-iter2)
-- [x] **Buyer Order Page** `/my-orders/:orderId` — dual-mode (supports traditional `order_*` and 3-party `3P_*` IDs); stepper UI; big emerald "📦 Nimepokea bidhaa / Confirm Delivery" button; auto-detects completed state; Swahili+English confirm dialog.
-- [x] **Public 3-party buyer confirm-delivery** endpoint `POST /api/escrow/three-party/{tx_id}/buyer-confirm-delivery?token=<hmac>` — no login, HMAC-authed, releases escrow to supplier+hawker+platform.
-- [x] **Voice engagement strip** on landing page — `GET /api/products/voice-listed` returns 3 latest voice-created products; `<VoiceListedStrip>` renders cards with "VOICE" mic badges + "Try voice listing" CTA → `/dashboard`. Hides gracefully when empty.
-- [x] **Category support** on `ProductCreate` (default `'general'`) + backfilled on all existing products so marketplace filters stay sane for future voice listings.
-
-## Key API Endpoints
-- **Auth**: `/api/auth/{register,login,forgot-password,reset-password,session,me,profile,logout}`
-- **Products**: `/api/products` (CRUD seller), `/api/products/public`, `/api/products/detail/{id}`, `/api/pay/{code}`
-- **Orders**: `/api/orders`, `/api/orders/{id}`, `/api/seller/orders`, `/orders/{id}/status`, `/orders/{id}/confirm-delivery`, `/rate`, `/dispute`
-- **3-Party Escrow**: `/api/escrow/three-party/{create,pending,approve,pay,release,my-transactions,edit}`, `/api/escrow/three-party/{tx_id}/supplier-response`
-- **Verify**: `/api/escrow/verify/{tx_id}` (public / buyer / supplier via HMAC `?t=&r=`)
-- **Payments**: `/api/payments/simulate`, Selcom, M-Pesa, Stripe, NALA routes
-- **AI**: `/api/ai/{support,dispute}`, fraud check
-- **Dashboard**: `/api/seller/stats`, `/api/seller/trade-history`, `/api/currencies`, `/api/export-categories`
-
-## Key DB Schemas (MongoDB)
-- `users`: {user_id, email, phone (+255…), password_hash, name, business_name}
-- `user_sessions`: {session_token, user_id, expires_at}
-- `three_party_transactions`: {tx_id, hawker_id, hawker_name, supplier_cost, buyer_price, commission, supply_fee, buyer_fee, platform_fee, status, approval_snapshot, supplier_phone}
-- `escrow_transactions`, `products`, `orders`
-
-## Environment Variables
-### /app/backend/.env
-```
-MONGO_URL="mongodb://localhost:27017"
-DB_NAME="biz_salama_db"
-CORS_ORIGINS="*"
-JWT_SECRET="biz-salama-secret-change-in-prod-2026"
-EMERGENT_LLM_KEY="sk-emergent-…"
-BASE_URL="https://salama-secure.preview.emergentagent.com"
-```
-### /app/frontend/.env
-```
-REACT_APP_BACKEND_URL=https://salama-secure.preview.emergentagent.com
-WDS_SOCKET_PORT=443
-ENABLE_HEALTH_CHECK=false
-```
-
-## Live URLs
-- Preview: https://salama-secure.preview.emergentagent.com
-- Production custom domain: https://www.biz-salama.co.tz (Cloudflare + Emergent native deployment)
-
-## Mocked / Fallback Behaviour
-- **MOCKED** SMS sending (Africa's Talking) — OTPs returned as `demo_otp` when key missing
-- **MOCKED** Mobile Money → falls back to `/api/payments/simulate` when real keys missing
-- **NOT YET IMPLEMENTED** Click-Pesa (scheduled P1)
-- Exchange rates static (USD=2500, GBP=3200, EUR=2700, KES=18, UGX=0.67, TZS=1)
-
-## Test Results
-- **Iter 2 (Apr 24, 2026)**: 23/23 backend PASS (8 new + 15 regression); 100% critical frontend flows. No critical bugs. Minor: Whisper BadRequestError now mapped → HTTP 400 (fixed post-test). See `/app/test_reports/iteration_2.json`.
-- **Iter 1 (Apr 23, 2026)**: 15/15 backend PASS. See `/app/test_reports/iteration_1.json`.
-
-## ⚠️ CRITICAL — Production vs Preview Discrepancy (Apr 24, 2026)
-When users report "sign in still failing" or "PWA still shows React atom icon", **check which URL they are using before assuming a code bug**:
-- `salama-secure.preview.emergentagent.com` = preview env, has all current fixes
-- `www.biz-salama.co.tz` = production custom domain; only has whatever build was last deployed from Emergent → Deployments
-- Production backend URL = `https://salama-secure.emergent.host` (different from preview)
-- Quick sanity check (preview): `curl -s https://salama-secure.preview.emergentagent.com/logo192.png | python3 -c "from PIL import Image; import sys, io; px=Image.open(io.BytesIO(sys.stdin.buffer.read())).convert('RGBA').getpixel((96,96)); print('Gold ✓' if px[0]>200 and px[1]>150 and px[2]<100 else 'Stale React atom ✗')"`
-
-## 🔥 CRITICAL — CORS Origin Whitelist (MUST NEVER BREAK)
-**Root cause of "Network Error" when users register/login on `www.biz-salama.co.tz`**:
-Production backend previously had `CORS_ORIGINS="*"` in its env var. Our code filters `*` out (combining `*` with `allow_credentials=True` is invalid per CORS spec) → empty allow-list → every browser request from the custom domain hit `HTTP 400 "Disallowed CORS origin"` and users saw a generic "Network Error" toast.
-
-**Permanent fix (Apr 24, 2026, server.py)**: `_BASELINE_CORS_ORIGINS` is now hardcoded in the backend and ALWAYS includes:
-  - `https://www.biz-salama.co.tz`
-  - `https://biz-salama.co.tz`
-  - `http://localhost:3000`
-Env var `CORS_ORIGINS` is additive on top of these baselines. A misset env var can no longer lock out the custom domain. Verified by `grep "CORS allowed origins" /var/log/supervisor/backend.err.log`.
-
-**For any agent touching CORS**: the baseline set MUST include `www.biz-salama.co.tz` and `biz-salama.co.tz`. Do not remove these. Do not let `allow_origins=["*"]` + `allow_credentials=True` coexist — that combination is invalid CORS and some upstream proxies return 400.
-
-## Shipped Apr 24, 2026 (post-iter3) — PWA Icon Rebranding
-- [x] **Branded PWA icons** — generated gold shield + white checkmark on dark ink navy via `/app/backend/scripts/generate_icons.py`. Replaces default CRA React atom (RGB cyan `97,218,251`) with brand gold (RGB `251,191,36`). Outputs: `favicon.ico` (multi-res 16/32/48/64), `logo192.png`, `logo512.png`, new `apple-touch-icon.png` (180).
-- [x] **Cache-bust** applied via `?v=2` query string in `index.html` + `manifest.json` so browsers and OS install flows force-refresh icons.
-- [x] **manifest.json** — added `purpose: "any maskable"` for Android adaptive icons, `description`, `categories`, `scope`, `orientation` for better install experience.
-- [x] Verified login on preview works for all 5 phone formats (`+255712345678`, `255712345678`, `0712345678`, `712345678`, spaced) → redirects to `/dashboard`. Issue reported by user was on production domain which still runs a pre-fix build.
-
-## Shipped Apr 25, 2026 (post-iter5) — Bilingual rollout + Discovery UI Layer
-- [x] **i18n expansion** — `TRANSLATIONS` dictionary in `/app/frontend/src/i18n/index.tsx` extended with full keys for Hero card, How It Works, 3-Party showcase, Trust section, CTA, Footer, Login, Register, Marketplace (incl. category labels and sort options), Compare drawer, Trending sellers strip, and Product Detail. `biz_lang` localStorage key is the single source of truth.
-- [x] **Bilingual wiring** — `Footer.tsx`, `Login.tsx`, `Register.tsx`, `Marketplace.tsx`, `ProductDetail.tsx`, plus the LandingPage `How It Works` / `Three-Party showcase` / `Trust` / `CTA` sections all switch between Swahili and English when the navbar pill is toggled.
-- [x] **Discovery — Trending Sellers strip** (`/app/frontend/src/components/TrendingSellersStrip.tsx`) — backed by new `GET /api/sellers/trending?limit=` aggregation endpoint that ranks by active product count. Renders horizontal scroll of seller cards above the marketplace grid; hides gracefully when empty.
-- [x] **Discovery — Lowest Price badge** — `/api/products/public` now tags the cheapest product per category as `is_lowest_price: true` (only when ≥2 items in the category and there's actual price differentiation). Marketplace card surfaces a green pill `Tag · Lowest Price` and recolors the price as emerald.
-- [x] **Discovery — Compare drawer** — new `compareStore.ts` (zustand persisted, max 4 items) + `<CompareDrawer/>` mounted globally in `App.tsx`. Each marketplace card and PDP exposes a `Scale` toggle. A floating Compare FAB appears once any item is queued; opens a side-by-side drawer that auto-highlights the cheapest item.
-- [x] **Discovery — Real ProductDetail + Related Products** — `ProductDetail.tsx` now fetches `/api/products/detail/{id}` (replaces hardcoded "Kitenge Fabric" sample) and renders a Related Products grid powered by new `GET /api/products/related/{id}?limit=` endpoint (same category, sorted by absolute price distance, excludes the original).
-- [x] **Test coverage** — `/app/backend/tests/test_iter5_discovery.py` and `/app/test_reports/iteration_5.json`. 8/8 backend + 11/11 frontend PASS. Zero critical or minor issues.
-
-## Shipped Apr 25, 2026 (post-iter6) — Watch / Price-Drop Alerts
-- [x] **Backend** — new `product_watches` collection + endpoints: `POST /api/watches`, `GET /api/watches`, `GET /api/watches/check/{product_id}`, `DELETE /api/watches/{watch_id}`. Idempotent watch creation (one per user/product).
-- [x] **Price-drop fan-out** — `POST /api/products` schedules `_trigger_price_drop_alerts()` via `asyncio.create_task` (fire-and-forget). When a new product is listed in a watched category at a strictly lower price than the watcher's anchor, an alert is appended to every matching watch (capped to 25 most recent), `last_alerted_at` is bumped, and a bilingual SMS is dispatched via the existing `send_sms()` helper (simulated when `AFRICASTALKING_API_KEY` missing).
-- [x] **`<WatchBell/>`** (`/app/frontend/src/components/WatchBell.tsx`) — bell toggle with two variants (`card` for marketplace tiles, `pdp` for product detail). Anonymous click → bilingual "Sign in to watch" toast.
-- [x] **`/my-watches`** page (`MyWatchesPage.tsx`) — lists every watch with the cheapest current same-category alternative as a green "View cheaper option · You'd save TZS X" CTA, plus a collapsible alerts history. Empty state directs back to marketplace.
-- [x] **Navbar** — desktop bell icon (`desktop-watches-link`) + mobile menu link (`mobile-watches-link`) → `/my-watches`.
-- [x] **i18n** — `watch.*`, `watches.*`, `nav.watches` keys (SW + EN).
-- [x] **Tests** — `/app/backend/tests/test_iter6_watches.py` and `/app/test_reports/iteration_6.json`. 15/15 backend + 10/10 frontend PASS.
-
-## Shipped Apr 25, 2026 (post-iter7) — Public Seller Profile
-- [x] **Backend** — new public `GET /api/sellers/{seller_id}` endpoint returning seller meta (name, badges, location, bio, joined date, products_count, orders_completed) plus the seller's active product list. Route declared *after* `/api/sellers/trending` so FastAPI's literal-first matcher resolves correctly.
-- [x] **`SellerProfile.tsx` rewrite** — replaced hardcoded "Mama Biashara" stub with a real fetcher. Header shows verified + women-owned badges, joined date, real stats grid (rating · orders completed · products count). Products grid (`seller-products-grid`) is interactive with per-card test IDs and links to PDP. Loading + 404 states are i18n-aware.
-- [x] **Hamburger testid** — `data-testid="navbar-mobile-toggle"` + ARIA attributes added to the mobile menu button (test agent feedback from iter6).
-- [x] **Tests** — `/app/test_reports/iteration_7.json`. 8/8 new backend + 23/23 iter5/iter6 regression + 9/9 frontend acceptance criteria PASS. Zero critical or minor issues.
-
-## Shipped Apr 29, 2026 (post-iter10) — Financial Ledger (Double-Entry on Mongo)
-User shared a PostgreSQL ledger schema and asked us to implement it. Decision: refactor on Mongo with **1:1 schema mapping**, keep all guarantees (immutable entries, idempotent webhooks, double-entry invariants enforced in code).
-
-- [x] **`/app/backend/ledger.py` — new module**:
-  - `calculate_split(mode, deal_value, supplier_cost?)` — canonical fee math. Locked-in fee model: **2% supply + 2% hawker + 3% buyer**. For deal=100k direct → gross=103k, seller=98k, platform=5k. For 3-party deal=100k / supplier=80k → gross=103k, seller=78.4k, agent=19.6k, platform=5k. Invariant `gross == seller + agent + platform` asserted in code (and in tests, across 5 cases including pennies).
-  - `post_funds_received` (debit cash_clearing / credit escrow_liability) — idempotent on `(provider, provider_txn_id)`.
-  - `post_release` (debit escrow_liability / credit seller_payable + agent_payable + platform_revenue).
-  - `post_refund` (reverse of funds_received, for dispute → refund_to_buyer).
-  - `post_payout_paid` (debit payable / credit cash_clearing).
-  - `assert_balanced(order_id)` — called after every batch; `_post_entries` rejects unbalanced batches before write.
-  - Chart of accounts seeded on every startup (idempotent upsert): `cash_clearing`, `escrow_liability`, `seller_payable`, `agent_payable`, `platform_revenue`.
-  - Auto-resolve helpers — find disputes older than `DISPUTE_AUTO_RESOLVE_DAYS=3`.
-
-- [x] **HTTP API surface (in `server.py`)**:
-  - `GET /api/ledger/accounts` (public) — chart of accounts.
-  - `POST /api/ledger/quote` (public) — stateless fee calculator. Validates inputs and returns the canonical split.
-  - `GET /api/ledger/order/{id}` (auth) — reconciliation view: order status, ledger position, paid_out, full entries list.
-  - `POST /api/payments/webhook` — gateway webhook handler. Idempotent on `(provider, event_id)`. Cross-checks amount against order.gross_amount. Posts funds-received and flips order to `funded`.
-  - `POST /api/orders/{id}/release` — buyer-only. Posts release entries, queues payouts.
-  - `GET /api/payouts` — scoped by user role (non-admin sees own).
-  - `POST /api/payouts/{id}/disburse` — admin-only. **MOCKED** until AzamPay/Selcom keys are wired. Returns `provider_ref="MOCK_xxx"` and posts the payout-paid double-entry.
-  - `POST /api/disputes` — open. One open dispute per order.
-  - `POST /api/disputes/{id}/resolve` — admin override (release_to_seller | refund_to_buyer).
-  - `POST /api/disputes/{id}/agree` — buyer or seller agrees; mutual agreement auto-finalizes.
-  - `GET /api/disputes` — scoped.
-
-- [x] **Background task** — `_dispute_auto_resolver_loop()` runs hourly, refunds buyers on disputes older than 3 days that haven't been resolved (pro-buyer default policy nudges sellers to engage).
-
-- [x] **Mongo collections (auto-created)**: `ledger_accounts`, `ledger_entries`, `payment_transactions`, `payouts`, `disputes`, `processed_webhooks`. All include `created_at`/`updated_at` ISO timestamps and `_id` excluded from API responses.
-
-- [x] **Frontend admin page** — `LedgerAdminPage.tsx` at `/admin/ledger`. Reactive Fee Calculator + tabbed Payouts / Disputes / Accounts views. All bilingual (`ledger.*` keys).
-
-- [x] **Tests** — `/app/backend/tests/test_ledger_e2e.py` (direct + 3p + refund + idempotency, all balanced) + `/app/test_reports/iteration_10.json` (22/22 new + 42/42 regression backend, 5/5 frontend, zero issues).
-
-### Mock-only / Deferred
-- ⚠️ **Real AzamPay / Selcom disbursement** — will replace the mock `/payouts/{id}/disburse` once the user provides API credentials. From the ledger's perspective, behaviour is identical — success path always ends with `post_payout_paid`.
-- ⏭ **Refactor existing `/api/escrow/three-party/*` and `/api/escrow/direct/*` flows to use the new ledger** — deferred to a follow-up iteration. Today's ledger handles fresh orders coming in via `/api/payments/webhook`. Existing escrow flows still use the old direct-write code path.
-
-## Shipped May 19, 2026 (iter11) — Mobile-First Seller Onboarding (5-doc capture)
-User asked: "How do I capture certificate of registration, Memart extract, TIN, business license, and national ID for each seller from my phone, and uniquely distinguish each seller?"
-
-- [x] **`/app/backend/seller_onboarding.py`** — REQUIRED_DOCS = `[national_id, business_registration, memart_extract, tin_certificate, business_license]`. Bilingual labels (SW + EN). Phone normalized to `+255XXXXXXXXX` via `normalize_tz_phone` BEFORE uniqueness checks. Phone = primary key, TIN (9-12 digits) = secondary unique key. Returns 409 on either collision so reps can resolve in the field.
-- [x] **HTTP API** (auth required for all except required-docs list):
-  - `GET /api/onboarding/seller/required-docs` (public) — 5 doc types + SW/EN labels
-  - `POST /api/onboarding/seller/start` — creates `seller_onboarding` (status=draft); validates phone + TIN uniqueness
-  - `POST /api/onboarding/seller/{id}/doc` — one camera snap at a time (so a flaky 3G connection only loses a single upload)
-  - `POST /api/onboarding/seller/{id}/submit` — gated on all 5 docs captured
-  - `GET /api/onboarding/seller/{id}` — progress reconcile (no base64 in list view)
-  - `GET /api/admin/onboarding/queue` — admin-only review queue
-  - `GET /api/admin/onboarding/{id}/doc/{doc_type}` — raw base64 for inspection
-  - `POST /api/admin/onboarding/{id}/review` — verified | rejected. On verified: creates seller user with `role='seller'`, `kyc_status='verified'`, `auth_type='password_pending'` (forces password reset on first login). **Auto-sends a bilingual welcome SMS with a password-set link** via existing Africa's Talking helper (simulated until AT key configured).
-- [x] **Mobile-first wizard** — `/app/frontend/src/pages/SellerOnboardingPage.tsx` at `/onboard/seller`. 7 steps: business info → 5 doc captures (rear-camera via `<input capture="environment">`) → review → success. Progress bar with `role="progressbar"` + ARIA. Optimizes photos client-side (canvas resize to ≤1600px JPEG 70%) before upload so cellular bandwidth + Mongo doc size stay sane.
-- [x] **i18n** — full `onb.*` key set (SW + EN).
-- [x] **Mongo schema** — new collection `seller_onboarding` with fields: `onboarding_id, business_name, owner_name, phone (UNIQUE-by-status), tin (UNIQUE-by-status), business_email, location, category, rep_user_id, documents{5}, status (draft|submitted|verified|rejected), created_user_id, submitted_at, reviewed_at, reviewed_by, rejection_reason, created_at, updated_at`.
-- [x] **Tests** — `/app/test_reports/iteration_11.json`: 18/18 new backend + 45/45 regression (iter5/6/10) + 6/6 frontend, zero issues. Phone-normalization across 5 formats verified; duplicate-phone and duplicate-TIN both return 409.
-- [x] **Polish (iter12)** — added `role="progressbar"` ARIA to the wizard progress bar; auto-SMS on admin verified.
-
-### Operational notes
-- Photos stored as base64 inside `seller_onboarding.documents.{doc_type}.image_b64`. Swap to S3 (or equivalent) when the volume justifies it; the API contract doesn't change.
-- The dedup is a read-then-write — under bursty concurrent rep traffic, two `start` calls with the same phone could race past the existence check. Mitigation (deferred): add a unique partial index on `(phone, status in [draft,submitted])`.
-
----
-*Version 6.8 — Mobile-first 5-doc seller onboarding, May 19, 2026*
-
-
-### Code Quality Hardening (Feb 19, 2026)
-- [x] Replaced empty/silent `catch {}` blocks across frontend with `console.debug` calls preserving intent comments:
-  - `src/pages/MyOrderPage.tsx:163` (Web Share API fallback)
-  - `src/pages/HawkerTxEditPage.tsx:33` (tx load failure)
-  - `src/components/three-party/SupplierConfirmationScreen.tsx:28, 50` (verify-link & non-JSON error body)
-- [x] Moved inline `// eslint-disable-next-line react-hooks/exhaustive-deps` in `HawkerTxEditPage.tsx` to preceding-line position so eslint now respects it (clears recurring warning).
-- [x] Reviewed `localStorage` usages — confirmed false positives:
-  - `i18n/index.tsx` stores only language preference (non-sensitive)
-  - `DirectEscrowCreatePage.tsx` & `VoiceProductListingModal.tsx` read JWT from Zustand-persisted `auth-storage`; this is an app-wide architectural choice. Migration to HttpOnly cookies remains a P2 task (would require backend cookie-session refactor).
-- [x] Previously in this session: `random` → `secrets` for OTPs / payment links; empty catch in `WatchBell.tsx`.
-- Smoke: frontend compiles cleanly, landing page renders in preview ✅
-
-
-### Observability — Self-hosted Client-Error Collector (Feb 19, 2026)
-- **Why**: After replacing silent `catch {}` blocks with `console.debug`, those signals were still invisible to operators. Built a tiny Sentry-lite so we can see real failures hitting Tanzanian users on flaky 3G — without paying a SaaS bill.
-- **Backend** (`/app/backend/client_errors.py` — new module, ~220 lines):
-  - `POST /api/client-errors` — public ingest. Returns 202 always (fire-and-forget). Rate-limited per IP to 30 events / minute. Hard size caps (4KB message, 4KB stack, 2KB meta). Unknown levels coerce to `info`.
-  - `GET /api/admin/client-errors?level=&since=&q=&limit=` — admin-only filtered listing (substring search on message + URL).
-  - `GET /api/admin/client-errors/stats` — totals + last-24h + last-7d + per-level breakdown.
-  - `DELETE /api/admin/client-errors?older_than_days=N` — admin purge (no arg = wipe all).
-  - Mongo collection `client_errors` with TTL index on `expire_at` (30-day retention) + compound `(level, created_at)` index. Indexes idempotent at startup.
-- **Frontend reporter** (`/app/frontend/src/lib/clientErrorReporter.ts`):
-  - Installs `window.onerror` + `unhandledrejection` handlers on app boot (from `index.tsx`).
-  - Public helper `reportClientError(level, message, meta)` — wired into the 3 catch blocks fixed earlier so debug events ship to the backend.
-  - Throttle: max 20 events / minute, dedupe identical signatures within 30s. Uses `navigator.sendBeacon` first (survives page unload), `fetch({keepalive:true})` fallback.
-  - Reads `user_id` from Zustand persist key `biz-salama-auth` (no store-import cycle).
-- **Admin UI** (`/app/frontend/src/pages/ClientErrorsAdminPage.tsx` → `/admin/client-errors`):
-  - Stats cards (24h / 7d / all-time / level breakdown), filters (level, search, limit), purge buttons (>7d & all), expandable detail row (URL, UA, viewport, online status, app version, stack, meta).
-  - Gated on the server's 401/403 — no client-side `role` check needed. Linked from `/admin/ledger` header.
-- **Verified via curl + screenshot**:
-  - Ingest accepts, dedupes, rate-limits.
-  - Stats return `{total, last_24h, last_7d, by_level_7d, retention_days}`.
-  - Unauthenticated admin endpoints return 401.
-  - Admin user `+255700000001 / AdminPass123!` (added to `test_credentials.md`) loads the page and sees all 4 captured events with expandable detail.
-
-
-### Code Quality Report Round 2 (Feb 19, 2026)
-
-**Applied fixes:**
-- **`backend/fraud.py` — `score_order()` refactor**: split the 90-line monolith into 4 small async rule evaluators (`_rule_velocity`, `_rule_self_deal_and_account_age`, `_rule_refund_rate`, `_rule_watchlist`). The main function is now a glue function that fans out rules and tallies points. Cyclomatic complexity dropped from 28 → ≤6. Behavioural sanity-tested: `self_deal` flag still triggers at 60 points; clean orders score 0.
-- **`backend/ledger.py` — `calculate_split()` refactor**: extracted `_split_direct`, `_split_three_party`, and `_reconcile_pennies`. The public function is now ~30 lines of declarative glue. Numbers match the existing fixtures (3-party 1,850,000 buyer price → supplier 1,617,000, supply_fee 33,000 — bit-exact with `test_biz_salama.py`).
-- **Hardcoded test creds (5 files)**: routed `LOGIN_PHONE`, `LOGIN_PASSWORD`, and `JWT_SECRET` through `os.environ.get(..., DEFAULT)` so CI can override; the documented `+255712345678 / test1234` local dev fixture still works out of the box.
-- **Array-index-as-key (14 instances)** in `SellerDashboard`, `Register`, `OrderTracking`, `MyOrderPage`, `LandingPage` (×6), plus `HawkerTxEditPage`, `DirectBuyerOfferPage`, and `SupplierConfirmationScreen` negotiation history. Static lists now use content-based keys (e.g. `step.label`, `item.title`); dynamic negotiation history uses `${by}-${action}-${i}` composite keys.
-
-**Pushed back on (with reasoning):**
-- **`is True` / `is False` "26+ instances in `server.py`"**: `grep -nE "is True|is False"` in `server.py` returns **zero** matches. The report's specific line numbers (`453, 528, 873, 4074-4082`) all point to other code patterns. False positive. Additionally, the report's recommended fix (`if x == True`) is anti-Pythonic; PEP 8 says use `if x:` directly. No change made.
-- **Hook deps in `SellerProfile`, `ProductDetail`, `LedgerAdminPage`, `ClientErrorsAdminPage`**: the "9+/10+/11+ missing" claim is exaggerated. The actual references are React state setters (`setLoading`, `setNotFound`, …) which React guarantees are stable, plus module-level imports (`api`). Adding them to deps changes nothing. The existing `[id]` / `[level, q, limit]` deps are correct. No change made.
-- **`localStorage` flagged in `clientErrorReporter.ts`**: that file only reads `user_id` (non-sensitive — already broadcast publicly via `/api/seller/{id}` etc.). Not a credential. No change made.
-- **Oversized components (`LandingPage.tsx` 522 lines, `ThreePartyTransactionCreator.tsx` 516 lines)**: these are visually rich marketing/wizard pages. Mechanical line-count splits create one-shot helper components that aren't reused anywhere — net negative for maintainability. Deferred until/unless we find genuine reuse boundaries.
-
-**Outstanding from the report (deferred):**
-- Refactor of `server.py` auth funcs (`register`/`login`/`forgot_password`/`reset_password`) — already on the P2 list; needs route-module extraction to do cleanly.
-- Refactor of `seller_onboarding.start_onboarding()` — P2.
-
-**Tests**:
-- `python3 -c` smoke for `calculate_split` (direct + three_party + edge errors): all pass, books balance.
-- `python3 -c` smoke for `score_order` (self-deal + clean): flags + scores match expectations.
-- Frontend webpack compiles cleanly (no new warnings). Landing page renders.
-
-
-### Code Quality Report Round 3 (Feb 19, 2026)
-
-**Applied fixes:**
-- **Empty catch blocks (5)**: `clientErrorReporter.ts` (×2 — beacon/fetch fallbacks), `i18n/index.tsx`, `VoiceListedStrip.tsx`, `TrendingSellersStrip.tsx`, `BuildBadge.tsx` — all now bind the error and `console.debug` it under a `typeof console !== 'undefined'` guard. Comments preserved.
-- **`fraud._rule_self_deal_and_account_age` split** (complexity 17 → ≤8 each): now two functions — `_rule_self_deal_by_phone()` (async; returns buyer doc so the next rule can reuse it without a second DB hit) and `_rule_new_account_high_value()` (pure function). Behavioural sanity test: `self_deal` still triggers 60 points, clean orders still score 0.
-- **`server.py:get_public_products()` split** (complexity 24 → ~8): extracted `_tag_lowest_price_per_category()` helper. Marketplace endpoint still returns 39 products with correct shape.
-- **Test files cleanup (6 files)**:
-  - `is True/False` patterns → Pythonic `assert expr` / `assert not (expr)` (10 fixes across `test_iter3_features.py`, `test_iter6_watches.py`, `test_iter11_seller_onboarding.py`)
-  - `random.choice` / `random.randint` → `secrets.choice` / `secrets.randbelow + offset` (14 fixes in `test_iter4_phone_pwa.py`, `test_iter3_features.py`, `test_biz_salama.py`). Not strictly required (test fixtures aren't security-sensitive) but silences the linter and removes a non-CSPRNG dependency.
-- All 5 affected test files compile under `py_compile`. Backend + frontend smoke-tested clean.
-
-**Pushed back on (third time, with concrete evidence this time):**
-- **"`is` / `is not` 49 instances in `server.py`, lines 453, 528, 873, 4074-4082"**: I checked each cited line. Every single one is `is None` / `is not None`. PEP 8 *mandates* this pattern (never use `==` with `None`). The report's automated tool is conflating `is None` with `is True/False`. This claim has appeared in three consecutive rounds — please ask whichever scanner is producing it to differentiate `is None` from `is True/False`, or it will keep wasting review cycles.
-- **"Missing hook dependencies — Product, SellerInfo, alive, api, Record, err…"**: again, these are TypeScript types, module-level imports, locally-scoped variables inside the effect closure, or React state setters (`setLoading` etc. — *guaranteed stable by React*). None of these can or should be in the dep array. Adding them either errors at compile time or causes infinite re-render loops. The existing deps (`[id]`, `[limit]`, `[level, q, limit]`) are correct.
-- **`localStorage in clientErrorReporter.ts:59`**: only reads `user_id`, which is public and broadcast via `/api/seller/{id}` and `/seller/{id}` profile pages. Not a credential.
-- **Oversized components**: addressed in Round 2 — these are visually-rich pages where mechanical splits hurt maintainability. No reuse boundaries identified.
-- **"Python: Undefined Variables (11 instances)"**: report provided no file or line numbers. Can't act on it. Linting `/app/backend/` with `ruff` (which has the equivalent rule `F821`) reports zero undefined references, so this is likely another false-positive class from the scanner.
-
-**Outstanding (deferred):**
-- `server.py` auth funcs (`register`/`login`/`forgot_password`/`reset_password`) complexity — needs the broader route-module extraction. P2.
-- `seller_onboarding.start_onboarding()` (complexity 21) refactor. P2.
-- `normalize_tz_phone()` complexity 11 — currently consolidates 5 phone-format normalizations in one place; splitting it loses readability. Will leave unless it grows further.
-
-
-### Permanent Lint Gate + Real Bug Sweep (Feb 20, 2026)
-
-To stop the false-positive-rebuttal cycle, installed a **deterministic lint gate**
-that future code-review reports should match. Anything that doesn't trip
-`make lint` is, by team definition, accepted.
-
-**New infrastructure:**
-- **`/app/backend/ruff.toml`** — explicit Python lint config: enables `E,F,B,SIM,UP,C90,S`
-  with documented per-rule ignores (every ignore comments *why* and links back
-  to the allowlist).
-- **`/app/CODE_REVIEW_ALLOWLIST.md`** — single source of truth with line-number
-  evidence for each verified false-positive class (`is None`, stable React
-  setters in deps, non-PII `user_id` localStorage reads, oversized landing pages).
-- **`/app/Makefile`** — `make lint` / `make smoke` / `make test-ledger` /
-  `make lint-fix`. Reviewers can run the same checks the team does.
-- **`/app/scripts/smoke.sh`** — colour-coded PASS/FAIL on 5 public endpoints.
-
-**Real bugs found and fixed (by actually running ruff + eslint with the gate):**
-
-1. **🐛 M-Pesa dead-code (`server.py:2741`)** — `password = base64(...)` was
-   computed but never sent. It was Kenyan Daraja STK-push leftover; Vodacom TZ
-   C2B uses Bearer-token-only auth. Removed with explanatory comment.
-2. **🐛 Hawker-approval SMS was commented out (`server.py:3517`)** — the
-   `template_msg` variable was constructed but `await send_sms(...)` was
-   commented. Re-enabled with bilingual SW/EN body + graceful `try/except`.
-3. **🐛 Duplicated `export default` (`VoiceProductListingModal.tsx:203-204`)** —
-   would have failed any strict bundler. Removed.
-4. **🐛 Soft assert that always passes (`test_iter2_features.py:122`)** — the
-   `or True` tail made `assert "duration_bytes" in body or "size" in body or True`
-   pass even on completely malformed responses. Made strict.
-5. **🐛 Unused `current_category` lookup (`server.py:2409`)** — dead code
-   from a removed category-filter step. Removed.
-6. **🐛 Empty `href="#"` (Footer, BuildBadge, Register)** — 7 instances of
-   accessibility-breaking placeholder anchors. Replaced with real social
-   links, `<Link to=>` for internal pages, and `<button>` for in-page actions.
-7. **🐛 26 × `raise HTTPException(...) from e` missing** — added `from e` to
-   every flagged `raise` inside an `except Exception as e:`. Tracebacks now
-   show the original exception cause instead of swallowing it.
-8. **Modernization (auto-fixed, 310 sites)** — `List[X]` → `list[X]`,
-   `Optional[X]` → `X | None`, `datetime.timezone.utc` → `datetime.UTC`,
-   trimmed 12 unused imports, 9 extra-parens, 1 nested `if` collapsed.
-9. **8 unused imports / variables** in `Navbar`, `VoiceProductListingModal`,
-   `ThreePartyTransactionCreator`, `Checkout`, `DirectEscrowCreatePage`,
-   `HawkerTxEditPage` — removed.
-10. **`react-hooks/exhaustive-deps` warning** in `DirectBuyerOfferPage` — the
-    inline `eslint-disable` comment was placed *inside* the line, making it a
-    no-op. Moved to preceding-line position.
-
-**Verification (all 4 gates pass cleanly):**
-- `cd /app/backend && ruff check .` → `All checks passed!`
-- `cd /app/frontend && CI=true yarn build` → `Compiled successfully.`
-- `make smoke` → 5/5 endpoints PASS
-- `make test-ledger` → ✅ All ledger flows passed end-to-end
-
-**Outstanding (still deferred, with reason):**
-- `server.py` auth-funcs route-module extraction — needs structural refactor, P2.
-- `seller_onboarding.start_onboarding()` state-machine refactor — P2.
-- `normalize_tz_phone()` complexity 11 — currently consolidates 5 TZ phone
-  format normalizations in one place; splitting hurts readability.
-
-The repeated scanner false positives (`is None` as "anti-pattern", "missing
-hook deps" that are stable setters, etc.) are now formally documented and
-dismissible by reading `CODE_REVIEW_ALLOWLIST.md` instead of re-proving them
-each round.
-
-
-### Security Audit + Real Hardening (Feb 20, 2026)
-
-Conducted a genuine security audit (not just documentation). Real gaps found
-and fixed; comprehensive posture statement written to `/app/SECURITY-AUDIT.md`.
-
-**New module — `/app/backend/security.py`:**
-- `SecurityHeadersMiddleware` — sets HSTS, X-Frame-Options DENY, X-Content-Type-
-  Options nosniff, Referrer-Policy, Permissions-Policy, X-XSS-Protection on
-  every response; full Content-Security-Policy on HTML.
-- `LoginRateLimiter` — sliding-window brute-force protection. 5 failed attempts
-  per (IP, identifier) in 15 minutes → 1-hour lockout. Successful login resets
-  the counter. Returns 429 + `Retry-After` + bilingual SW/EN error.
-
-**Real bugs found while auditing and fixed:**
-1. 🐛 `server.py:3173` — dispute SMS handler queried `db.users.find_one({"_id":
-   request.buyer_id})`. Users are stored with `user_id` (UUID), so this lookup
-   **never matched anyone**; dispute notifications silently never sent. Fixed to
-   `{"user_id": request.buyer_id}`.
-2. 🐛 `server.py:702` — backward-compat phone-fallback regex did `{"$regex":
-   f"{last9}$"}` without escaping. `phone` is digits-only after `normalize_tz_phone`
-   so not immediately exploitable, but added `re.escape()` as defence-in-depth.
-3. 🔒 No login brute-force protection — now shipped (verified: 5×401, 6th=429).
-4. 🔒 No HTTP security headers — now shipped (all 6 verified via curl).
-
-**`/app/SECURITY-AUDIT.md` — 16 sections covering:**
-- Executive summary with full posture table (15 domains scored)
-- Authentication (bcrypt, JWT, OTP CSPRNG, RBAC, brute-force lockout)
-- Transport (HSTS, TLS, mixed-content prevention)
-- CORS policy (allow-listed, no `*`)
-- HTTP headers (full CSP breakdown)
-- Input validation & injection (Pydantic, NoSQL, XSS, open-redirect)
-- Rate limiting (all surfaces)
-- Money flow integrity (ledger invariants, HMAC verify-links, webhook idempotency)
-- Fraud monitoring (5 rules)
-- File uploads (KYC + product images)
-- Logging & observability (no PII)
-- Secrets management (env-only, no git history leaks)
-- Dependencies (Dependabot recommended P3)
-- Privacy posture (TZ DPA + GDPR notes)
-- Threat model (top 5 attacks scored)
-- Remediation roadmap (Done / P2 / P3)
-- Self-verification: 5 commands anyone can run
-
-**P2 hardening tracked in audit doc:**
-- Migrate JWT from localStorage → HttpOnly + Secure + SameSite=Lax cookies
-- Move KYC images from Mongo base64 → S3 + KMS
-- Submit `biz-salama.co.tz` to HSTS preload list
-- Add `/api/csp-report` for CSP violation telemetry
-
-**All 4 gates green after these changes:**
-- `ruff check .` → All checks passed
-- `CI=true yarn build` → Compiled successfully
-- `make smoke` → 5/5 endpoints PASS
-- `make test-ledger` → All ledger flows balanced
-
-
-### Shipped Feb 20, 2026 (iter12) — Seller Picture Upload + Profile Edit + Send Payment Link CTA
-User reported: "Sellers face challenges wanting to register… onboarding of documents and pictures of products… Button does nothing. Ensure uploads happen, stick to seller page, enable picture to configure to file size." Plus: ensure sellers can upload their own profile, generate a payment link for a customer, and receive a link from 3rd party with accept/deny capability.
-
-**Closed P0 — "Add Product button does nothing"**
-- [x] Wired `/sell/new` route in `App.tsx` (lazy `CreateProductPage`). Previous agent had created the page but never routed it.
-- [x] `SellerDashboard.tsx` — "Add Product" is now a `<Link to="/sell/new">` with `data-testid="dashboard-add-product-btn"`. No more dead click.
-- [x] After product creation, the page now shows a **success card** (`product-created-success`) with:
-  - `product-share-url` → `${origin}/product/{product_id}`
-  - `copy-share-link-btn` (clipboard copy)
-  - `whatsapp-share-btn` (`wa.me/?text=…` deep link)
-  - `add-another-product-btn` (resets the form for rapid bulk listing)
-  - "View product page" + "Go to my store" deep links
-- [x] Backend `ProductCreate.image_b64` was already present — confirmed end-to-end round-trip via curl + testing-agent (7/7 backend tests pass). Photos compressed client-side via `imageUpload.ts` (≤1.5 MB JPEG, 1600 px longest edge) before POSTing.
-
-**(b) Seller profile editor — `/profile/edit`**
-- [x] New `ProfileEditPage.tsx` lazy-loaded at `/profile/edit`. Uses `imageUpload.ts` (`maxEdge=800, maxKB=500`) for avatar capture.
-- [x] Edits: avatar (`picture`), display name, business name, bio, location. Camera + gallery pickers both work on mobile.
-- [x] Backend `update_profile` allowed_fields extended to include `picture`, `bio`, `location` (was only `name/phone/business_name/is_women_owned/business_type/export_enabled` before — `picture` was returned but not writable, classic read-only-bug).
-- [x] Zustand `User` interface gained optional `business_name | picture | bio | location` so TS stays happy.
-- [x] `data-testid="dashboard-edit-profile-link"` on `/dashboard` next to the seller's name.
-
-**(c) Send payment link to customer + receive link with accept/deny**
-- [x] **Send link**: New "Send Payment Link" CTA (`data-testid="dashboard-direct-escrow-btn"`) on `/dashboard` pointing to `/direct/new` (existing `DirectEscrowCreatePage`). Seller fills item + price + buyer phone → `/api/escrow/direct/create` returns `buyer_offer_url` + WhatsApp share + copy-link.
-- [x] **Receive link with accept/deny**: Existing `/direct-offer/:txId?t=<hmac>` page (`DirectBuyerOfferPage`) — buyer can ✅ Accept / 💬 Counter-offer / ❌ Decline. Verified still working (no regression).
-- [x] 3-Party flow (`/verify/:txId` + `/supplier/portal`) unchanged — already had supplier accept/counter/decline.
-
-**Tests** — `/app/test_reports/iteration_12.json`:
-- 7/7 new backend: image_b64 round-trip, no-image OK, 401 anonymous, picture/bio/location persist on PUT /api/auth/profile, unknown fields silently dropped, direct escrow + verify regression
-- Frontend (mobile 390×844): /sell/new auth + anon paths; /profile/edit fields + save; /dashboard CTAs all wired with data-testids
-- Zero retest needed, zero regression
-
-
-
-
-
-### Shipped Feb 21, 2026 (iter13) — Seller Inventory CRUD ("My Products" + Edit/Hide/Delete + Price Review)
-User: "Allow sellers to view their profile and products plus ability to edit information whether on credentials or their listings (review their prices)."
-
-**Backend (`server.py`)**:
-- New **`GET /api/products/mine`** — authenticated seller's full inventory (active + inactive) wrapped as `{products: [...], count: N}`. Distinct from `GET /sellers/{seller_id}` (public + active-only).
-- New **`PATCH /api/products/{product_id}`** — partial update, ownership-scoped (returns 404 on non-owner to avoid leaking product existence). When `price` changes, `calculate_fees()` re-stamps `price_tzs / buyer_protection_fee / seller_acquisition_fee / total_buyer_pays / seller_receives`. Empty-body PATCH is a true no-op (no DB write). Stamps `updated_at = datetime.now(UTC)`.
-- Renamed pre-existing `GET /api/products` handler `get_my_products` → `list_seller_products_legacy` to resolve a ruff `F811` redefinition; the legacy bare-list response shape is unchanged.
-
-**Frontend**:
-- New **`/my-products`** (`MyProductsPage.tsx`) — grid of product cards with per-card **Edit / Hide-Show / Copy Link / Delete** actions, "Add product" CTA, empty state. Active toggle uses PATCH; delete uses DELETE; link copy uses `navigator.clipboard`. All actions show bilingual toasts.
-- New **`/sell/edit/:productId`** (`EditProductPage.tsx`) — pre-loads the existing record, allows photo replacement (reuses `imageUpload.ts` ≤1.5 MB compression), Saves via PATCH. Bottom destructive "Delete product" button mirrors the same `DELETE` call. 404 fallback for non-owners with a "Back to my products" CTA (`edit-not-found-back-btn`).
-- `productsAPI` in `lib/api.ts` gained `getMine / getOneMine / update / remove`.
-- Dashboard surfaces a new **My Products** CTA (`dashboard-my-products-btn` → `/my-products`) alongside Add Product.
-
-**Tests** — `/app/test_reports/iteration_13.json`:
-- 14/14 backend pytest: wrapped shape, includes-inactive, 401 unauth, fee-recalc on price change, validation 400s (empty name + negative price), is_active=false hides from public listing, non-owner 404 (PATCH + DELETE), unauth 401, empty-body no-op, image_b64 replacement persists, legacy `/products` still bare-list.
-- Smoke (5 public endpoints) all pass — zero regressions.
-- Frontend (390×844 mobile): 27 product cards rendered with all 4 per-card testids; dashboard CTA wires correctly; edit page pre-fills all 5 inputs + preview image; save redirects to `/my-products`; 404 fallback works.
-
-
-
-### Shipped Feb 21, 2026 (iter14) — Admin-Direct Seller Registration
-User: "Allow for admin to register sellers and their profiles and pictures." Choices: all fields + avatar + starter product + KYC docs (all optional); admin can type initial password OR send SMS link; pages at `/admin/sellers` and `/admin/sellers/new`; admin-trusted (immediate `verified`).
-
-**New backend module — `/app/backend/admin_sellers.py`**:
-- `create_seller()` — phone-unique (409 `PHONE_EXISTS:<phone>`) + email-unique check; `auth_type='phone'` when admin types a password, `auth_type='password_pending'` + `password_reset_token` (72h) when SMS-link path. Optional starter product is created inline using existing `calculate_fees`. Optional `documents` map stashes admin-uploaded KYC images on `users.admin_uploaded_documents`. SMS sent via existing `send_sms` (simulated when AT key missing) — link is also returned in the API response so admin can share it manually.
-- `list_sellers()` — `role='seller'` filter with case-insensitive search on name/business_name/phone + bulk product-count aggregation (avoids N+1).
-- `update_seller()` / `resend_set_password_link()` — admin can deactivate/activate, edit profile fields, or regenerate the password-set link.
-
-**Routes (placed BEFORE `app.include_router(api_router)` to avoid late-registration 404s)**:
-- `POST /api/admin/sellers` · `GET /api/admin/sellers` · `PATCH /api/admin/sellers/{id}` · `POST /api/admin/sellers/{id}/resend-password-link` · `POST /api/auth/set-password-with-token` (token-based reset, distinct from existing OTP-based one).
-
-**Frontend pages**:
-- `/admin/sellers` (`AdminSellersPage.tsx`) — searchable seller directory, per-row View / Resend-link (when `password_pending`) / Deactivate-Activate. Empty + 403 + loading states all i18n-aware.
-- `/admin/sellers/new` (`AdminSellerCreatePage.tsx`) — single-screen form: avatar (auto-compressed via `imageUpload.ts`, ≤500 KB), account details, password radios (SMS-link default, "Set yourself" reveals password field), starter product (toggleable), 5 KYC doc slots (each compressed ≤1.5 MB). On success → bilingual confirmation card with copyable set-password link + "Register another" button that resets the form.
-
-**Tests** — `/app/test_reports/iteration_14.json`:
-- 23/23 backend pytest: full CRUD, validation 400s (invalid phone, short password), conflict 409s (duplicate phone + email), 403 for non-admin, 401 unauth, token-reset round-trip + new-password login, document stash, regression on `/products/mine`, `/admin/onboarding/queue`, `/admin/reconciliation`, `/admin/client-errors`.
-- Frontend (390×844 mobile): all 14 testids on the create page; search debounces and filters; success-card flows for both password paths; password_pending sellers expose Resend-link.
-- Smoke + ledger E2E PASS — zero broader regression.
-
-**Operational notes**
-- The pre-existing OTP-based `/api/auth/reset-password` is unchanged. The new `/api/auth/set-password-with-token` is the path used by the SMS link sent by admin onboarding (and by the existing field-rep flow's welcome SMS, indirectly).
-- `set_password_link` is returned in the API response so admin can copy/paste it via WhatsApp if AT SMS is mocked.
-- `list_sellers` only shows users with `role='seller'` — pre-existing users from earlier registrations won't appear unless they were admin-onboarded. Existing field-rep onboardings already create users with `role='seller'`, so both flows share this directory.
-
-
-
-
-### Shipped Feb 21, 2026 (iter15) — Bulk CSV Seller Import + Admin-gate login fix
-User accepted the enhancement. Two related shipments:
-
-**1) Bulk CSV import — onboard a whole street market in one paste**
-- Backend: new `parse_bulk_csv()` + `bulk_import()` in `admin_sellers.py`. New route `POST /api/admin/sellers/bulk-csv` (admin-only, 256 KB cap). Required headers `name,phone` + optional `email/business_name/location/bio`, case-insensitive. Per-row failures (invalid TZ phone, duplicate `PHONE_EXISTS:`, missing fields) captured in `errors[]` with the original CSV line number so a single bad row never blocks the batch. SMS-link password path used for every imported seller.
-- Frontend: new `BulkImportModal` reachable via `admin-bulk-import-btn` on `/admin/sellers`. Supports paste-CSV, upload-`.csv`, fill-with-sample. Result panel shows `created / failed / total` counters + per-row error log + list of newly-created sellers.
-
-**2) HIGH-PRIORITY bug found by testing agent — login response omitted `role`**
-- The seed admin (`role='admin'` in MongoDB) was logging in successfully but the React store ended up with `user.role === undefined`. `AdminSellersPage.tsx` gates on `user?.role !== 'admin'`, so a real admin was permanently shown the "Sign in as admin" card and the bulk-import button was **unreachable in the real UI flow**. The testing agent only exercised it by patching localStorage.
-- Fix: added `"role": user.get('role')` to the response dicts of `POST /api/auth/login`, `GET /api/auth/me`, and `PUT /api/auth/profile`. Verified by logging in through the real form → store now persists `user.role='admin'` → admin-bulk-import-btn and admin-add-seller-btn render correctly.
-- Side fix: `/auth/me` 500 for users missing `auth_type` (default to `'password'`).
-
-**Other minor cleanups (also flagged in iter15)**:
-- `parse_bulk_csv` row numbers now `int` everywhere (was inconsistent str/int).
-- Bare `except Exception` in `bulk_import` narrowed to `(LookupError, ValueError)`.
-- Size check now happens BEFORE `strip()` so whitespace-padded oversized payloads return 413 (not 400).
-- `list_sellers` search now uses `re.escape()` to avoid regex injection.
-
-**Tests** — `/app/test_reports/iteration_15.json`:
-- 15/15 backend pytest: happy path, mixed valid+invalid+duplicate, missing header, empty, oversized, 401/403, case-insensitive headers, all regression suites.
-- Frontend manual playwright: modal opens, sample fills, submit POSTs and renders result, file upload populates textarea, done refreshes list, non-admin sees sign-in fallback.
-- Ledger E2E + smoke still green.
-
-
-
-
-### Shipped Feb 21, 2026 (iter16) — Seller Self-Service KYC + Admin Doc Attach
-User on production: "Seller cant see option to load documents." Clarified: needed self-service KYC for already-registered sellers (was missing), keep field-rep `/onboard/seller` intact, and let admin attach docs to existing sellers.
-
-**New backend module — `/app/backend/kyc_docs.py`**:
-- Storage shape: `users.kyc_documents.{doc_type} = {image_b64, uploaded_at, uploaded_by, review_status, rejection_reason}` plus `users.kyc_status` flow (`unsubmitted → pending_review → approved/rejected`). Stored on the user record so it's discoverable without joining the `seller_onboarding` collection.
-- 5 endpoints: `GET /api/auth/kyc/documents` (self), `POST /api/auth/kyc/documents` (self upload one), `POST /api/auth/kyc/submit` (self submit batch — requires all 5), `GET /api/admin/sellers/{id}/documents` (admin), `POST /api/admin/sellers/{id}/documents` (admin attach), `POST /api/admin/sellers/{id}/kyc/review` (approve/reject — either a single doc or the whole batch; whole-batch approve flips `is_verified=true`).
-- Admin-direct uploads land with `review_status='approved'`; seller self-uploads kick `kyc_status='pending_review'`.
-
-**Bug found & fixed in own code**: used `if not user` after a projection that only requested missing fields → returns `{}` (truthy as empty dict, but falsy in Python). Fixed by switching to `user is None` checks throughout (Mongo idiomatic). Caught during my own curl smoke before testing agent.
-
-**Frontend**:
-- New `/my-documents` (`MyDocumentsPage.tsx`) — KYC status banner with capture progress, 5 cards (camera + gallery upload, auto-compressed via `imageUpload.ts` ≤1.5 MB), rejection reasons shown inline. **Submit for review** button enabled only when all 5 captured.
-- `SellerDashboard` exposes new **Verify Account** CTA (`dashboard-my-documents-btn` → `/my-documents`).
-- `AdminSellersPage` gained a **Docs** button per row (`seller-docs-{user_id}`) that opens a `SellerDocsModal` with: KYC status badge, 5 admin upload rows, **Approve / Reject KYC** actions.
-
-**Tests** — `/app/test_reports/iteration_16.json`:
-- 14/14 backend pytest: full CRUD + validation (invalid doc_type, tiny image, oversized image, partial-submit 400, missing user 404), admin-attach-vs-self-upload status flow, single-doc reject preserves batch, 401/403, regression on `/api/onboarding/seller/*` field-rep flow + `/admin/onboarding/queue`.
-- Frontend mobile 390×844: 5 cards render, dashboard CTA links correctly, admin SellerDocsModal opens with all expected testids.
-- Smoke + ledger E2E still PASS.
-
-**Production impact**: this closes the user's reported gap on `www.biz-salama.co.tz` — but production needs a redeploy to pick up the new module + frontend pages. Until redeployed, the issue persists in production.
-
-
-
-
-### Shipped Feb 29, 2026 (iter17) — Admin discoverability + Edit Seller + Onboarding queue UI + Contact phone
-User: "Admin login button?cant see it" + "Add the option for admin to add new sellers on their own discretion" + "Put mob contacts on app as 0754710139". Built four coordinated surfaces so admins can drive all three seller-registration paths without typing URLs.
-
-**Navbar — 👑 Admin dropdown** (`Navbar.tsx`)
-- The single Admin link now expands into a dropdown (`data-testid="nav-admin-link"` + `nav-admin-dropdown`) with five entries: Sellers, Register seller, Onboarding queue, Ledger, Client errors. Renders only when `user.role === 'admin'`. Mobile sheet also shows the same items under a "👑 Admin" header. Outside-click closes the dropdown.
-
-**Edit Seller modal** (`AdminSellersPage.tsx`)
-- New per-row ✏️ **Edit** button (`seller-edit-{user_id}`) opens an `EditSellerModal` with: avatar upload (auto-compressed via `imageUpload.ts`), name, business_name, location, bio, Active/Verified toggles. PATCHes `/api/admin/sellers/{user_id}` (backend route from iter14) and refreshes the list.
-
-**Onboarding queue page** (`AdminOnboardingQueuePage.tsx`)
-- Brand-new `/admin/onboarding/queue` route surfacing field-rep submissions from `/onboard/seller`. Tabs filter by `submitted / verified / rejected`. Each row expands to show all 5 docs with **Preview** buttons (loads image_b64 via `GET /api/admin/onboarding/{id}/doc/{doc_type}`) and **Approve / Reject** actions (POSTs `/api/admin/onboarding/{id}/review`; reject prompts for a reason). Approve fires the existing SMS notification to the new seller. Backend endpoints existed since iter? but had no UI — now they do.
-
-**Field-rep flow more discoverable** (`Register.tsx`)
-- Added a "Registering on behalf of another seller? Use the field-rep form →" link below the standard "Already have an account?" line. Targets `/onboard/seller`. Bilingual via new i18n keys `reg.field_rep_hint` + `reg.field_rep_link`.
-
-**Contact phone replaced everywhere**
-- `Footer.tsx` — `+255 700 123 456` → `+255 754 710 139` (now a clickable `tel:` link with `footer-phone-link` testid)
-- `Footer.tsx` — `support@biz-salama.co.tz` now a clickable `mailto:` link
-- `EscrowVerifyPublic.tsx` — `+255 7XX XXX XXX` placeholder → real `+255 754 710 139`
-- Login placeholder hint `0712345678` left alone (it's an example format, not a contact)
-
-**.env de-ignored** — root `.gitignore` was again blocking `*.env` (regression from earlier in the session). Removed those lines so Save-to-GitHub picks up `backend/.env` and `frontend/.env`. **This was blocking production from picking up env-driven config changes.**
-
-**Production secret fix flagged by Support**: `REACT_APP_BACKEND_URL` was set to `https://salama-secure.emergent.host` in the deployment secrets — needs to be `https://www.biz-salama.co.tz`. Until that's fixed in the Emergent dashboard Secrets tab, the frontend may hit CORS/cookie issues talking to the backend from the custom domain.
-
-**Tests done in-session**: backend curl tests for all new admin endpoints (PATCH seller verified=true → 200; onboarding queue listing → 1 pending; onboarding review approve/reject; dropdown navigation smoke screenshot ✅).
-
-**Operational notes**
-- Three seller-registration paths now fully discoverable: `/register` (self), `/onboard/seller` (field rep, linked from register page), `/admin/sellers/new` (admin direct, in 👑 Admin dropdown).
-- Field-rep approvals trigger an Africa's Talking SMS to the new seller — mocked when AT_API_KEY missing.
-
-
+## Key endpoints (selected)
+- `PATCH /api/products/{product_id}` — update product
+- `POST /api/admin/sellers` — admin direct create seller
+- `POST /api/admin/sellers/bulk-csv` — bulk CSV import
+- `POST /api/auth/set-password-with-token` — single-use magic-link
+- `POST /api/admin/auth/unlock` — force-unlock rate-limited identity
+- `POST /api/escrow/three-party/{tx_id}/buyer-confirm-delivery` — buyer release
+- `GET  /api/escrow/verify/{tx_id}` — supplier/buyer magic-link verify
+
+## Production checklist
+- `ENV=production` in deploy env
+- `AT_API_KEY` set (Africa's Talking) — otherwise `_assert_prod_safety()` refuses boot
+- `BASE_URL=https://www.biz-salama.co.tz` set
+- `JWT_SECRET` rotated, ≥16 chars, deployed via secret manager
+- `CORS_ORIGINS` whitelists prod domain only
+- CI `security-lint.yml` green on the deploy commit
+
+## Backlog (P0 → P3)
+- **P2** — Click-Pesa / AzamPay / Selcom real SDK wiring (currently mocked in `ledger.py`)
+- **P2** — Refactor `server.py` (6.1k lines) into routers: `routes/auth.py`, `routes/products.py`, `routes/escrow.py`, `routes/orders.py`
+- **P3** — Ratings & reviews UI
+- **P3** — Native app wrapper (Capacitor / React Native)
+- **P3** — Public `/trust` page surfacing the audit results to buyers/sellers
+
+## Credentials
+See `/app/memory/test_credentials.md`. Seed admin: `+255700000001` / `AdminPass123!`.

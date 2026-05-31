@@ -5932,6 +5932,28 @@ async def admin_resend_password_link(user_id: str, request: Request):
         raise HTTPException(status_code=404, detail=str(e)) from e
 
 
+class UnlockLoginRequest(BaseModel):
+    phone: str | None = None
+    ip: str | None = None
+
+
+@api_router.post("/admin/auth/unlock")
+async def admin_unlock_login(payload: UnlockLoginRequest, request: Request):
+    """Admin clears a brute-force lockout on a phone and/or IP.
+
+    Useful when a legitimate user (often the admin themselves on a different
+    device) trips the rate limiter via browser auto-fill or background retries.
+    """
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    if not payload.phone and not payload.ip:
+        raise HTTPException(status_code=400, detail="Provide phone or ip")
+    identifier = normalize_tz_phone(payload.phone) if payload.phone else None
+    result = login_rate_limiter.force_clear(identifier=identifier, ip=payload.ip)
+    return {"ok": True, **result}
+
+
 class BulkSellersCsvRequest(BaseModel):
     csv_text: str
 

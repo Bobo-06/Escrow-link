@@ -124,8 +124,8 @@ class LoginRateLimiter:
     """
 
     WINDOW_SECONDS = 15 * 60
-    MAX_FAILURES = 5
-    LOCKOUT_SECONDS = 60 * 60
+    MAX_FAILURES = 8
+    LOCKOUT_SECONDS = 15 * 60
 
     def __init__(self) -> None:
         # Each key → deque of failure timestamps within the window.
@@ -172,6 +172,28 @@ class LoginRateLimiter:
                     self._key("id", identifier)):
             self._failures.pop(key, None)
             self._locked_until.pop(key, None)
+
+    def force_clear(self, *, identifier: str | None = None, ip: str | None = None) -> dict[str, int]:
+        """Admin-driven unlock — clears either an identifier (phone) or an IP, or both.
+
+        Returns a small dict showing what was cleared, so the admin UI can give
+        meaningful feedback ("cleared 1 lockout").
+        """
+        cleared_failures = 0
+        cleared_locks = 0
+        keys: list[str] = []
+        if identifier:
+            keys.append(self._key("id", identifier))
+        if ip:
+            keys.append(self._key("ip", ip))
+        for k in keys:
+            if k in self._failures:
+                del self._failures[k]
+                cleared_failures += 1
+            if k in self._locked_until:
+                del self._locked_until[k]
+                cleared_locks += 1
+        return {"cleared_failures": cleared_failures, "cleared_locks": cleared_locks}
 
 
 # Singleton — `from security import login_rate_limiter`

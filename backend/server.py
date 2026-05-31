@@ -836,9 +836,10 @@ async def forgot_password(data: ForgotPasswordRequest):
     )
     
     # In production, send SMS via Africa's Talking
-    # For demo, we'll log it and return in response (remove in production!)
     sms_content = SMS_TEMPLATES["password_reset_otp"](otp)
-    logger.info(f"Password reset OTP for {user['phone'] or user['email']}: {otp}")
+    # SECURITY: never log the OTP value. Log only the user_id (no phone/email/OTP)
+    # so support can correlate without leaking credentials into log aggregators.
+    logger.info(f"Password reset OTP generated for user_id={user['user_id']}")
     
     # Try to send SMS if phone provided and AT is configured
     if user.get('phone') and AT_API_KEY:

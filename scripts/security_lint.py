@@ -100,7 +100,7 @@ PROD_SAFE_ALLOWED: set[tuple[str, int]] = {
     # The runtime startup check `_assert_prod_safety()` in server.py refuses
     # to boot in ENV=production without AT_API_KEY, so this can never trigger
     # in prod.
-    ("server.py", 871),
+    ("server.py", 873),
 }
 
 # ───────────────────────────── Data types ───────────────────────────────

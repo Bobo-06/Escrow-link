@@ -65,6 +65,7 @@ import client_errors as ce_module
 from security import SecurityHeadersMiddleware, login_rate_limiter
 import admin_sellers as adm_sellers
 import kyc_docs as kyc_module
+import selcom_client
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -90,10 +91,11 @@ EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 AT_API_KEY = os.environ.get('AFRICASTALKING_API_KEY', '')
 AT_USERNAME = os.environ.get('AFRICASTALKING_USERNAME', 'sandbox')
 
-# Selcom Pesalink
-SELCOM_API_KEY = os.environ.get('SELCOM_API_KEY', '')
-SELCOM_SECRET = os.environ.get('SELCOM_SECRET', '')
+# Selcom Pesalink — credentials read from env by selcom_client module.
+# Module-level imports kept here as a single source of truth for *which*
+# env vars matter for the prod-safety guard.
 SELCOM_VENDOR = os.environ.get('SELCOM_VENDOR', '')
+SELCOM_API_KEY = os.environ.get('SELCOM_API_KEY', '')
 SELCOM_BASE_URL = os.environ.get('SELCOM_BASE_URL', 'https://apigw.selcommobile.com/v1')
 
 # M-Pesa Daraja (Vodacom TZ)
@@ -2715,122 +2717,110 @@ async def send_sms_notification(request: SMSRequest):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def selcom_headers() -> dict[str, str]:
-    """Generate Selcom API headers with signature"""
-    import time
-    nonce = uuid.uuid4().hex
-    timestamp = str(int(time.time()))
-    params = f"{SELCOM_VENDOR}{nonce}{timestamp}"
-    signature = base64.b64encode(
-        hmac.new(SELCOM_SECRET.encode(), params.encode(), hashlib.sha256).digest()
-    ).decode()
-    
-    return {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "Authorization": f"SELCOM {SELCOM_API_KEY}",
-        "Digest-Method": "HS256",
-        "Digest": signature,
-        "Timestamp": timestamp,
-        "Nonce": nonce,
-    }
+    """DEPRECATED — kept for legacy callers. Real signing now lives in
+    selcom_client.py and follows the documented `Signed-Fields` HMAC spec.
+    This helper is retained only because older code paths reference it; it
+    is no longer used by /payments/selcom/* routes.
+    """
+    raise RuntimeError(
+        "selcom_headers() is deprecated. Use selcom_client.create_checkout_order "
+        "or selcom_client.wallet_push_ussd which sign per-payload."
+    )
 
 @api_router.post("/payments/selcom/checkout")
 async def selcom_checkout(request: SelcomCheckoutRequest):
-    """Create Selcom checkout order"""
-    if not SELCOM_API_KEY:
-        # Simulate for development
-        return {
-            "ok": True,
-            "simulated": True,
-            "checkout_url": f"{BASE_URL}/payment/selcom/demo",
-            "order_id": request.order_id
-        }
-    
+    """Create a Selcom hosted-checkout order. Delegates to selcom_client which
+    handles the documented HMAC signing scheme + base64 URL encoding."""
     try:
-        payload = {
-            "vendor": SELCOM_VENDOR,
-            "order_id": request.order_id,
-            "buyer_email": request.buyer_email,
-            "buyer_name": request.buyer_name,
-            "buyer_phone": request.phone,
-            "amount": request.amount,
-            "currency": "TZS",
-            "redirect_url": f"{BASE_URL}/payment/selcom/callback",
-            "cancel_url": f"{BASE_URL}/payment/selcom/cancel",
-            "webhook": f"{BASE_URL}/api/payments/selcom/webhook",
-            "payment_methods": ["SELCOM-WALLET", "MASTERPASS", "TIGOPESA", "AIRTEL", "HALOPESA"]
-        }
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{SELCOM_BASE_URL}/checkout/create-order",
-                json=payload,
-                headers=selcom_headers()
-            )
-            data = response.json()
-            
+        result = await selcom_client.create_checkout_order(
+            order_id=request.order_id,
+            buyer_email=request.buyer_email,
+            buyer_name=request.buyer_name,
+            buyer_phone=request.phone,
+            amount=int(request.amount),
+            redirect_url=f"{BASE_URL}/payment/selcom/callback",
+            cancel_url=f"{BASE_URL}/payment/selcom/cancel",
+            webhook_url=f"{BASE_URL}/api/payments/selcom/webhook",
+        )
+        if result.get("simulated"):
+            return {
+                "ok": True,
+                "simulated": True,
+                "checkout_url": f"{BASE_URL}/payment/selcom/demo",
+                "order_id": request.order_id,
+            }
+        sc = result.get("selcom") or {}
+        # Selcom returns: { result, resultcode, data: [ { payment_token, payment_gateway_url, ... } ] }
+        data = sc.get("data") or []
+        gateway_url = (data[0] if data else {}).get("payment_gateway_url") if isinstance(data, list) else (sc.get("data") or {}).get("payment_gateway_url")
         return {
-            "ok": True,
-            "checkout_url": data.get("data", {}).get("payment_gateway_url"),
-            "order_id": request.order_id
+            "ok": result["ok"],
+            "checkout_url": gateway_url,
+            "order_id": request.order_id,
+            "selcom": sc,
         }
     except Exception as e:
         logger.error(f"Selcom checkout error: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
+
 @api_router.post("/payments/selcom/stk")
 async def selcom_stk_push(request: SelcomSTKRequest):
-    """Direct STK push via Selcom wallet"""
-    if not SELCOM_API_KEY:
-        return {"ok": True, "simulated": True, "status": "pending"}
-    
+    """Trigger Selcom wallet USSD-push (STK equivalent)."""
     try:
-        payload = {
-            "vendor": SELCOM_VENDOR,
-            "msisdn": request.phone,
-            "amount": request.amount,
-            "currency": "TZS",
-            "remarks": "SecureTrade Escrow",
-            "transref": request.transaction_ref,
-            "callback": f"{BASE_URL}/api/payments/selcom/callback"
-        }
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{SELCOM_BASE_URL}/checkout/wallet-to-wallet",
-                json=payload,
-                headers=selcom_headers()
-            )
-            
-        return {"ok": True, **response.json()}
+        result = await selcom_client.wallet_push_ussd(
+            transid=request.transaction_ref or selcom_client.new_transid(),
+            utilityref=request.transaction_ref,
+            amount=int(request.amount),
+            msisdn=request.phone,
+        )
+        return result
     except Exception as e:
+        logger.error(f"Selcom STK error: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
+
 
 @api_router.post("/payments/selcom/webhook")
 async def selcom_webhook(request: Request):
-    """Handle Selcom payment webhook"""
+    """Handle Selcom payment webhook. HMAC-verified per Selcom spec."""
     body = await request.json()
+    # Verify signature unless Selcom isn't configured (dev/simulated)
+    if selcom_client.is_configured():
+        ok, reason = selcom_client.verify_webhook(
+            headers=dict(request.headers),
+            body_json=body,
+        )
+        if not ok:
+            logger.warning(f"Selcom webhook signature rejected: {reason}")
+            raise HTTPException(status_code=401, detail=f"signature: {reason}")
+
     order_id = body.get("order_id")
     result = body.get("result")
-    
-    if result == "SUCCESS":
+    payment_status = body.get("payment_status")
+
+    completed = (result == "SUCCESS") or (payment_status == "COMPLETED")
+    if completed:
         await db.orders.update_one(
             {"order_id": order_id},
             {"$set": {
                 "status": "paid",
                 "payment_status": "completed",
-                "selcom_tx_id": body.get("selcom_transaction_id"),
-                "paid_at": datetime.now(UTC)
-            }}
+                "selcom_tx_id": body.get("transid") or body.get("selcom_transaction_id"),
+                "selcom_reference": body.get("reference"),
+                "paid_at": datetime.now(UTC),
+            }},
         )
-        # Create audit log
         await create_audit_log(order_id, "PAYMENT_RECEIVED", "system", {"gateway": "selcom"})
+    elif result == "PENDING":
+        await db.orders.update_one(
+            {"order_id": order_id},
+            {"$set": {"status": "pending_payment", "payment_status": "pending"}},
+        )
     else:
         await db.orders.update_one(
             {"order_id": order_id},
-            {"$set": {"status": "payment_failed", "failure_reason": body.get("result_desc")}}
+            {"$set": {"status": "payment_failed", "failure_reason": body.get("result_desc") or body.get("message")}},
         )
-    
     return {"ok": True}
 
 # ═══════════════════════════════════════════════════════════════════════════

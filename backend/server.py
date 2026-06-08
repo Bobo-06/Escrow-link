@@ -6150,9 +6150,10 @@ async def admin_bootstrap_first_admin(payload: BootstrapAdminRequest):
     await db.users.insert_one(doc)
 
     # Issue session token immediately so the caller can log in without a
-    # second round-trip.
+    # second round-trip. NOTE: must write to db.user_sessions (the collection
+    # get_current_user reads from), NOT db.sessions.
     session_token = f"session_{uuid.uuid4().hex}"
-    await db.sessions.insert_one({
+    await db.user_sessions.insert_one({
         "session_token": session_token,
         "user_id": user_id,
         "created_at": now,

@@ -6023,6 +6023,73 @@ class BootstrapAdminRequest(BaseModel):
     name: str | None = None
 
 
+def _check_recovery_secret(request: Request) -> None:
+    """Gate for emergency admin-recovery endpoints.
+
+    Uses the existing JWT_SECRET (already provisioned in prod env) as the
+    authorization key, so we don't add another secret to manage. Only the
+    operator with shell/dashboard access to the prod env vars can call these.
+    """
+    provided = request.headers.get("X-Admin-Recovery-Secret", "")
+    if not provided or not hmac.compare_digest(provided.encode(), JWT_SECRET.encode()):
+        raise HTTPException(status_code=403, detail="Invalid recovery secret")
+
+
+@api_router.get("/admin/recovery/list-admins")
+async def admin_recovery_list_admins(request: Request):
+    """Emergency: list all admin users (no auth required — gated by JWT_SECRET header).
+
+    Use when locked out of production. Pass header
+    `X-Admin-Recovery-Secret: <JWT_SECRET value>` to view existing admins.
+    Returns identity fields only — NEVER password hashes.
+    """
+    _check_recovery_secret(request)
+    admins = await db.users.find(
+        {"role": "admin"},
+        {"_id": 0, "user_id": 1, "phone": 1, "email": 1, "name": 1, "created_at": 1, "is_active": 1},
+    ).to_list(50)
+    for a in admins:
+        if isinstance(a.get("created_at"), datetime):
+            a["created_at"] = a["created_at"].isoformat()
+    return {"count": len(admins), "admins": admins}
+
+
+class RecoveryResetPasswordRequest(BaseModel):
+    user_id: str
+    new_password: str
+
+
+@api_router.post("/admin/recovery/reset-password")
+async def admin_recovery_reset_password(payload: RecoveryResetPasswordRequest, request: Request):
+    """Emergency: reset a specific admin's password.
+
+    Same gate as list-admins. Identify the admin via `user_id` from the
+    list-admins response.
+    """
+    _check_recovery_secret(request)
+    if len(payload.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    user = await db.users.find_one(
+        {"user_id": payload.user_id, "role": "admin"},
+        {"_id": 0, "user_id": 1, "phone": 1},
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="Admin not found with that user_id")
+    pw_hash = bcrypt.hashpw(payload.new_password.encode(), bcrypt.gensalt()).decode()
+    await db.users.update_one(
+        {"user_id": payload.user_id},
+        {"$set": {
+            "password_hash": pw_hash,
+            "auth_type": "phone",
+            "updated_at": datetime.now(UTC),
+        }},
+    )
+    # Also clear any brute-force lockout against this identity
+    login_rate_limiter.force_clear(identifier=user.get("phone") or "", ip=None)
+    logger.info(f"Admin password reset via recovery: user_id={user['user_id']}")
+    return {"ok": True, "message": "Password reset. Log in with the new password.", "phone": user.get("phone")}
+
+
 @api_router.post("/admin/bootstrap-first-admin")
 async def admin_bootstrap_first_admin(payload: BootstrapAdminRequest):
     """Create the first admin user — only works on a database with ZERO admins.

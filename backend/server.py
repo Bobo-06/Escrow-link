@@ -2729,8 +2729,7 @@ def selcom_headers() -> dict[str, str]:
 
 @api_router.post("/payments/selcom/checkout")
 async def selcom_checkout(request: SelcomCheckoutRequest):
-    """Create a Selcom hosted-checkout order. Delegates to selcom_client which
-    handles the documented HMAC signing scheme + base64 URL encoding."""
+    """Create a Selcom hosted-checkout order via create-order-minimal."""
     try:
         result = await selcom_client.create_checkout_order(
             order_id=request.order_id,
@@ -2750,12 +2749,15 @@ async def selcom_checkout(request: SelcomCheckoutRequest):
                 "order_id": request.order_id,
             }
         sc = result.get("selcom") or {}
-        # Selcom returns: { result, resultcode, data: [ { payment_token, payment_gateway_url, ... } ] }
+        # Selcom returns { result, resultcode, data: [ { payment_token, payment_gateway_url, payment_gateway_url_decoded } ] }
         data = sc.get("data") or []
-        gateway_url = (data[0] if data else {}).get("payment_gateway_url") if isinstance(data, list) else (sc.get("data") or {}).get("payment_gateway_url")
+        first = data[0] if isinstance(data, list) and data else {}
+        # Prefer the human-friendly decoded URL added by selcom_client
+        gateway_url = first.get("payment_gateway_url_decoded") or first.get("payment_gateway_url")
         return {
-            "ok": result["ok"],
+            "ok": result["ok"] and sc.get("result") == "SUCCESS",
             "checkout_url": gateway_url,
+            "payment_token": first.get("payment_token"),
             "order_id": request.order_id,
             "selcom": sc,
         }
@@ -2766,15 +2768,42 @@ async def selcom_checkout(request: SelcomCheckoutRequest):
 
 @api_router.post("/payments/selcom/stk")
 async def selcom_stk_push(request: SelcomSTKRequest):
-    """Trigger Selcom wallet USSD-push (STK equivalent)."""
+    """Trigger Selcom wallet-pull push USSD.
+
+    Two-step flow per Selcom's spec:
+      1. create-order-minimal (registers the order with Selcom)
+      2. wallet-payment (triggers the USSD PIN prompt for that order)
+    """
     try:
-        result = await selcom_client.wallet_push_ussd(
-            transid=request.transaction_ref or selcom_client.new_transid(),
-            utilityref=request.transaction_ref,
+        order_id = request.transaction_ref or f"BSL-{secrets.token_urlsafe(6)}"
+        # Step 1
+        create = await selcom_client.create_checkout_order(
+            order_id=order_id,
+            buyer_email="buyer@biz-salama.co.tz",
+            buyer_name="Biz-Salama Buyer",
+            buyer_phone=request.phone,
             amount=int(request.amount),
+            redirect_url=f"{BASE_URL}/payment/selcom/callback",
+            cancel_url=f"{BASE_URL}/payment/selcom/cancel",
+            webhook_url=f"{BASE_URL}/api/payments/selcom/webhook",
+        )
+        if create.get("simulated"):
+            return {"ok": True, "simulated": True, "status": "pending", "order_id": order_id}
+        if (create.get("selcom") or {}).get("result") != "SUCCESS":
+            return {"ok": False, "stage": "create-order", **create}
+        # Step 2 — push USSD for the now-registered order
+        transid = selcom_client.new_transid()
+        push = await selcom_client.wallet_pull_payment(
+            transid=transid,
+            order_id=order_id,
             msisdn=request.phone,
         )
-        return result
+        return {
+            "ok": push["ok"] and (push.get("selcom") or {}).get("result") == "SUCCESS",
+            "order_id": order_id,
+            "transid": transid,
+            "selcom": push.get("selcom"),
+        }
     except Exception as e:
         logger.error(f"Selcom STK error: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e

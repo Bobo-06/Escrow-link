@@ -134,18 +134,29 @@ async def create_checkout_order(
     buyer_name: str,
     buyer_phone: str,
     amount: int,  # integer TZS
-    redirect_url: str,
-    cancel_url: str,
+    redirect_url: str,  # accepted for API compatibility; not sent (minimal endpoint)
+    cancel_url: str,    # accepted for API compatibility; not sent (minimal endpoint)
     webhook_url: str,
     no_of_items: int = 1,
     buyer_remarks: str = "",
     merchant_remarks: str = "",
 ) -> dict[str, Any]:
-    """POST {base}/checkout/create-order with correct signing.
+    """POST {base}/checkout/create-order-minimal.
 
-    URL fields are base64-encoded as required by Selcom's spec. Buyer identity
-    fields stay as plain UTF-8 strings.
+    This is the endpoint Selcom support directed us to use. The full
+    /checkout/create-order endpoint is not enabled on our sandbox vendor.
+
+    Per UAT (gateway refs S20581783730, S20581783761), the API requires:
+      * webhook URL base64-encoded
+      * Content-Type application/json
+      * no_of_items required (even though docs sample suggests otherwise)
+
+    Returns the Selcom JSON with payment_token + base64 payment_gateway_url.
+    `redirect_url` / `cancel_url` are accepted for backwards-compat with the
+    full create-order call but not transmitted — they're not part of the
+    minimal flow.
     """
+    _ = (redirect_url, cancel_url)  # accepted but unused for minimal endpoint
     if not is_configured():
         return {
             "ok": True,
@@ -162,70 +173,57 @@ async def create_checkout_order(
         "buyer_phone": buyer_phone,
         "amount": int(amount),
         "currency": "TZS",
-        "redirect_url": _b64(redirect_url),
-        "cancel_url": _b64(cancel_url),
         "webhook": _b64(webhook_url),
-        "buyer_remarks": buyer_remarks or "NONE",
-        "merchant_remarks": merchant_remarks or "NONE",
+        "buyer_remarks": buyer_remarks or "None",
+        "merchant_remarks": merchant_remarks or "None",
         "no_of_items": int(no_of_items),
     }
-    # IMPORTANT: signed-fields order must match the order Selcom verifies. The
-    # documented ordering follows the table in the API reference.
     signed_fields = [
-        "vendor",
-        "order_id",
-        "buyer_email",
-        "buyer_name",
-        "buyer_phone",
-        "amount",
-        "currency",
-        "redirect_url",
-        "cancel_url",
-        "webhook",
-        "buyer_remarks",
-        "merchant_remarks",
+        "vendor", "order_id", "buyer_email", "buyer_name", "buyer_phone",
+        "amount", "currency", "webhook", "buyer_remarks", "merchant_remarks",
         "no_of_items",
     ]
     headers = _build_headers(payload, signed_fields)
-    url = f"{_cfg('SELCOM_BASE_URL', 'https://apigw.selcommobile.com/v1').rstrip('/')}/checkout/create-order"
+    url = f"{_cfg('SELCOM_BASE_URL', 'https://apigw.selcommobile.com/v1').rstrip('/')}/checkout/create-order-minimal"
     async with httpx.AsyncClient(timeout=20.0) as client:
         resp = await client.post(url, json=payload, headers=headers)
     try:
         body = resp.json()
     except Exception:
         body = {"raw": resp.text}
+
+    # Decode base64 payment_gateway_url for the caller's convenience.
+    if isinstance(body, dict) and isinstance(body.get("data"), list) and body["data"]:
+        first = body["data"][0]
+        if isinstance(first, dict) and first.get("payment_gateway_url"):
+            try:
+                first["payment_gateway_url_decoded"] = base64.b64decode(
+                    first["payment_gateway_url"]
+                ).decode()
+            except Exception:
+                pass
     return {"ok": resp.is_success, "status_code": resp.status_code, "selcom": body}
 
 
-async def wallet_push_ussd(
+async def wallet_pull_payment(
     *,
     transid: str,
-    utilityref: str,
-    amount: int,
+    order_id: str,
     msisdn: str,
 ) -> dict[str, Any]:
-    """POST {base}/wallet/pushussd — STK-equivalent for Selcom wallet.
+    """POST {base}/checkout/wallet-payment — wallet-pull (STK-equivalent).
 
-    Triggers the USSD PIN-entry prompt on the user's handset.
+    Triggers the USSD PIN-entry prompt on the buyer's handset for an order
+    previously created via create_checkout_order(). UAT confirmed working
+    (gateway ref S20581783556 — "Wallet push successful").
     """
     if not is_configured():
-        return {
-            "ok": True,
-            "simulated": True,
-            "status": "pending",
-            "transid": transid,
-        }
+        return {"ok": True, "simulated": True, "status": "pending", "transid": transid}
 
-    payload = {
-        "transid": transid,
-        "utilityref": utilityref,
-        "amount": int(amount),
-        "vendor": _cfg("SELCOM_VENDOR"),
-        "msisdn": msisdn,
-    }
-    signed_fields = ["transid", "utilityref", "amount", "vendor", "msisdn"]
+    payload = {"transid": transid, "order_id": order_id, "msisdn": msisdn}
+    signed_fields = ["transid", "order_id", "msisdn"]
     headers = _build_headers(payload, signed_fields)
-    url = f"{_cfg('SELCOM_BASE_URL', 'https://apigw.selcommobile.com/v1').rstrip('/')}/wallet/pushussd"
+    url = f"{_cfg('SELCOM_BASE_URL', 'https://apigw.selcommobile.com/v1').rstrip('/')}/checkout/wallet-payment"
     async with httpx.AsyncClient(timeout=20.0) as client:
         resp = await client.post(url, json=payload, headers=headers)
     try:
@@ -233,6 +231,10 @@ async def wallet_push_ussd(
     except Exception:
         body = {"raw": resp.text}
     return {"ok": resp.is_success, "status_code": resp.status_code, "selcom": body}
+
+
+# Kept as an alias for the older route-handler name to avoid breaking imports.
+wallet_push_ussd = wallet_pull_payment
 
 
 # ─────────────────────────── Webhook verify ────────────────────────────

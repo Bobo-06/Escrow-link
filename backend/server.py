@@ -5982,6 +5982,120 @@ class BulkSellersCsvRequest(BaseModel):
     csv_text: str
 
 
+# ──────────────────────────────────────────────────────────────────────────
+# ADMIN SELCOM DIAGNOSTICS
+# Live self-check endpoints used during go-live to verify env vars, outbound
+# IP, and end-to-end Selcom reachability — admin-auth-only.
+# ──────────────────────────────────────────────────────────────────────────
+
+
+@api_router.get("/admin/egress-ip")
+async def admin_egress_ip(request: Request):
+    """Return this server's outbound IP as reported by Selcom's own IP-detector.
+
+    The IP returned here is the value Selcom must whitelist for the calling
+    environment. Use this on production immediately after deploy to grab the
+    prod outbound IP without needing shell access or platform-support tickets.
+    """
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get("https://paypoint.selcommobile.com/getip.php")
+        return {
+            "ok": resp.is_success,
+            "egress_ip": resp.text.strip(),
+            "source": "https://paypoint.selcommobile.com/getip.php",
+            "instruction": (
+                "Send this IP to Selcom and ask them to whitelist it against "
+                "vendor SB00192172 on apigw.selcommobile.com. Once whitelisted, "
+                "all Selcom payment calls from this environment will work."
+            ),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"IP probe failed: {e}") from e
+
+
+@api_router.post("/admin/selcom-diagnostic")
+async def admin_selcom_diagnostic(request: Request):
+    """Run a live create-order-minimal call and report which gate is failing.
+
+    Output tells you which of these gates is open / blocked for the current
+    environment:
+      • Env vars present
+      • IP whitelisted at Selcom
+      • API endpoint enabled for the vendor
+      • Signature verifies
+      • Order created successfully
+    """
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    # 1. Env-var check
+    env_ok = selcom_client.is_configured()
+    base_url_env = os.environ.get("BASE_URL", "").rstrip("/")
+    out: dict[str, Any] = {
+        "env_vars_set": env_ok,
+        "base_url": base_url_env or "(unset)",
+        "vendor": os.environ.get("SELCOM_VENDOR", "(unset)"),
+        "api_key_len": len(os.environ.get("SELCOM_API_KEY", "")),
+        "secret_len": len(os.environ.get("SELCOM_SECRET", "")),
+    }
+    if not env_ok:
+        out["verdict"] = "BLOCKED — Selcom env vars missing. Set SELCOM_VENDOR / SELCOM_API_KEY / SELCOM_SECRET in this environment's settings and redeploy."
+        return out
+
+    # 2. Egress IP
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as c:
+            ip_resp = await c.get("https://paypoint.selcommobile.com/getip.php")
+        out["egress_ip"] = ip_resp.text.strip()
+    except Exception as e:
+        out["egress_ip"] = f"probe failed: {e}"
+
+    # 3. Live create-order-minimal call against Selcom
+    probe_oid = f"DIAG-{secrets.token_urlsafe(6)}"
+    result = await selcom_client.create_checkout_order(
+        order_id=probe_oid,
+        buyer_email="diagnostic@biz-salama.co.tz",
+        buyer_name="Selcom Diagnostic",
+        buyer_phone="255712345678",
+        amount=500,
+        redirect_url=f"{BASE_URL}/payment/selcom/callback",
+        cancel_url=f"{BASE_URL}/payment/selcom/cancel",
+        webhook_url=f"{BASE_URL}/api/payments/selcom/webhook",
+    )
+    sc = result.get("selcom") or {}
+    out["selcom_response"] = sc
+    msg = (sc.get("message") or "").lower()
+    rc = str(sc.get("resultcode") or result.get("status_code") or "")
+
+    # 4. Interpret the result into a human verdict
+    if sc.get("result") == "SUCCESS":
+        out["verdict"] = "PASS ✅ — env vars, IP whitelist, endpoint enablement, signature all green. This environment can process live Selcom payments."
+    elif "ip not whitelisted" in msg or "4032" in rc:
+        out["verdict"] = (
+            f"BLOCKED — Selcom has not whitelisted this environment's outbound IP "
+            f"({out.get('egress_ip')}). Send this IP to Selcom and ask them to "
+            f"whitelist it for vendor {out['vendor']}."
+        )
+    elif "endpoint" in msg and "enabled" in msg:
+        out["verdict"] = "BLOCKED — API endpoint not enabled for vendor on Selcom's side. Contact Selcom to enable Checkout (create-order-minimal) + Wallet Payment products."
+    elif "api user" in msg or "user not found" in msg:
+        out["verdict"] = "BLOCKED — Selcom does not recognise the API key. Re-verify SELCOM_API_KEY env var matches what Selcom issued."
+    elif "digest" in msg or "signature" in msg:
+        out["verdict"] = "BLOCKED — Signature verification failed at Selcom. SELCOM_SECRET env var likely incorrect or has stray whitespace."
+    elif "not acceptable" in msg or rc == "406":
+        out["verdict"] = "BLOCKED — Request format rejected. Code may be stale; redeploy with latest /app/backend/selcom_client.py."
+    else:
+        out["verdict"] = f"BLOCKED — Selcom returned: {sc}"
+
+    return out
+
+
+
 @api_router.post("/admin/sellers/bulk-csv")
 async def admin_bulk_csv(payload: BulkSellersCsvRequest, request: Request):
     user = await get_current_user(request)

@@ -6017,6 +6017,91 @@ async def admin_egress_ip(request: Request):
         raise HTTPException(status_code=502, detail=f"IP probe failed: {e}") from e
 
 
+class BootstrapAdminRequest(BaseModel):
+    phone: str
+    password: str
+    name: str | None = None
+
+
+@api_router.post("/admin/bootstrap-first-admin")
+async def admin_bootstrap_first_admin(payload: BootstrapAdminRequest):
+    """Create the first admin user — only works on a database with ZERO admins.
+
+    Designed for production go-live: when the seed-admin migration was not run
+    on the prod DB, this endpoint lets you safely create the first admin via a
+    public HTTP call. Once any admin exists in the database, the endpoint
+    permanently rejects all calls with 409 Conflict, so it cannot be abused.
+
+    Returns the new admin's session_token on success so you can log in
+    immediately.
+    """
+    # Idempotency / safety gate — refuse if any admin already exists.
+    existing = await db.users.find_one({"role": "admin"}, {"_id": 0, "user_id": 1})
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail="Admin already exists. This endpoint is disabled.",
+        )
+
+    # Validate inputs
+    normalized = normalize_tz_phone(payload.phone)
+    if not normalized:
+        raise HTTPException(status_code=400, detail="Invalid TZ phone. Use 0712... or +255712...")
+    if len(payload.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+    # Don't allow re-using an existing non-admin phone for safety; ask the
+    # caller to choose a fresh phone or promote the existing user manually.
+    dupe = await db.users.find_one({"phone": normalized}, {"_id": 0, "user_id": 1, "role": 1})
+    if dupe:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"User with phone {normalized} already exists with role "
+                f"'{dupe.get('role', 'user')}'. Use a different phone for the "
+                f"first admin, or contact support to promote the existing user."
+            ),
+        )
+
+    user_id = f"admin_{uuid.uuid4().hex[:12]}"
+    now = datetime.now(UTC)
+    pw_hash = bcrypt.hashpw(payload.password.encode(), bcrypt.gensalt()).decode()
+    doc = {
+        "user_id": user_id,
+        "name": (payload.name or "Platform Admin").strip(),
+        "phone": normalized,
+        "email": None,
+        "role": "admin",
+        "password_hash": pw_hash,
+        "auth_type": "phone",
+        "is_verified": True,
+        "is_active": True,
+        "kyc_status": "verified",
+        "created_at": now,
+        "bootstrap_first_admin": True,
+    }
+    await db.users.insert_one(doc)
+
+    # Issue session token immediately so the caller can log in without a
+    # second round-trip.
+    session_token = f"session_{uuid.uuid4().hex}"
+    await db.sessions.insert_one({
+        "session_token": session_token,
+        "user_id": user_id,
+        "created_at": now,
+        "expires_at": now + timedelta(days=7),
+    })
+
+    logger.info(f"First admin bootstrapped: user_id={user_id}")
+    return {
+        "ok": True,
+        "message": "First admin created. This endpoint is now permanently disabled.",
+        "user_id": user_id,
+        "phone": normalized,
+        "session_token": session_token,
+    }
+
+
 @api_router.post("/admin/selcom-diagnostic")
 async def admin_selcom_diagnostic(request: Request):
     """Run a live create-order-minimal call and report which gate is failing.

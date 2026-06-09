@@ -6231,17 +6231,24 @@ async def admin_selcom_diagnostic(request: Request):
         out["egress_ip"] = f"probe failed: {e}"
 
     # 3. Live create-order-minimal call against Selcom
+    base_url = base_url_env or os.environ.get("BASE_URL") or "https://www.biz-salama.co.tz"
     probe_oid = f"DIAG-{secrets.token_urlsafe(6)}"
-    result = await selcom_client.create_checkout_order(
-        order_id=probe_oid,
-        buyer_email="diagnostic@biz-salama.co.tz",
-        buyer_name="Selcom Diagnostic",
-        buyer_phone="255712345678",
-        amount=500,
-        redirect_url=f"{BASE_URL}/payment/selcom/callback",
-        cancel_url=f"{BASE_URL}/payment/selcom/cancel",
-        webhook_url=f"{BASE_URL}/api/payments/selcom/webhook",
-    )
+    try:
+        result = await selcom_client.create_checkout_order(
+            order_id=probe_oid,
+            buyer_email="diagnostic@biz-salama.co.tz",
+            buyer_name="Selcom Diagnostic",
+            buyer_phone="255712345678",
+            amount=500,
+            redirect_url=f"{base_url}/payment/selcom/callback",
+            cancel_url=f"{base_url}/payment/selcom/cancel",
+            webhook_url=f"{base_url}/api/payments/selcom/webhook",
+        )
+    except Exception as e:
+        logger.exception("selcom-diagnostic create_checkout_order failed")
+        out["verdict"] = f"BLOCKED — exception calling Selcom: {type(e).__name__}: {e}"
+        out["selcom_exception"] = f"{type(e).__name__}: {e}"
+        return out
     sc = result.get("selcom") or {}
     out["selcom_response"] = sc
     msg = (sc.get("message") or "").lower()

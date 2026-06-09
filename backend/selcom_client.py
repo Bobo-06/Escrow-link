@@ -76,6 +76,25 @@ def is_configured() -> bool:
     return bool(_cfg("SELCOM_VENDOR") and _cfg("SELCOM_API_KEY") and _cfg("SELCOM_SECRET"))
 
 
+def _proxy_url() -> str | None:
+    """Optional outbound HTTP proxy for Selcom calls only.
+
+    Set `SELCOM_PROXY_URL` to route Selcom traffic through a static-IP VPS
+    that Selcom has whitelisted. Format: `http://user:pass@host:port`.
+    When unset, calls go direct (preserves dev/preview behaviour).
+    """
+    v = os.environ.get("SELCOM_PROXY_URL")
+    return v if v else None
+
+
+def _client(timeout: float = 20.0) -> "httpx.AsyncClient":
+    """httpx client with optional proxy for Selcom traffic."""
+    proxy = _proxy_url()
+    if proxy:
+        return httpx.AsyncClient(timeout=timeout, proxy=proxy)
+    return httpx.AsyncClient(timeout=timeout)
+
+
 # ─────────────────────────── Signing core ──────────────────────────────
 
 

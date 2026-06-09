@@ -185,7 +185,7 @@ async def create_checkout_order(
     ]
     headers = _build_headers(payload, signed_fields)
     url = f"{_cfg('SELCOM_BASE_URL', 'https://apigw.selcommobile.com/v1').rstrip('/')}/checkout/create-order-minimal"
-    async with httpx.AsyncClient(timeout=20.0) as client:
+    async with _client() as client:
         resp = await client.post(url, json=payload, headers=headers)
     try:
         body = resp.json()
@@ -224,7 +224,7 @@ async def wallet_pull_payment(
     signed_fields = ["transid", "order_id", "msisdn"]
     headers = _build_headers(payload, signed_fields)
     url = f"{_cfg('SELCOM_BASE_URL', 'https://apigw.selcommobile.com/v1').rstrip('/')}/checkout/wallet-payment"
-    async with httpx.AsyncClient(timeout=20.0) as client:
+    async with _client() as client:
         resp = await client.post(url, json=payload, headers=headers)
     try:
         body = resp.json()

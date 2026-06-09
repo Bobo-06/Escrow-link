@@ -5991,30 +5991,52 @@ class BulkSellersCsvRequest(BaseModel):
 
 @api_router.get("/admin/egress-ip")
 async def admin_egress_ip(request: Request):
-    """Return this server's outbound IP as reported by Selcom's own IP-detector.
+    """Return this environment's outbound IP — both direct AND via Selcom proxy.
 
-    The IP returned here is the value Selcom must whitelist for the calling
-    environment. Use this on production immediately after deploy to grab the
-    prod outbound IP without needing shell access or platform-support tickets.
+    The `egress_ip` field reflects how Selcom will actually see us: if
+    SELCOM_PROXY_URL is set, the request routes through the VPS proxy and
+    returns the VPS IP. Otherwise, returns the platform's NAT-egress IP.
+    `egress_ip_direct` is always the platform IP for comparison.
     """
     user = await get_current_user(request)
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
+    out: dict[str, Any] = {"source": "https://paypoint.selcommobile.com/getip.php"}
+    # Direct (no proxy)
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get("https://paypoint.selcommobile.com/getip.php")
-        return {
-            "ok": resp.is_success,
-            "egress_ip": resp.text.strip(),
-            "source": "https://paypoint.selcommobile.com/getip.php",
-            "instruction": (
-                "Send this IP to Selcom and ask them to whitelist it against "
-                "vendor SB00192172 on apigw.selcommobile.com. Once whitelisted, "
-                "all Selcom payment calls from this environment will work."
-            ),
-        }
+            r = await client.get("https://paypoint.selcommobile.com/getip.php")
+        out["egress_ip_direct"] = r.text.strip()
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"IP probe failed: {e}") from e
+        out["egress_ip_direct"] = f"probe failed: {e}"
+    # Via proxy (if configured)
+    proxy = os.environ.get("SELCOM_PROXY_URL")
+    out["proxy_configured"] = bool(proxy)
+    if proxy:
+        try:
+            async with httpx.AsyncClient(timeout=10.0, proxy=proxy) as client:
+                r = await client.get("https://paypoint.selcommobile.com/getip.php")
+            out["egress_ip"] = r.text.strip()
+            out["egress_ip_via_proxy"] = out["egress_ip"]
+            out["instruction"] = (
+                f"Selcom will see us as {out['egress_ip']} (via your VPS). "
+                "Ensure this IP is whitelisted at Selcom."
+            )
+        except Exception as e:
+            out["egress_ip_via_proxy"] = f"proxy probe failed: {e}"
+            out["instruction"] = (
+                "SELCOM_PROXY_URL is set but the proxy did not respond. "
+                "Verify the VPS, port, credentials, and firewall."
+            )
+    else:
+        out["egress_ip"] = out["egress_ip_direct"]
+        out["instruction"] = (
+            "No proxy configured. Selcom will see us as the platform IP "
+            f"({out['egress_ip_direct']}), which may rotate. Set "
+            "SELCOM_PROXY_URL to route through your static-IP VPS."
+        )
+    out["ok"] = True
+    return out
 
 
 class BootstrapAdminRequest(BaseModel):

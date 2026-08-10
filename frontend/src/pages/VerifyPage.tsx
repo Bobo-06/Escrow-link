@@ -9,8 +9,8 @@ export default function VerifyPage() {
   return (
     <>
       <SEO
-        title={`Verify Escrow ${txId}`}
-        description="Public verification of Biz-Salama escrow transaction. No login required."
+        title={`Verify Transaction ${txId}`}
+        description="Public verification of Biz-Salama protected transaction. No login required."
         url={`/verify/${txId}`}
       />
       <EscrowVerifyPublic txId={txId || ""} onClose={() => navigate("/")} />

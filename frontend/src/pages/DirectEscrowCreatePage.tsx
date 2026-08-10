@@ -151,13 +151,13 @@ export default function DirectEscrowCreatePage() {
 
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.gold, letterSpacing: "1px", marginBottom: 6 }}>
-            DIRECT ESCROW · 2-PARTY · NO MIDDLEMAN
+            DIRECT SECURE COMMERCE · 2-PARTY · NO MIDDLEMAN
           </div>
           <h1 style={{ fontFamily: "Syne,sans-serif", fontSize: 24, fontWeight: 800, color: C.ink, marginBottom: 4 }}>
             Tuma ombi kwa mnunuzi
           </h1>
           <p style={{ fontSize: 13, color: C.muted }}>
-            Send a buyer a secure escrow proposal. They can accept, counter, or decline. Funds are held safely until they confirm delivery.
+            Send a buyer a secure purchase proposal. They can accept, counter, or decline. Funds are held safely until they confirm delivery.
           </p>
         </div>
 
@@ -242,7 +242,7 @@ export default function DirectEscrowCreatePage() {
               <span style={{ fontWeight: 700, color: C.ink }}>{fmt(form.price)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted, marginBottom: 4 }}>
-              <span>Escrow fee (3%)</span>
+              <span>Service fee (3%)</span>
               <span>{fmt(Number(form.price) * BUYER_FEE_PCT)}</span>
             </div>
             <div style={{ borderTop: `1px solid ${C.emerald}33`, paddingTop: 6, display: "flex", justifyContent: "space-between", fontFamily: "Syne,sans-serif", fontSize: 16, fontWeight: 800, color: C.ink }}>

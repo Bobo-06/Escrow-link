@@ -158,7 +158,7 @@ export default function ThreePartyTransactionCreator({ hawker, onCreated, onClos
               {step === "confirm" && "Thibitisha / Confirm"}
             </div>
             <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 10, marginTop: 1 }}>
-              Hatua {stepIdx + 1} ya {steps.length} · Three-Party Escrow
+              Hatua {stepIdx + 1} ya {steps.length} · Three-Party Secure Commerce
             </div>
           </div>
         </div>
@@ -268,10 +268,10 @@ export default function ThreePartyTransactionCreator({ hawker, onCreated, onClos
             <div style={{ background: "rgba(37,99,235,0.07)", border: "1px solid rgba(37,99,235,0.15)", borderRadius: 12, padding: "12px 14px", marginBottom: 16 }}>
               <div style={{ fontFamily: "Syne,sans-serif", fontSize: 12, fontWeight: 700, color: C.blue, marginBottom: 4 }}>📱 Mmiliki Atapokea SMS</div>
               <div style={{ fontSize: 12, color: "rgba(10,10,15,0.6)", lineHeight: 1.5 }}>
-                Mmiliki wa duka atapata SMS ya WhatsApp na uthibitisho wa escrow. Hawahitaji akaunti ya Biz-Salama — watachunguza tu kiungo cha uthibitisho.
+                Mmiliki wa duka atapata SMS ya WhatsApp na uthibitisho wa malipo. Hawahitaji akaunti ya Biz-Salama — watachunguza tu kiungo cha uthibitisho.
                 <br />
                 <br />
-                The shop owner will receive an SMS/WhatsApp with escrow proof. They don't need a Biz-Salama account — they just verify the link.
+                The shop owner will receive an SMS/WhatsApp with payment confirmation. They don't need a Biz-Salama account — they just verify the link.
               </div>
             </div>
 
@@ -433,9 +433,9 @@ export default function ThreePartyTransactionCreator({ hawker, onCreated, onClos
               <div style={{ fontFamily: "Syne,sans-serif", fontSize: 12, fontWeight: 700, color: C.amber, marginBottom: 8 }}>⏭ Hatua Zinazofuata / What Happens Next</div>
               {(
                 [
-                  ["1", "Mmiliki anapata SMS ya uthibitisho wa escrow", "Supplier receives escrow SMS/WhatsApp"],
+                  ["1", "Mmiliki anapata SMS ya uthibitisho wa malipo", "Supplier receives payment confirmation SMS/WhatsApp"],
                   ["2", "Mmiliki anakubali kutoa bidhaa", "Supplier confirms to release goods"],
-                  ["3", "Mnunuzi analipa escrow", "Buyer pays escrow"],
+                  ["3", "Mnunuzi analipa salama", "Buyer pays securely"],
                   ["4", "Wewe unakwenda dukani — bidhaa inatolewa", "You go to shop — goods released to you"],
                   ["5", "Bidhaa inafika kwa mnunuzi → pesa inatolewa", "Delivery confirmed → payouts split automatically"],
                 ] as [string, string, string][]

@@ -28,8 +28,8 @@ const LandingPage: React.FC = () => {
   return (
     <div className="overflow-hidden">
       <SEO
-        title="Shop Safely with Escrow Protection"
-        description="Tanzania's #1 trusted escrow marketplace. Your money stays protected until you receive your goods. 2,000+ happy customers. M-Pesa, Tigo Pesa & Airtel Money supported."
+        title="Shop Safely with Biz-Salama Protection"
+        description="Tanzania's #1 trusted secure commerce marketplace. Your money stays protected until you receive your goods. 2,000+ happy customers. M-Pesa, Tigo Pesa & Airtel Money supported."
         url="/"
       />
       {/* Hero Section */}
@@ -237,7 +237,7 @@ const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* Three-Party Escrow Showcase */}
+      {/* Three-Party Secure Commerce Showcase */}
       <section id="three-party" className="py-20 bg-gradient-to-b from-ink-800 via-ink-900 to-ink-800 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl" />
         <div className="absolute bottom-0 left-0 w-80 h-80 bg-gold-500/10 rounded-full blur-3xl" />
@@ -261,7 +261,7 @@ const LandingPage: React.FC = () => {
             {[
               { num: '1', emoji: '📱', title: 'Hawker creates link', sw: 'Mchuuzi atengeneza kiungo', desc: 'Set buyer price + supplier cost in the 4-step wizard' },
               { num: '2', emoji: '💬', title: 'Shop owner approves', sw: 'Mmiliki anakubali kwa SMS', desc: 'Gets WhatsApp/SMS → taps link → accepts (no account needed)' },
-              { num: '3', emoji: '🔒', title: 'Buyer pays escrow', sw: 'Mnunuzi analipa escrow', desc: 'Funds held in licensed bank account · M-Pesa / Tigo Pesa' },
+              { num: '3', emoji: '🔒', title: 'Buyer pays securely', sw: 'Mnunuzi analipa salama', desc: 'Funds held in licensed bank account · M-Pesa / Tigo Pesa' },
               { num: '4', emoji: '📦', title: 'Goods delivered', sw: 'Bidhaa inatolewa', desc: 'Hawker collects from shop, delivers to buyer' },
               { num: '5', emoji: '💰', title: 'Auto split payout', sw: 'Malipo yanagawanywa', desc: 'Supplier → M-Pesa · Hawker → commission · instant' },
             ].map((s, i) => (
@@ -373,7 +373,7 @@ const LandingPage: React.FC = () => {
                       <div className="text-white font-display font-bold text-base">
                         Biz-<span className="text-gold-400">Salama</span>
                       </div>
-                      <div className="text-ink-500 text-[10px]">biz-salama.co.tz · Escrow Licensed</div>
+                      <div className="text-ink-500 text-[10px]">biz-salama.co.tz · Secure Commerce</div>
                     </div>
                     <div className="text-right">
                       <div className="text-ink-500 text-[10px]">Tarehe</div>
@@ -412,7 +412,7 @@ const LandingPage: React.FC = () => {
                   </div>
 
                   <div className="mt-3 text-ink-500 text-[10px] leading-relaxed">
-                    Shop owner taps the link → sees escrow status live → taps <strong className="text-emerald-300">"NDIO / Accept"</strong>
+                    Shop owner taps the link → sees transaction status live → taps <strong className="text-emerald-300">"NDIO / Accept"</strong>
                     from their own phone. No Biz-Salama account required.
                   </div>
                 </div>

@@ -148,14 +148,14 @@ const MyOrderPage: React.FC = () => {
     const isDone = released || order.status === 'completed' || order.escrow_status === 'released';
     const itemLine = `${order.name}${order.seller_name ? ` — ${order.seller_name}` : ''}`;
     const message = isDone
-      ? `📦 Nimenunua ${itemLine} kupitia Biz-Salama — malipo yalindwa na escrow hadi nikathibitisha risiti ✅\n\nI just bought ${itemLine} safely with Biz-Salama escrow — funds only released after I confirmed delivery.\n\n🛡️ ${base}`
-      : `🛡️ Ninanunua ${itemLine} kupitia Biz-Salama — malipo yangu yamelindwa na escrow salama ✅\n\nI'm buying ${itemLine} safely with Biz-Salama escrow.\n\n${base}`;
+      ? `📦 Nimenunua ${itemLine} kupitia Biz-Salama — malipo yalindwa hadi nikathibitisha risiti ✅\n\nI just bought ${itemLine} safely with Biz-Salama — funds only released after I confirmed delivery.\n\n🛡️ ${base}`
+      : `🛡️ Ninanunua ${itemLine} kupitia Biz-Salama — malipo yangu yamelindwa salama ✅\n\nI'm buying ${itemLine} safely with Biz-Salama.\n\n${base}`;
 
     // Try native Web Share first (mobile), fall back to WhatsApp deep-link
     try {
       if (navigator.share) {
         await navigator.share({
-          title: 'Biz-Salama — Escrow-protected purchase',
+          title: 'Biz-Salama — Protected purchase',
           text: message,
           url: orderUrl,
         });
@@ -258,7 +258,7 @@ const MyOrderPage: React.FC = () => {
             <Shield className="w-4 h-4" />
             {isCompleted
               ? 'Pesa imetolewa kwa muuzaji / Funds released to seller'
-              : 'Pesa yako ipo salama kwenye escrow / Your money is safely in escrow'}
+              : 'Pesa yako ipo salama / Your money is safely protected'}
           </div>
 
           {/* WhatsApp share — every completed order becomes organic marketing */}
@@ -345,7 +345,7 @@ const MyOrderPage: React.FC = () => {
           <div className="glass rounded-xl p-4 flex items-center gap-3" data-testid="pending-payment-notice">
             <AlertCircle className="w-5 h-5 text-gold-400 flex-shrink-0" />
             <p className="text-ink-300 text-sm">
-              Payment not yet received. Complete payment to activate escrow protection.
+              Payment not yet received. Complete payment to activate Biz-Salama protection.
             </p>
           </div>
         )}

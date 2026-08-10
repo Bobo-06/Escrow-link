@@ -77,7 +77,7 @@ const Register: React.FC = () => {
     <div className="min-h-screen bg-ink-900 pt-20 pb-12">
       <SEO
         title="Create Your Free Seller Account"
-        description="Join 1,200+ sellers on Biz-Salama. Start selling with escrow protection, verified buyers, and M-Pesa payments. Free to register."
+        description="Join 1,200+ sellers on Biz-Salama. Start selling with secure payment protection, verified buyers, and M-Pesa payments. Free to register."
         url="/register"
       />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">

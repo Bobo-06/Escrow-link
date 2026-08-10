@@ -75,7 +75,7 @@ const Checkout: React.FC = () => {
 
             <div className="mt-4 flex items-center justify-center text-emerald-400 text-sm">
               <Shield className="w-4 h-4 mr-2" />
-              Protected by Escrow
+              Protected by Biz-Salama
             </div>
           </div>
         </div>

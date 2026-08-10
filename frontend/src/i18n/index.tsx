@@ -20,7 +20,7 @@ type Dict = Record<string, { sw: string; en: string }>;
 export const TRANSLATIONS: Dict = {
   // ─── Navbar
   "nav.marketplace": { sw: "Soko", en: "Marketplace" },
-  "nav.three_party": { sw: "Escrow ya Watatu", en: "3-Party Escrow" },
+  "nav.three_party": { sw: "Biashara Salama ya Watatu", en: "3-Party Secure Commerce" },
   "nav.how": { sw: "Inavyofanya kazi", en: "How It Works" },
   "nav.trust": { sw: "Usalama", en: "Trust & Safety" },
   "nav.dashboard": { sw: "Dashibodi", en: "Dashboard" },
@@ -30,16 +30,16 @@ export const TRANSLATIONS: Dict = {
   "nav.cta_3p": { sw: "+ Watatu", en: "+ 3-Party" },
   "nav.cta_direct": { sw: "+ Moja kwa moja", en: "+ Direct" },
   "nav.cta_3p_full": { sw: "+ Muamala wa Watatu", en: "+ New 3-Party Transaction" },
-  "nav.cta_direct_full": { sw: "+ Escrow ya Moja kwa Moja", en: "+ Direct Escrow (no middleman)" },
-  "nav.about_3p": { sw: "Kuhusu Escrow ya Watatu", en: "About 3-Party Escrow" },
+  "nav.cta_direct_full": { sw: "+ Malipo Salama ya Moja kwa Moja", en: "+ Direct Secure Commerce (no middleman)" },
+  "nav.about_3p": { sw: "Kuhusu Biashara Salama ya Watatu", en: "About 3-Party Secure Commerce" },
 
   // ─── Hero
-  "hero.eyebrow": { sw: "Soko Salama la Tanzania", en: "Tanzania's Trusted Escrow Marketplace" },
+  "hero.eyebrow": { sw: "Soko Salama la Tanzania", en: "Tanzania's Trusted Secure Commerce Marketplace" },
   "hero.title_a": { sw: "Nunua na uuze", en: "Buy & sell" },
   "hero.title_b": { sw: "salama kabisa", en: "with confidence" },
   "hero.subtitle": {
-    sw: "Pesa yako iko salama kwenye escrow hadi utakapopokea bidhaa. M-Pesa, Tigo Pesa, Airtel Money zinakubaliwa.",
-    en: "Your money is held safely in escrow until you confirm delivery. M-Pesa, Tigo Pesa, Airtel Money supported.",
+    sw: "Pesa yako iko salama hadi utakapopokea bidhaa. M-Pesa, Tigo Pesa, Airtel Money zinakubaliwa.",
+    en: "Your money is held safely until you confirm delivery. M-Pesa, Tigo Pesa, Airtel Money supported.",
   },
   "hero.cta_browse": { sw: "Tazama Soko", en: "Browse Marketplace" },
   "hero.cta_sell": { sw: "Anza Kuuza", en: "Start Selling" },
@@ -70,7 +70,7 @@ export const TRANSLATIONS: Dict = {
   "hero.card.product": { sw: "Bidhaa", en: "Product" },
   "hero.card.status": { sw: "Hali", en: "Status" },
   "hero.card.funds_secured": { sw: "Pesa Imelindwa", en: "Funds Secured" },
-  "hero.card.escrow_protected": { sw: "Imelindwa na Escrow", en: "Escrow Protected" },
+  "hero.card.escrow_protected": { sw: "Imelindwa na Biz-Salama", en: "Biz-Salama Protected" },
   "hero.card.assurance": {
     sw: "Malipo yako yanahifadhiwa salama hadi utakapothibitisha utoaji",
     en: "Your payment is held securely until delivery is confirmed",
@@ -89,8 +89,8 @@ export const TRANSLATIONS: Dict = {
   },
   "how.step2.title": { sw: "Lipa Salama", en: "Secure Payment" },
   "how.step2.desc": {
-    sw: "Lipa kupitia M-Pesa, Airtel Money au Tigo Pesa. Pesa yako inashikiliwa salama kwenye escrow.",
-    en: "Pay via M-Pesa, Airtel Money, or Tigo Pesa. Your money is held safely in escrow.",
+    sw: "Lipa kupitia M-Pesa, Airtel Money au Tigo Pesa. Pesa yako inashikiliwa salama.",
+    en: "Pay via M-Pesa, Airtel Money, or Tigo Pesa. Your money is held safely.",
   },
   "how.step3.title": { sw: "Thibitisha na Toa", en: "Confirm & Release" },
   "how.step3.desc": {
@@ -99,12 +99,12 @@ export const TRANSLATIONS: Dict = {
   },
 
   // ─── 3-Party showcase
-  "tp.eyebrow": { sw: "Escrow ya Watatu · Mchuuzi ↔ Duka ↔ Mnunuzi", en: "Three-Party Escrow · Hawker ↔ Shop ↔ Buyer" },
+  "tp.eyebrow": { sw: "Biashara Salama ya Watatu · Mchuuzi ↔ Duka ↔ Mnunuzi", en: "Three-Party Secure Commerce · Hawker ↔ Shop ↔ Buyer" },
   "tp.title_a": { sw: "Uza bidhaa", en: "Sell stock you" },
   "tp.title_b": { sw: "ambazo bado huzimiliki", en: "don't own yet" },
   "tp.subtitle": {
-    sw: "Kwa Wachuuzi: orodhesha bidhaa kutoka maduka ya Kariakoo, shiriki kiungo cha escrow, na pata komishen pindi utoaji unapothibitishwa — bila kulipa hata shilingi mapema.",
-    en: "For street hawkers: list items from Kariakoo shop owners, share an escrow link, and earn commission the moment delivery is confirmed — without paying a single shilling upfront.",
+    sw: "Kwa Wachuuzi: orodhesha bidhaa kutoka maduka ya Kariakoo, shiriki kiungo cha malipo salama, na pata komishen pindi utoaji unapothibitishwa — bila kulipa hata shilingi mapema.",
+    en: "For street hawkers: list items from Kariakoo shop owners, share a secure payment link, and earn commission the moment delivery is confirmed — without paying a single shilling upfront.",
   },
   "tp.transparent_split": { sw: "Mgawanyo Wazi", en: "Transparent Split" },
   "tp.split_sub": { sw: "Kila mtu anaona kila shilingi", en: "Everyone sees every shilling" },
@@ -115,7 +115,7 @@ export const TRANSLATIONS: Dict = {
   },
   "tp.letter_title": { sw: "Barua ya Hakikisho", en: "Letter of Comfort" },
   "tp.letter_sub": { sw: "Kile mmiliki wa duka anachopata", en: "What the shop owner gets" },
-  "tp.cta_try": { sw: "Jaribu Escrow ya Watatu", en: "Try 3-Party Escrow Now" },
+  "tp.cta_try": { sw: "Jaribu Biashara Salama ya Watatu", en: "Try 3-Party Secure Commerce Now" },
   "tp.cta_supplier": { sw: "Mimi ni Mmiliki wa Duka (Supplier)", en: "I'm a Shop Owner (Supplier)" },
 
   // ─── Trust section
@@ -124,7 +124,7 @@ export const TRANSLATIONS: Dict = {
     sw: "Tumejenga soko salama zaidi Afrika Mashariki, lililoundwa mahsusi kwa wauzaji wa kijamii na wateja wao.",
     en: "We've built the most secure marketplace in East Africa, specifically designed for social sellers and their customers.",
   },
-  "trust.f1.title": { sw: "Ulinzi wa Escrow", en: "Escrow Protection" },
+  "trust.f1.title": { sw: "Ulinzi wa Malipo", en: "Payment Protection" },
   "trust.f1.desc": {
     sw: "Kila muamala umelindwa. Wauzaji hulipwa tu utakapothibitisha utoaji.",
     en: "Every transaction is protected. Sellers only get paid when you confirm delivery.",
@@ -161,8 +161,8 @@ export const TRANSLATIONS: Dict = {
 
   // ─── Footer
   "footer.tagline": {
-    sw: "Mfumo wa escrow unaoaminika Tanzania kwa wauzaji wa kijamii. Nunua salama, uza kwa imani. Pesa yako inalindwa hadi upokee bidhaa.",
-    en: "Tanzania's trusted escrow platform for social sellers. Shop safely, sell confidently. Your money is protected until you receive your goods.",
+    sw: "Jukwaa la biashara salama la kuaminika Tanzania kwa wauzaji wa kijamii. Nunua salama, uza kwa imani. Pesa yako inalindwa hadi upokee bidhaa.",
+    en: "Tanzania's trusted secure commerce platform for social sellers. Shop safely, sell confidently. Your money is protected until you receive your goods.",
   },
   "footer.quick_links": { sw: "Viungo vya Haraka", en: "Quick Links" },
   "footer.become_seller": { sw: "Kuwa Muuzaji", en: "Become a Seller" },
@@ -194,7 +194,7 @@ export const TRANSLATIONS: Dict = {
     sw: "Jiunge na maelfu ya wauzaji waliofanikiwa kwenye soko linaloaminika zaidi Tanzania.",
     en: "Join thousands of successful sellers on Tanzania's most trusted marketplace.",
   },
-  "reg.benefit1": { sw: "Ulinzi wa Escrow kwa miamala yote", en: "Escrow protection on all transactions" },
+  "reg.benefit1": { sw: "Ulinzi wa Malipo kwa miamala yote", en: "Payment protection on all transactions" },
   "reg.benefit2": { sw: "Fikia wateja waliothibitishwa", en: "Access to verified buyers" },
   "reg.benefit3": { sw: "Malipo ya pesa za simu", en: "Mobile money payments" },
   "reg.benefit4": { sw: "Bure kuanza kuuza", en: "Free to start selling" },
@@ -234,8 +234,8 @@ export const TRANSLATIONS: Dict = {
   // ─── Marketplace
   "mkt.title": { sw: "Gundua Bidhaa za Kushangaza", en: "Discover Amazing Products" },
   "mkt.subtitle": {
-    sw: "Nunua kutoka kwa wauzaji waliothibitishwa kote Tanzania na ulinzi wa escrow",
-    en: "Shop from verified sellers across Tanzania with escrow protection",
+    sw: "Nunua kutoka kwa wauzaji waliothibitishwa kote Tanzania na ulinzi wa malipo",
+    en: "Shop from verified sellers across Tanzania with payment protection",
   },
   "mkt.search_ph": { sw: "Tafuta bidhaa…", en: "Search for products..." },
   "mkt.cat.all": { sw: "Aina Zote", en: "All Categories" },
@@ -269,11 +269,11 @@ export const TRANSLATIONS: Dict = {
   "compare.fab": { sw: "Linganisha", en: "Compare" },
 
   // ─── Product detail
-  "pd.escrow_protected": { sw: "Imelindwa na Escrow", en: "Escrow Protected" },
+  "pd.escrow_protected": { sw: "Imelindwa na Biz-Salama", en: "Biz-Salama Protected" },
   "pd.reviews": { sw: "tathmini", en: "reviews" },
   "pd.view_seller": { sw: "Tazama wasifu wa muuzaji", en: "View seller profile" },
   "pd.buy_now": { sw: "Nunua Sasa", en: "Buy Now" },
-  "pd.escrow_assurance_title": { sw: "Ulinzi wa Escrow", en: "Escrow Protection" },
+  "pd.escrow_assurance_title": { sw: "Ulinzi wa Malipo", en: "Payment Protection" },
   "pd.escrow_assurance_body": {
     sw: "Malipo yako yanahifadhiwa salama hadi uthibitishe utoaji. Ulinzi 100% kwa mnunuzi.",
     en: "Your payment is held securely until you confirm delivery. 100% buyer protection.",

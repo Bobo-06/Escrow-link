@@ -45,7 +45,7 @@ const SellerDashboard: React.FC = () => {
               className="flex items-center px-5 py-3 bg-emerald-500 text-white rounded-xl font-semibold hover:bg-emerald-400 transition-all"
             >
               <Users className="w-5 h-5 mr-2" />
-              3-Party Escrow
+              3-Party Secure Commerce
             </Link>
             <Link
               data-testid="dashboard-supplier-portal-btn"
@@ -114,7 +114,7 @@ const SellerDashboard: React.FC = () => {
             <Shield className="w-10 h-10 text-emerald-400 mr-4" />
             <div>
               <p className="text-white font-semibold">All transactions protected</p>
-              <p className="text-ink-400 text-sm">Buyers pay with confidence using escrow</p>
+              <p className="text-ink-400 text-sm">Buyers pay with confidence — Biz-Salama holds funds until delivery</p>
             </div>
           </div>
           <Link to="/marketplace" className="text-gold-400 font-medium hover:underline">

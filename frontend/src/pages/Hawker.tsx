@@ -13,7 +13,7 @@ export default function Hawker() {
   if (!isAuthenticated) {
     return (
       <div style={{ minHeight: "100vh", paddingTop: 90, textAlign: "center", color: "white", background: "#0A0A0F" }}>
-        <SEO title="Three-Party Escrow — Login Required" url="/hawker/new" noindex />
+        <SEO title="Three-Party Secure Commerce — Login Required" url="/hawker/new" noindex />
         <h2 style={{ fontFamily: "Syne,sans-serif", fontSize: 22 }}>Tafadhali ingia kwanza / Please sign in</h2>
         <button
           data-testid="hawker-login-redirect"
@@ -38,7 +38,7 @@ export default function Hawker() {
   return (
     <>
       <SEO
-        title="Create Three-Party Escrow"
+        title="Create Three-Party Secure Commerce"
         description="Hawker creates stock request to supplier with buyer price and commission split"
         url="/hawker/new"
         noindex

@@ -57,7 +57,7 @@ const Login: React.FC = () => {
     <div className="min-h-screen bg-ink-900 flex items-center justify-center pt-20 pb-12 px-4">
       <SEO
         title="Sign In"
-        description="Sign in to your Biz-Salama account to buy, sell, and track escrow-protected transactions."
+        description="Sign in to your Biz-Salama account to buy, sell, and track secure protected transactions."
         url="/login"
         noindex
       />

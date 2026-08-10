@@ -97,7 +97,7 @@ export default function DirectBuyerOfferPage() {
       <div style={{ maxWidth: 440, margin: "0 auto", padding: "0 16px" }}>
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 16 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.emerald, letterSpacing: "1px", marginBottom: 6 }}>🛡️ BIZ-SALAMA ESCROW</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.emerald, letterSpacing: "1px", marginBottom: 6 }}>🛡️ BIZ-SALAMA PROTECTED</div>
           <h1 style={{ fontFamily: "Syne,sans-serif", fontSize: 22, fontWeight: 800, color: C.ink }}>Ombi la Ununuzi / Purchase Offer</h1>
         </div>
 
@@ -114,7 +114,7 @@ export default function DirectBuyerOfferPage() {
         <div style={{ background: C.emeraldPale, borderRadius: 14, padding: 16, marginBottom: 12, border: `1px solid ${C.emerald}33` }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.emerald, letterSpacing: "0.5px", marginBottom: 8 }}>UTALIPA / YOU PAY</div>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: 13 }}><span style={{ color: C.muted }}>Bei / Price</span><span style={{ fontWeight: 700, color: C.ink }}>{fmt(price)}</span></div>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: 12 }}><span style={{ color: C.muted }}>Escrow fee (3%)</span><span style={{ color: C.muted }}>{fmt(buyerFee)}</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: 12 }}><span style={{ color: C.muted }}>Service fee (3%)</span><span style={{ color: C.muted }}>{fmt(buyerFee)}</span></div>
           <div style={{ borderTop: `1px solid ${C.emerald}33`, paddingTop: 6, display: "flex", justifyContent: "space-between", fontFamily: "Syne,sans-serif", fontSize: 18, fontWeight: 800, color: C.ink }}><span>Jumla / Total</span><span>{fmt(total)}</span></div>
         </div>
 

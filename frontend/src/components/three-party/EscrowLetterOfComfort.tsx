@@ -17,8 +17,8 @@ export default function EscrowLetterOfComfort({ tx, onClose }: Props) {
     (tx?.supplier_token ? `${origin}/verify/${txId}?t=${tx.supplier_token}&r=supplier` : `${origin}/verify/${txId}`);
 
   const letter = {
-    sw: `Biz-Salama Tanzania inathibitisha kwamba ${fmtTSh(tx?.buyer_price || 1850000)} imeshikwa salama katika akaunti ya escrow iliyoidhinishwa kwa ajili ya muamala ${txId}.\n\nPesa hii itatolewa MOJA KWA MOJA kwa M-Pesa yako (+255${tx?.supplier_phone || "7XX"}) mara mnunuzi athibitishapo kupokea bidhaa.\n\nThibitisha hapa: ${verifyUrl}`,
-    en: `Biz-Salama Tanzania confirms that ${fmtTSh(tx?.buyer_price || 1850000)} is securely held in a licensed escrow account for transaction ${txId}.\n\nFunds will be released DIRECTLY to your M-Pesa (+255${tx?.supplier_phone || "7XX"}) upon buyer delivery confirmation.\n\nVerify at: ${verifyUrl}`,
+    sw: `Biz-Salama Tanzania inathibitisha kwamba ${fmtTSh(tx?.buyer_price || 1850000)} imeshikwa salama katika akaunti ya amana iliyoidhinishwa kwa ajili ya muamala ${txId}.\n\nPesa hii itatolewa MOJA KWA MOJA kwa M-Pesa yako (+255${tx?.supplier_phone || "7XX"}) mara mnunuzi athibitishapo kupokea bidhaa.\n\nThibitisha hapa: ${verifyUrl}`,
+    en: `Biz-Salama Tanzania confirms that ${fmtTSh(tx?.buyer_price || 1850000)} is securely held in a licensed trust account for transaction ${txId}.\n\nFunds will be released DIRECTLY to your M-Pesa (+255${tx?.supplier_phone || "7XX"}) upon buyer delivery confirmation.\n\nVerify at: ${verifyUrl}`,
   };
 
   const shareViaWhatsApp = () => {
@@ -65,7 +65,7 @@ export default function EscrowLetterOfComfort({ tx, onClose }: Props) {
               <div style={{ fontFamily: "Syne,sans-serif", fontSize: 16, fontWeight: 800 }}>
                 Biz-<span style={{ color: C.gold }}>Salama</span>
               </div>
-              <div style={{ fontSize: 10, color: C.muted }}>Tanzania · biz-salama.co.tz · Escrow Licensed</div>
+              <div style={{ fontSize: 10, color: C.muted }}>Tanzania · biz-salama.co.tz · Secure Commerce</div>
             </div>
             <div style={{ marginLeft: "auto", textAlign: "right" }}>
               <div style={{ fontSize: 10, color: C.muted }}>Tarehe / Date</div>
@@ -84,7 +84,7 @@ export default function EscrowLetterOfComfort({ tx, onClose }: Props) {
               ["📦 Bidhaa / Item", tx?.item || "Samsung Galaxy S24 Ultra", null],
               ["💰 Kiasi / Amount", fmtTSh(tx?.buyer_price || 1850000), "Syne,sans-serif"],
               ["📱 Mmiliki / Supplier", tx?.supplier_name || "Duka la Mmiliki", null],
-              ["🏦 Imeshikwa Na / Held At", "CRDB Bank PLC (Escrow Trust)", null],
+              ["🏦 Imeshikwa Na / Held At", "CRDB Bank PLC (Trust Account)", null],
               ["⏳ Itatoka Lini / Released When", "Mnunuzi atakapopokelewa bidhaa", null],
             ] as [string, string, string | null][]
           ).map(([l, v, font]) => (

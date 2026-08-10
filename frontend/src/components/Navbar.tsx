@@ -58,7 +58,7 @@ const Navbar: React.FC = () => {
                   to="/direct/new"
                   data-testid="desktop-direct-cta"
                   className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/40 text-emerald-300 px-3 py-2 rounded-full font-bold text-xs hover:bg-emerald-500/20 whitespace-nowrap"
-                  title="Direct Escrow — seller to buyer, no middleman"
+                  title="Direct Secure Commerce — seller to buyer, no middleman"
                 >
                   <ShoppingBag className="w-4 h-4" />
                   {t("nav.cta_direct")}
@@ -67,7 +67,7 @@ const Navbar: React.FC = () => {
                   to="/hawker/new"
                   data-testid="desktop-new-3p-cta"
                   className="flex items-center gap-1.5 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-900 px-3 py-2 rounded-full font-bold text-xs hover:from-gold-400 hover:to-gold-500 shadow-lg shadow-gold-500/30 whitespace-nowrap"
-                  title="3-Party Escrow — hawker ↔ supplier ↔ buyer"
+                  title="3-Party Secure Commerce — hawker ↔ supplier ↔ buyer"
                 >
                   <Users className="w-4 h-4" />
                   {t("nav.cta_3p")}

@@ -11,9 +11,9 @@ interface SEOProps {
 }
 
 const SITE = 'https://www.biz-salama.co.tz';
-const DEFAULT_TITLE = 'Biz-Salama — Secure Escrow Marketplace for Tanzania';
+const DEFAULT_TITLE = 'Biz-Salama — Tanzania\'s Secure Commerce Marketplace';
 const DEFAULT_DESC =
-  "Tanzania's #1 trusted escrow marketplace. Your money stays protected until you receive your goods. Buy from verified sellers.";
+  "Tanzania's #1 trusted secure commerce marketplace. Your money stays protected until you receive your goods. Buy from verified sellers.";
 const DEFAULT_IMAGE = `${SITE}/og-image.png`;
 
 const SEO: React.FC<SEOProps> = ({

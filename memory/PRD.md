@@ -1,20 +1,50 @@
 # Biz-Salama — Product Requirements & Status
 
 ## Original problem statement
-React web app for Biz-Salama, a secure escrow marketplace for Tanzania, with custom-domain support. Core requirements:
+React web app for Biz-Salama, a Tanzanian **secure commerce marketplace** (operating as a Merchant of Record / Commerce Facilitation Service, not an escrow agent — per BoT/Selcom compliance), with custom-domain support. Core requirements:
 
 - Standard marketplace with product listings
-- 3-Party Escrow (Hawker ↔ Shop ↔ Buyer), HMAC-segregated views, unlimited 2-way counter-offers
-- Direct 2-Party Escrow (Seller ↔ Buyer)
+- 3-Party Secure Commerce (Hawker ↔ Shop ↔ Buyer), HMAC-segregated views, unlimited 2-way counter-offers
+- Direct 2-Party Secure Commerce (Seller ↔ Buyer)
 - Bilingual Swahili / English toggle
 - Voice search + voice product listing
 - PWA install + service worker
 - SEO via prerendering bot-intercepts
 
+## Terminology rule (CRITICAL — BoT / Selcom compliance)
+The platform operates as a **Merchant of Record providing a Commerce Facilitation Service**, NOT an escrow agent. Do NOT use the word "escrow" in any user-facing text, SMS templates, marketing copy, or public documentation. Use "Secure Commerce" / "Payment Protection" / "Biz-Salama Protected" (EN) or "Biashara Salama" / "Malipo Salama" / "Ulinzi wa Malipo" (SW). Internal variables, API paths (`/api/escrow/*`), DB fields (`escrow_status`), and component filenames may remain as-is — only user-visible strings are affected.
+
 ## Tech stack
 React 18 (lazy-loaded), TypeScript, Tailwind, FastAPI, MongoDB, JWT auth, brute-force rate limiting, Cloudflare/DNS, Africa's Talking SMS.
 
 ## Recent sessions
+
+### 2026-02-10 — Compliance: strip "escrow" from user-facing UI
+**Trigger:** Selcom / BoT compliance — the platform must not present itself as an escrow agent (which would require a PSP license). It operates as a Merchant of Record providing Commerce Facilitation.
+
+**Files updated (24 files, ~40 user-visible strings):**
+- `frontend/src/i18n/index.tsx` — all EN + SW translations for nav, hero, marketplace, product detail, registration, trust badges
+- `frontend/public/index.html` + `manifest.json` — page `<title>`, meta description, Open Graph, Twitter cards, JSON-LD Organization schema, PWA name/description, `<noscript>` fallback
+- `frontend/src/components/SEO.tsx` — default title + description
+- `frontend/src/components/Navbar.tsx` — dropdown tooltips
+- `frontend/src/components/InstallAppButton.tsx` — install prompt copy
+- `frontend/src/pages/LandingPage.tsx` — hero SEO copy, 5-step flow diagram, ledger card badge
+- `frontend/src/pages/Checkout.tsx`, `Marketplace.tsx`, `Register.tsx`, `Login.tsx`, `VerifyPage.tsx`, `Hawker.tsx`, `SellerDashboard.tsx`, `CreateProductPage.tsx`, `MyOrderPage.tsx` (incl. WhatsApp share text, Web Share title, status banners), `DirectBuyerOfferPage.tsx`, `DirectEscrowCreatePage.tsx`
+- `frontend/src/components/three-party/EscrowVerifyPublic.tsx` — audience badge, fee label, guarantee text
+- `frontend/src/components/three-party/EscrowLetterOfComfort.tsx` — supplier letter (SW + EN), footer, held-at label
+- `frontend/src/components/three-party/ThreePartyTransactionCreator.tsx` — 4-step wizard step footer + supplier SMS explainer + "what happens next" list
+- `frontend/src/components/three-party/constants.ts` — `TX_STATES.escrowed.en` label ("Escrowed" → "Funds Secured")
+
+**Terminology mapping applied:**
+- "escrow" (EN) → "Secure Commerce" / "Biz-Salama Protected" / "Payment Protection" / "Service Fee"
+- "escrow" (SW) → "Biashara Salama" / "Malipo Salama" / "Ulinzi wa Malipo"
+- "3-Party Escrow" → "3-Party Secure Commerce" / "Biashara Salama ya Watatu"
+- "Escrow Licensed" → "Secure Commerce"
+- "CRDB Bank PLC (Escrow Trust)" → "CRDB Bank PLC (Trust Account)"
+
+**Left untouched (per user directive):** internal variables, component filenames (`EscrowLetterOfComfort`, `EscrowVerifyPublic`, `DirectEscrowCreatePage`), API paths (`/api/escrow/*`), DB fields (`escrow_status`), `data-testid` values, code comments, and TX_STATES data keys.
+
+**Verification:** Landing + Marketplace pages smoke-tested in both EN + SW via automated screenshot — no "escrow" text visible.
 
 ### 2026-05-31 — URL/log security audit + CI guard
 **Audit findings (live, against Preview):**
@@ -80,7 +110,11 @@ React 18 (lazy-loaded), TypeScript, Tailwind, FastAPI, MongoDB, JWT auth, brute-
 - CI `security-lint.yml` green on the deploy commit
 
 ## Backlog (P0 → P3)
-- **P2** — Click-Pesa / AzamPay / Selcom real SDK wiring (currently mocked in `ledger.py`)
+- **P1** — Selcom Disbursement API / automated payouts (replace mocked `/api/payouts/{id}/disburse`)
+- **P2** — Daily reconciliation report (admin UI + API) comparing Selcom inflows/outflows vs internal ledger
+- **P2** — Refund automation via Selcom refund API
+- **P2** — Legal templates: Merchant-of-Record ToS, Supplier Agreement, Sample Ledger Report PDF
+- **P2** — Click-Pesa / AzamPay as backup payment providers
 - **P2** — Refactor `server.py` (6.1k lines) into routers: `routes/auth.py`, `routes/products.py`, `routes/escrow.py`, `routes/orders.py`
 - **P3** — Ratings & reviews UI
 - **P3** — Native app wrapper (Capacitor / React Native)

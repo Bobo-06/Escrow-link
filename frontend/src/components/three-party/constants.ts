@@ -1,4 +1,4 @@
-// Shared constants for Three-Party Escrow UI
+// Shared constants for Three-Party Secure Commerce UI
 export const C = {
   ink: "#0A0A0F", ink2: "#1A1A26",
   gold: "#F59E0B", goldD: "#D97706", goldL: "#FCD34D",
@@ -25,8 +25,8 @@ export const TX_STATES: Record<string, { label: string; en: string; color: strin
   pending_approval:   { label: "Inasubiri Mmiliki",     en: "Awaiting Supplier",  color: C.amber,   icon: "⏳" },
   supplier_approved:  { label: "Mmiliki Amethibitisha", en: "Supplier Confirmed", color: C.blue,    icon: "✅" },
   payment_pending:    { label: "Malipo Yanakusuliwa",   en: "Payment Pending",    color: C.amber,   icon: "💳" },
-  escrowed:           { label: "Imeshikwa Salama",      en: "Escrowed",           color: C.emerald, icon: "🔒" },
-  paid:               { label: "Imeshikwa Salama",      en: "Escrowed",           color: C.emerald, icon: "🔒" },
+  escrowed:           { label: "Imeshikwa Salama",      en: "Funds Secured",      color: C.emerald, icon: "🔒" },
+  paid:               { label: "Imeshikwa Salama",      en: "Funds Secured",      color: C.emerald, icon: "🔒" },
   goods_released:     { label: "Bidhaa Imetolewa",      en: "Goods Released",     color: C.blue,    icon: "📦" },
   in_transit:         { label: "Inasafirishwa",         en: "In Transit",         color: C.amber,   icon: "🚚" },
   delivered:          { label: "Imewasilishwa",         en: "Delivered",          color: C.emerald, icon: "🎉" },

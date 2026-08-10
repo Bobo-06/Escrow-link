@@ -97,7 +97,7 @@ const Marketplace: React.FC = () => {
     <div className="min-h-screen bg-ink-900 pt-20">
       <SEO
         title="Marketplace — Verified Sellers in Tanzania"
-        description="Browse thousands of products from verified Tanzanian sellers. Fashion, electronics, home, beauty & more. Every purchase protected by escrow."
+        description="Browse thousands of products from verified Tanzanian sellers. Fashion, electronics, home, beauty & more. Every purchase is Biz-Salama protected."
         url="/marketplace"
       />
       {/* Hero Banner */}

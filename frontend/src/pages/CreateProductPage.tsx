@@ -180,8 +180,8 @@ export default function CreateProductPage() {
             </div>
             <p className="text-ink-400 text-sm mt-1">
               {lang === 'sw'
-                ? 'Tuma kiungo hiki kwa mteja. Atalipia salama kupitia escrow.'
-                : "Send this link to your customer. They'll pay securely via escrow."}
+                ? 'Tuma kiungo hiki kwa mteja. Atalipia salama kupitia Biz-Salama.'
+                : "Send this link to your customer. They'll pay securely via Biz-Salama."}
             </p>
 
             <div className="mt-4 p-3 bg-ink-900 border border-ink-700 rounded-xl font-mono text-xs text-ink-300 break-all" data-testid="product-share-url">

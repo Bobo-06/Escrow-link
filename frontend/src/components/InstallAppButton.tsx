@@ -168,7 +168,7 @@ const InstallAppButton: React.FC<{ className?: string }> = ({ className = '' }) 
                 <span className="text-base">💡</span>
                 <span>
                   <strong className="text-emerald-200">Why install?</strong> Faster loads, works offline,
-                  and sends you real-time notifications when a buyer pays escrow or confirms delivery.
+                  and sends you real-time notifications when a buyer pays or confirms delivery.
                 </span>
               </div>
 

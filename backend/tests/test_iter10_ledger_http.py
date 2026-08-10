@@ -47,12 +47,25 @@ def auth_headers(session_token):
 
 
 # ─── Chart of accounts ────────────────────────────────────────────────────
-def test_ledger_accounts_returns_5_seeded():
+def test_ledger_accounts_returns_reframed_chart():
+    """Verify the Merchant-of-Record chart of accounts is seeded correctly.
+    Post-reframe (2026-07): buyer funds book as revenue at receipt; supplier
+    payments book as COGS at release. Legacy escrow_liability / platform_revenue
+    codes are retained for pre-reframe records but not used by new inflows."""
     r = requests.get(f"{API}/ledger/accounts", timeout=15)
     assert r.status_code == 200, r.text
     accounts = r.json()["accounts"]
     codes = {a["code"] for a in accounts}
-    assert codes == {"cash_clearing", "escrow_liability", "seller_payable", "agent_payable", "platform_revenue"}
+    assert codes == {
+        "cash_clearing",
+        "revenue_facilitation",
+        "cogs_supplier",
+        "opex_agent_commission",
+        "seller_payable",
+        "agent_payable",
+        "escrow_liability",   # legacy — retained for pre-reframe records
+        "platform_revenue",   # legacy — retained for pre-reframe records
+    }
 
 
 # ─── Fee quote ────────────────────────────────────────────────────────────
@@ -180,8 +193,10 @@ def test_release_buyer_only_and_balanced(mongo, funded_order, auth_headers, user
     assert r.json()["payouts_queued"] >= 1
 
     fin = requests.get(f"{API}/ledger/order/{order_id}", headers=auth_headers, timeout=15).json()
-    # 2 fund + 3 release (escrow debit, seller credit, platform credit) = 5 (no agent for direct)
-    assert len(fin["entries"]) == 5
+    # Post-reframe: 2 receipt entries (cash_clearing / revenue_facilitation) +
+    # 2 release entries (cogs_supplier / seller_payable) = 4 for direct-mode
+    # (no agent). Platform margin is recognised at receipt, not at release.
+    assert len(fin["entries"]) == 4
     assert fin["ledger_position"]["debit"] == fin["ledger_position"]["credit"]
 
     # Re-release on settled order → 400

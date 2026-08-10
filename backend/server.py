@@ -158,8 +158,8 @@ Respond ONLY in JSON: { "risk_level": "low|medium|high", "reasons": ["reason1", 
 # ═══════════════════════════════════════════════════════════════════════════
 SMS_TEMPLATES = {
     "escrow_created": lambda amount, tx_id: {
-        "sw": f"SecureTrade: Malipo ya TSh {amount:,.0f} yameshikwa salama. TX: {tx_id}. Utapata taarifa wakati bidhaa inasafirishwa.",
-        "en": f"SecureTrade: TSh {amount:,.0f} secured in escrow. TX: {tx_id}. You'll be notified when item ships."
+        "sw": f"Biz-Salama: Malipo ya TSh {amount:,.0f} yamepokelewa salama. Kumbukumbu: {tx_id}. Utaarifiwa wakati bidhaa inasafirishwa.",
+        "en": f"Biz-Salama: TSh {amount:,.0f} received. Ref: {tx_id}. You'll be notified when your order ships."
     },
     "item_shipped": lambda tx_id, tracking_no: {
         "sw": f"SecureTrade: Bidhaa yako imepelekwa! Nambari ya ufuatiliaji: {tracking_no}. TX: {tx_id}.",
@@ -3400,7 +3400,7 @@ async def escrow_verify(tx_id: str, token: str | None = None, role: str | None =
             "tx_id": tx["tx_id"],
             "type": "three_party",
             "status": tx.get("status"),
-            "bank": "CRDB Bank PLC (Escrow Trust)",
+            "bank": "CRDB Bank PLC (Biz-Salama Operating Account)",
             "locked_at": tx.get("paid_at") or tx.get("approved_at") or tx.get("created_at"),
             "created_at": tx.get("created_at"),
             "verified": True,
@@ -3808,7 +3808,7 @@ async def three_party_pay(request: ThreePartyEscrowPay, current_user: dict = Dep
         "payment_ref": payment_ref,
         "amount": buyer_price,
         "message_sw": "Malipo yamefanikiwa! Pesa imeshikwa salama.",
-        "message_en": "Payment successful! Funds held in escrow."
+        "message_en": "Payment successful! Order confirmed with Biz-Salama."
     }
 
 @api_router.post("/escrow/three-party/release")

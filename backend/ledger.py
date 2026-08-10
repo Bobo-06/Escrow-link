@@ -53,13 +53,23 @@ def to_float(x) -> float:
     return float(D(x))
 
 
-# ─── Account codes (chart of accounts) ────────────────────────────────────
+# ─── Chart of accounts (Merchant-of-Record model) ──────────────────────────
+# Biz-Salama is the legal Merchant of Record for every buyer transaction.
+# Buyer funds enter as REVENUE on receipt (not as third-party liability), and
+# payments to suppliers / PDSA agents are booked as COGS / OpEx respectively.
+# This eliminates the NPSA-2015 "on behalf of a user" trigger and removes the
+# PSP-licence requirement. See /app/memory/PRD.md — 2026-07 reframe.
 ACCOUNTS = [
-    {"code": "cash_clearing",     "name": "Gateway Clearing Cash",            "type": "asset"},
-    {"code": "escrow_liability",  "name": "Customer Funds Pending Release",   "type": "liability"},
-    {"code": "seller_payable",    "name": "Seller Payables",                  "type": "liability"},
-    {"code": "agent_payable",     "name": "Agent (Hawker) Payables",          "type": "liability"},
-    {"code": "platform_revenue",  "name": "Platform Revenue",                 "type": "revenue"},
+    {"code": "cash_clearing",           "name": "Gateway Clearing Cash",              "type": "asset"},
+    {"code": "revenue_facilitation",    "name": "Commerce Facilitation Revenue",      "type": "revenue"},
+    {"code": "cogs_supplier",           "name": "Cost of Sales — Supplier Payments",  "type": "expense"},
+    {"code": "opex_agent_commission",   "name": "Contractor Commission — PDSA/Agent", "type": "expense"},
+    {"code": "seller_payable",          "name": "Supplier Payables (pending release)", "type": "liability"},
+    {"code": "agent_payable",           "name": "Agent Commission Payable (pending)",  "type": "liability"},
+    # Retained for backwards-compatible refund posting only. Not used on new
+    # inflows. Any legacy documents referencing "escrow" continue to balance.
+    {"code": "escrow_liability",        "name": "Legacy — Pre-reframe liability",     "type": "liability"},
+    {"code": "platform_revenue",        "name": "Legacy — Platform Revenue (pre-reframe)", "type": "revenue"},
 ]
 VALID_CODES = {a["code"] for a in ACCOUNTS}
 
@@ -269,9 +279,9 @@ async def post_funds_received(
     db, *, order_id: str, gross_amount, provider: str, provider_txn_id: str, raw_payload: dict | None = None,
 ) -> str:
     """
-    Buyer payment confirmed by gateway:
+    Buyer payment confirmed by gateway — booked as Merchant-of-Record revenue:
         debit  cash_clearing
-        credit escrow_liability
+        credit revenue_facilitation
     Returns the payment_transactions doc id.
 
     Idempotent on (provider, provider_txn_id) via a unique-style guard.
@@ -305,8 +315,8 @@ async def post_funds_received(
         order_id=order_id,
         memo=f"Buyer payment received via {provider}",
         batch=[
-            {"account_code": "cash_clearing",    "entry_type": "debit",  "amount": gross_amount},
-            {"account_code": "escrow_liability", "entry_type": "credit", "amount": gross_amount},
+            {"account_code": "cash_clearing",           "entry_type": "debit",  "amount": gross_amount},
+            {"account_code": "revenue_facilitation",    "entry_type": "credit", "amount": gross_amount},
         ],
     )
     await assert_balanced(db, order_id)
@@ -315,11 +325,17 @@ async def post_funds_received(
 
 async def post_release(db, *, order: dict[str, Any]) -> None:
     """
-    Buyer confirmed delivery / dispute resolved in seller's favour:
-        debit  escrow_liability      (gross_amount)
-        credit seller_payable        (seller_amount)
-        credit agent_payable         (agent_commission, if > 0)
-        credit platform_revenue      (platform_fee)
+    Delivery confirmed → book supplier COGS and agent commission as expenses,
+    against corresponding payables (which will be cleared when the outbound
+    payment executes via `post_payout_paid`).
+
+    Under the Merchant-of-Record model:
+        debit  cogs_supplier          (supplier amount — cost of sales)
+        debit  opex_agent_commission  (agent commission — operating expense)
+        credit seller_payable         (supplier amount)
+        credit agent_payable          (agent commission)
+    The platform's margin remains in revenue_facilitation (booked at receipt);
+    no separate release entry is needed for the fee.
     """
     order_id = order["order_id"]
     gross = D(order["gross_amount"])
@@ -333,31 +349,31 @@ async def post_release(db, *, order: dict[str, Any]) -> None:
         )
 
     batch: list[dict[str, Any]] = [
-        {"account_code": "escrow_liability", "entry_type": "debit",  "amount": gross},
-        {"account_code": "seller_payable",   "entry_type": "credit", "amount": seller},
-        {"account_code": "platform_revenue", "entry_type": "credit", "amount": platform},
+        {"account_code": "cogs_supplier",  "entry_type": "debit",  "amount": seller},
+        {"account_code": "seller_payable", "entry_type": "credit", "amount": seller},
     ]
     if agent > 0:
-        batch.append({"account_code": "agent_payable", "entry_type": "credit", "amount": agent})
+        batch.append({"account_code": "opex_agent_commission", "entry_type": "debit",  "amount": agent})
+        batch.append({"account_code": "agent_payable",         "entry_type": "credit", "amount": agent})
 
-    await _post_entries(db, order_id=order_id, batch=batch, memo="Escrow release on delivery")
+    await _post_entries(db, order_id=order_id, batch=batch, memo="Supplier + agent expense accrual on delivery")
     await assert_balanced(db, order_id)
 
 
 async def post_refund(db, *, order_id: str, amount) -> None:
     """
-    Dispute resolved in buyer's favour:
-        debit  escrow_liability
+    Dispute resolved in buyer's favour — reverse the facilitation revenue:
+        debit  revenue_facilitation
         credit cash_clearing
-    Reverses the funds-received posting.
+    Reverses the funds-received posting under the Merchant-of-Record model.
     """
     await _post_entries(
         db,
         order_id=order_id,
         memo="Refund — dispute resolved for buyer",
         batch=[
-            {"account_code": "escrow_liability", "entry_type": "debit",  "amount": amount},
-            {"account_code": "cash_clearing",    "entry_type": "credit", "amount": amount},
+            {"account_code": "revenue_facilitation", "entry_type": "debit",  "amount": amount},
+            {"account_code": "cash_clearing",        "entry_type": "credit", "amount": amount},
         ],
     )
     await assert_balanced(db, order_id)

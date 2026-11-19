@@ -47,25 +47,27 @@ def auth_headers(session_token):
 
 
 # ─── Chart of accounts ────────────────────────────────────────────────────
-def test_ledger_accounts_returns_reframed_chart():
-    """Verify the Merchant-of-Record chart of accounts is seeded correctly.
-    Post-reframe (2026-07): buyer funds book as revenue at receipt; supplier
-    payments book as COGS at release. Legacy escrow_liability / platform_revenue
-    codes are retained for pre-reframe records but not used by new inflows."""
+def test_ledger_accounts_returns_true_escrow_chart():
+    """Verify the true-escrow (bank-trusteed) chart of accounts is seeded.
+    Post-revert (2026-10): buyer funds book as a liability at receipt; platform
+    fee is recognised only on release. Legacy codes retained for records that
+    predate the revert."""
     r = requests.get(f"{API}/ledger/accounts", timeout=15)
     assert r.status_code == 200, r.text
     accounts = r.json()["accounts"]
     codes = {a["code"] for a in accounts}
-    assert codes == {
-        "cash_clearing",
-        "revenue_facilitation",
-        "cogs_supplier",
-        "opex_agent_commission",
+    # Active (true-escrow) codes MUST all be present.
+    assert {
+        "cash_clearing_selcom",
+        "cash_trust_azania",
+        "buyer_escrow_liability",
         "seller_payable",
         "agent_payable",
-        "escrow_liability",   # legacy — retained for pre-reframe records
-        "platform_revenue",   # legacy — retained for pre-reframe records
-    }
+        "platform_revenue",
+    }.issubset(codes)
+    # Legacy codes retained for read-only historical entries.
+    assert {"cash_clearing", "revenue_facilitation", "cogs_supplier",
+            "opex_agent_commission", "escrow_liability"}.issubset(codes)
 
 
 # ─── Fee quote ────────────────────────────────────────────────────────────
@@ -193,10 +195,11 @@ def test_release_buyer_only_and_balanced(mongo, funded_order, auth_headers, user
     assert r.json()["payouts_queued"] >= 1
 
     fin = requests.get(f"{API}/ledger/order/{order_id}", headers=auth_headers, timeout=15).json()
-    # Post-reframe: 2 receipt entries (cash_clearing / revenue_facilitation) +
-    # 2 release entries (cogs_supplier / seller_payable) = 4 for direct-mode
-    # (no agent). Platform margin is recognised at receipt, not at release.
-    assert len(fin["entries"]) == 4
+    # Post-revert (true escrow): 2 receipt entries (cash_clearing_selcom /
+    # buyer_escrow_liability) + 3 release entries for direct mode
+    # (buyer_escrow_liability debit, seller_payable + platform_revenue
+    # credits) = 5 entries. Platform revenue is recognised at release.
+    assert len(fin["entries"]) == 5
     assert fin["ledger_position"]["debit"] == fin["ledger_position"]["credit"]
 
     # Re-release on settled order → 400

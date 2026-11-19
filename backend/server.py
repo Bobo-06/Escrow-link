@@ -26,12 +26,17 @@ from ledger import (
     seed_chart_of_accounts,
     calculate_split as ledger_calculate_split,
     post_funds_received as ledger_post_funds_received,
+    post_trust_transfer as ledger_post_trust_transfer,
     post_release as ledger_post_release,
     post_refund as ledger_post_refund,
     post_payout_paid as ledger_post_payout_paid,
     order_financials as ledger_order_financials,
     webhook_already_processed as ledger_webhook_already_processed,
     mark_webhook_processed as ledger_mark_webhook_processed,
+    record_escrow_event as ledger_record_escrow_event,
+    list_escrow_events as ledger_list_escrow_events,
+    trust_account_summary as ledger_trust_account_summary,
+    account_balance as ledger_account_balance,
     find_auto_resolvable_disputes,
     DISPUTE_AUTO_RESOLVE_DAYS,
     ACCOUNTS as LEDGER_ACCOUNTS,
@@ -5019,6 +5024,321 @@ async def disburse_payout(payout_id: str, request: Request):
         }},
     )
     return {"ok": True, "payout_id": payout_id, "provider_ref": provider_ref, "mocked": True}
+
+
+# ═══ Admin: Azania Trust Reconciliation ══════════════════════════════════
+# Daily operational flow for the bank-trusteed escrow model:
+#   1. Buyer pays Selcom           → cash_clearing_selcom + buyer_escrow_liability
+#   2. Admin sweeps Selcom→Azania  → cash_trust_azania   - cash_clearing_selcom
+#      (POST /api/admin/escrow/transfer-recorded)
+#   3. Buyer confirms delivery     → release accrues payables
+#   4. Admin pays seller/agent IB  → POST /api/admin/payouts/{id}/manual-record
+#   5. Daily reconcile             → GET /api/admin/escrow/reconcile
+
+class ManualTransferRecorded(BaseModel):
+    order_ids: list[str]              # orders included in the sweep
+    expected_total: float             # admin's computed total; must match system
+    selcom_ref: str                   # Selcom IB transaction reference
+    azania_ref: str                   # Azania IB deposit reference
+    note: str = ""
+
+
+class ManualPayoutRecorded(BaseModel):
+    beneficiary_phone: str             # mobile wallet number paid
+    azania_ref: str                    # Azania IB transaction reference
+    note: str = ""
+
+
+class ManualRefundRecorded(BaseModel):
+    buyer_phone: str                   # mobile wallet or bank account refunded
+    azania_ref: str                    # Azania IB transaction reference
+    reason: str = ""
+
+
+def _require_admin(user: dict[str, Any]) -> None:
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+
+
+@api_router.get("/admin/escrow/queue")
+async def admin_escrow_queue(request: Request):
+    """
+    Step 1 of daily reconciliation. Lists orders whose buyer payment has
+    cleared on Selcom but has NOT yet been swept to the Azania trust account.
+    Admin takes the `total` figure, logs into Selcom IB, transfers that amount
+    to Azania, then POSTs /api/admin/escrow/transfer-recorded with the refs.
+    """
+    user = await get_current_user(request)
+    _require_admin(user)
+
+    # Find orders that have a cash_clearing_selcom debit but no matching
+    # trust_transfer credit. (A trust transfer debits cash_trust_azania and
+    # credits cash_clearing_selcom for the same order_id.)
+    pipeline = [
+        {"$match": {"account_code": {"$in": ["cash_clearing_selcom", "cash_trust_azania"]}}},
+        {"$group": {
+            "_id": "$order_id",
+            "selcom_debits":  {"$sum": {"$cond": [{"$and": [
+                {"$eq": ["$account_code", "cash_clearing_selcom"]},
+                {"$eq": ["$entry_type", "debit"]}]}, "$amount", 0]}},
+            "selcom_credits": {"$sum": {"$cond": [{"$and": [
+                {"$eq": ["$account_code", "cash_clearing_selcom"]},
+                {"$eq": ["$entry_type", "credit"]}]}, "$amount", 0]}},
+        }},
+        {"$match": {"$expr": {"$gt": ["$selcom_debits", "$selcom_credits"]}}},
+        {"$sort": {"_id": 1}},
+    ]
+    pending: list[dict[str, Any]] = []
+    total = 0.0
+    async for row in db.ledger_entries.aggregate(pipeline):
+        amount = round(row["selcom_debits"] - row["selcom_credits"], 2)
+        order = await db.orders.find_one(
+            {"order_id": row["_id"]},
+            {"_id": 0, "order_id": 1, "buyer_phone": 1, "buyer_name": 1, "created_at": 1, "status": 1},
+        )
+        pending.append({
+            "order_id": row["_id"],
+            "amount": amount,
+            "buyer_phone": (order or {}).get("buyer_phone"),
+            "buyer_name": (order or {}).get("buyer_name"),
+            "order_status": (order or {}).get("status"),
+        })
+        total += amount
+    return {
+        "pending_count": len(pending),
+        "pending_total": round(total, 2),
+        "narration": f"BIZSALAMA-SWEEP-{datetime.now(UTC).strftime('%Y%m%d')}",
+        "orders": pending,
+    }
+
+
+@api_router.post("/admin/escrow/transfer-recorded")
+async def admin_record_trust_transfer(payload: ManualTransferRecorded, request: Request):
+    """
+    Step 2 of daily reconciliation. Admin confirms they transferred the day's
+    Selcom collection total into the Azania trust account via internet banking.
+    Posts cash_trust_azania debit / cash_clearing_selcom credit for each order.
+
+    Refuses to record unless the admin's expected total matches the system's
+    computed Selcom-pending total for the listed orders — this catches typos
+    and prevents mis-crediting the trust account.
+    """
+    user = await get_current_user(request)
+    _require_admin(user)
+
+    if not payload.order_ids:
+        raise HTTPException(status_code=400, detail="order_ids is required")
+    if not payload.selcom_ref or not payload.azania_ref:
+        raise HTTPException(status_code=400, detail="selcom_ref and azania_ref are required")
+
+    # Compute per-order pending amounts (same logic as the queue endpoint).
+    per_order: dict[str, float] = {}
+    for oid in payload.order_ids:
+        pipeline = [
+            {"$match": {"order_id": oid, "account_code": "cash_clearing_selcom"}},
+            {"$group": {
+                "_id": None,
+                "debits":  {"$sum": {"$cond": [{"$eq": ["$entry_type", "debit"]},  "$amount", 0]}},
+                "credits": {"$sum": {"$cond": [{"$eq": ["$entry_type", "credit"]}, "$amount", 0]}},
+            }},
+        ]
+        rows = await db.ledger_entries.aggregate(pipeline).to_list(1)
+        pending = round((rows[0]["debits"] - rows[0]["credits"]), 2) if rows else 0.0
+        if pending <= 0:
+            raise HTTPException(status_code=400, detail=f"Order {oid} has no Selcom-pending balance to sweep")
+        per_order[oid] = pending
+
+    computed_total = round(sum(per_order.values()), 2)
+    expected_total = round(payload.expected_total, 2)
+    if computed_total != expected_total:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Total mismatch: system={computed_total} expected={expected_total}. Refusing to record.",
+        )
+
+    # Record each leg. Idempotency within the same selcom_ref is handled at
+    # the audit-log level: duplicate submissions will produce new ledger
+    # entries, so caller MUST not retry on a 2xx. (We keep this strict rather
+    # than adding a dedupe table since bank-ref uniqueness is enforced by the
+    # bank itself and the mismatch guard above catches accidental double-click.)
+    for oid, amount in per_order.items():
+        await ledger_post_trust_transfer(
+            db,
+            order_id=oid, amount=amount,
+            selcom_ref=payload.selcom_ref, azania_ref=payload.azania_ref,
+            admin_user_id=user["user_id"],
+        )
+
+    # Persist a batch summary for audit / dashboard.
+    batch_id = f"sweep_{uuid.uuid4().hex[:12]}"
+    await db.trust_transfers.insert_one({
+        "batch_id": batch_id,
+        "order_ids": list(per_order.keys()),
+        "total_amount": computed_total,
+        "selcom_ref": payload.selcom_ref,
+        "azania_ref": payload.azania_ref,
+        "note": payload.note,
+        "recorded_by": user["user_id"],
+        "recorded_at": datetime.now(UTC),
+    })
+    return {"ok": True, "batch_id": batch_id, "orders_swept": len(per_order), "total_amount": computed_total}
+
+
+@api_router.post("/admin/payouts/{payout_id}/manual-record")
+async def admin_record_manual_payout(
+    payout_id: str, payload: ManualPayoutRecorded, request: Request,
+):
+    """
+    Step 4 of daily reconciliation. Admin logged into Azania internet banking,
+    transferred the payable amount to the seller/agent's mobile wallet, and now
+    records the bank reference. Flips the payout to `paid` and posts the
+    corresponding double entry (seller_payable/agent_payable debit ↔
+    cash_trust_azania credit).
+
+    Refused unless the order's Selcom→Azania sweep has been recorded (i.e.
+    cash_trust_azania must have sufficient balance for the order).
+    """
+    user = await get_current_user(request)
+    _require_admin(user)
+    if not payload.azania_ref:
+        raise HTTPException(status_code=400, detail="azania_ref is required")
+
+    payout = await db.payouts.find_one({"payout_id": payout_id}, {"_id": 0})
+    if not payout:
+        raise HTTPException(status_code=404, detail="Payout not found")
+    if payout.get("status") != "queued":
+        raise HTTPException(status_code=400, detail=f"Payout is '{payout.get('status')}', not queued")
+
+    # Sanity: funds must have been swept to Azania first for this order.
+    pipeline = [
+        {"$match": {"order_id": payout["order_id"], "account_code": "cash_trust_azania"}},
+        {"$group": {
+            "_id": None,
+            "debits":  {"$sum": {"$cond": [{"$eq": ["$entry_type", "debit"]},  "$amount", 0]}},
+            "credits": {"$sum": {"$cond": [{"$eq": ["$entry_type", "credit"]}, "$amount", 0]}},
+        }},
+    ]
+    rows = await db.ledger_entries.aggregate(pipeline).to_list(1)
+    trust_balance = round((rows[0]["debits"] - rows[0]["credits"]), 2) if rows else 0.0
+    if trust_balance < float(payout["amount"]):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient Azania trust balance for order {payout['order_id']}: "
+                   f"have {trust_balance}, need {payout['amount']}. "
+                   f"Record the Selcom→Azania sweep first via /admin/escrow/transfer-recorded.",
+        )
+
+    enriched = {
+        **payout,
+        "provider_ref": payload.azania_ref,
+        "admin_user_id": user["user_id"],
+        "provider": "azania_ib",
+    }
+    await ledger_post_payout_paid(db, payout=enriched)
+    await db.payouts.update_one(
+        {"payout_id": payout_id},
+        {"$set": {
+            "status": "paid",
+            "provider": "azania_ib",
+            "provider_ref": payload.azania_ref,
+            "beneficiary_phone_confirmed": payload.beneficiary_phone,
+            "note": payload.note,
+            "recorded_by": user["user_id"],
+            "updated_at": datetime.now(UTC),
+        }},
+    )
+    return {
+        "ok": True, "payout_id": payout_id,
+        "azania_ref": payload.azania_ref,
+        "amount": payout["amount"],
+    }
+
+
+@api_router.post("/admin/orders/{order_id}/refund-recorded")
+async def admin_record_refund(order_id: str, payload: ManualRefundRecorded, request: Request):
+    """
+    Admin logged into Azania IB, refunded the buyer, and records the bank ref.
+    Posts buyer_escrow_liability debit / cash_trust_azania credit. Flips the
+    order status to `refunded`.
+    """
+    user = await get_current_user(request)
+    _require_admin(user)
+    if not payload.azania_ref:
+        raise HTTPException(status_code=400, detail="azania_ref is required")
+
+    order = await db.orders.find_one({"order_id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.get("status") == "refunded":
+        raise HTTPException(status_code=400, detail="Order already refunded")
+
+    amount = float(order.get("gross_amount") or 0)
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Order gross_amount is 0 or missing")
+
+    await ledger_post_refund(db, order_id=order_id, amount=amount)
+    await db.orders.update_one(
+        {"order_id": order_id},
+        {"$set": {
+            "status": "refunded",
+            "refunded_at": datetime.now(UTC),
+            "refund_azania_ref": payload.azania_ref,
+            "refund_reason": payload.reason,
+            "refunded_by": user["user_id"],
+        }},
+    )
+    await ledger_record_escrow_event(
+        db, order_id=order_id, event_type="refunded",
+        actor=f"admin:{user['user_id']}",
+        meta={"azania_ref": payload.azania_ref, "reason": payload.reason, "buyer_phone": payload.buyer_phone},
+    )
+    return {"ok": True, "order_id": order_id, "amount": amount, "azania_ref": payload.azania_ref}
+
+
+@api_router.get("/admin/escrow/reconcile")
+async def admin_escrow_reconcile(request: Request):
+    """
+    Daily reconciliation snapshot. The two cash balances (Selcom clearing +
+    Azania trust) must cover all outstanding liabilities to buyers, sellers,
+    and agents. Any shortfall or unexpected surplus is investigated the same
+    day — typically it means a Selcom→Azania sweep or a manual payout hasn't
+    been recorded yet.
+    """
+    user = await get_current_user(request)
+    _require_admin(user)
+    summary = await ledger_trust_account_summary(db)
+
+    # Pending work items
+    sweep_queue = await db.ledger_entries.count_documents({"account_code": "cash_clearing_selcom"})
+    queued_payouts = await db.payouts.count_documents({"status": "queued"})
+
+    return {
+        **summary,
+        "sweep_pending_entries": sweep_queue,
+        "payouts_queued": queued_payouts,
+        "generated_at": datetime.now(UTC).isoformat(),
+    }
+
+
+@api_router.get("/admin/escrow/events/{order_id}")
+async def admin_escrow_events(order_id: str, request: Request):
+    """Append-only audit trail for an order. Immutable evidence log."""
+    user = await get_current_user(request)
+    _require_admin(user)
+    events = await ledger_list_escrow_events(db, order_id, limit=500)
+    return {"order_id": order_id, "events": events, "count": len(events)}
+
+
+@api_router.get("/admin/escrow/transfers")
+async def admin_list_trust_transfers(request: Request, limit: int = 100):
+    """Admin dashboard: recent Selcom→Azania sweep batches."""
+    user = await get_current_user(request)
+    _require_admin(user)
+    rows = await db.trust_transfers.find({}, {"_id": 0}).sort("recorded_at", -1).to_list(min(limit, 500))
+    for r in rows:
+        if isinstance(r.get("recorded_at"), datetime):
+            r["recorded_at"] = r["recorded_at"].isoformat()
+    return {"transfers": rows, "count": len(rows)}
 
 
 @api_router.post("/disputes")

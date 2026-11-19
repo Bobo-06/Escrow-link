@@ -1,10 +1,21 @@
 """
-Biz-Salama Financial Ledger
-───────────────────────────
-Production-grade double-entry bookkeeping on top of MongoDB. Implements the
-schema the user shared (PostgreSQL design) 1:1 as Mongo collections with the
-same guarantees:
+Biz-Salama Financial Ledger — True Escrow (bank-trusteed)
+──────────────────────────────────────────────────────────
+Production-grade double-entry bookkeeping on top of MongoDB. Models the real
+flow for a bank-trusteed escrow service in Tanzania:
 
+    Buyer ─(Selcom)─► cash_clearing_selcom
+                              │   (admin records daily sweep)
+                              ▼
+                     cash_trust_azania  ◄── funds here belong to buyers
+                              │   (buyer confirms delivery)
+                              ▼
+                      seller_payable + agent_payable + platform_revenue
+                              │   (admin records payout from Azania IB)
+                              ▼
+                      seller / agent mobile wallet  +  Biz-Salama ops account
+
+Guarantees:
 * Ledger entries are immutable (append-only). We never `update_one` an entry.
 * Every order's debits MUST equal credits at all times. `assert_balanced()`
   enforces this and is called after every posting batch.
@@ -15,19 +26,22 @@ Fee model (locked in by user, Apr 2026):
     2% supply-side  (from supplier payout)
     2% hawker       (from hawker / agent commission, 3-party only)
     3% buyer-side   (from buyer, on top of the deal value)
-    → Platform takes ~5% of the net deal value.
+    → Platform takes ~5% of the net deal value, recognised as revenue on
+      release (NOT at receipt — funds are a buyer liability until then).
 
 Order modes:
-    "direct"   — buyer ↔ seller (no agent). agent_commission = 0.
+    "direct"      — buyer ↔ seller (no agent). agent_commission = 0.
     "three_party" — buyer ↔ hawker(agent) ↔ supplier(seller).
 
 Collections created lazily on first use:
-    ledger_accounts          — chart of accounts (seeded once)
-    ledger_entries           — append-only debits/credits
-    payment_transactions     — gateway records (idempotent via provider_txn_id)
-    payouts                  — disbursements queue
-    disputes                 — buyer/seller dispute lifecycle
-    processed_webhooks       — (provider, event_id) dedupe table
+    ledger_accounts        — chart of accounts (seeded once)
+    ledger_entries         — append-only debits/credits
+    payment_transactions   — gateway records (idempotent via provider_txn_id)
+    payouts                — disbursements queue
+    disputes               — buyer/seller dispute lifecycle
+    processed_webhooks     — (provider, event_id) dedupe table
+    escrow_events          — append-only audit trail of state transitions
+    trust_transfers        — admin records of Selcom → Azania bank sweeps
 """
 
 from __future__ import annotations
@@ -53,23 +67,33 @@ def to_float(x) -> float:
     return float(D(x))
 
 
-# ─── Chart of accounts (Merchant-of-Record model) ──────────────────────────
-# Biz-Salama is the legal Merchant of Record for every buyer transaction.
-# Buyer funds enter as REVENUE on receipt (not as third-party liability), and
-# payments to suppliers / PDSA agents are booked as COGS / OpEx respectively.
-# This eliminates the NPSA-2015 "on behalf of a user" trigger and removes the
-# PSP-licence requirement. See /app/memory/PRD.md — 2026-07 reframe.
+# ─── Chart of accounts (True-escrow / bank-trusteed model) ────────────────
+# Biz-Salama operates escrow through Azania Bank's licensed Trust Services.
+# Buyer funds are a liability on our books (owed back to buyer until delivery
+# is confirmed), NOT revenue. Platform fee is recognised only on release.
+#
+# Trustee: Azania Bank PLC. Settlor: Biz-Salama Ltd. Beneficiaries: buyers.
 ACCOUNTS = [
-    {"code": "cash_clearing",           "name": "Gateway Clearing Cash",              "type": "asset"},
-    {"code": "revenue_facilitation",    "name": "Commerce Facilitation Revenue",      "type": "revenue"},
-    {"code": "cogs_supplier",           "name": "Cost of Sales — Supplier Payments",  "type": "expense"},
-    {"code": "opex_agent_commission",   "name": "Contractor Commission — PDSA/Agent", "type": "expense"},
-    {"code": "seller_payable",          "name": "Supplier Payables (pending release)", "type": "liability"},
-    {"code": "agent_payable",           "name": "Agent Commission Payable (pending)",  "type": "liability"},
-    # Retained for backwards-compatible refund posting only. Not used on new
-    # inflows. Any legacy documents referencing "escrow" continue to balance.
-    {"code": "escrow_liability",        "name": "Legacy — Pre-reframe liability",     "type": "liability"},
-    {"code": "platform_revenue",        "name": "Legacy — Platform Revenue (pre-reframe)", "type": "revenue"},
+    # ─── Assets ───
+    {"code": "cash_clearing_selcom",    "name": "Selcom Clearing Cash (pre-sweep to Azania)",      "type": "asset"},
+    {"code": "cash_trust_azania",       "name": "Azania Trust Escrow Account",                      "type": "asset"},
+
+    # ─── Liabilities ───
+    {"code": "buyer_escrow_liability",  "name": "Buyer Escrow Liability (funds owed back until release)", "type": "liability"},
+    {"code": "seller_payable",          "name": "Seller Payable (owed after release)",              "type": "liability"},
+    {"code": "agent_payable",           "name": "Agent/Hawker Commission Payable",                  "type": "liability"},
+
+    # ─── Revenue ───
+    {"code": "platform_revenue",        "name": "Platform Facilitation Revenue (earned on release)", "type": "revenue"},
+
+    # ─── Legacy accounts (retained so pre-revert historical entries still balance) ───
+    # NEW entries MUST NOT use these codes. Kept for read-only historical records
+    # from the brief 2026-07 Merchant-of-Record reframe. See PRD.md.
+    {"code": "cash_clearing",           "name": "Legacy — Gateway Clearing (pre-trust revert)",     "type": "asset"},
+    {"code": "revenue_facilitation",    "name": "Legacy — Commerce Facilitation Revenue (pre-revert)", "type": "revenue"},
+    {"code": "cogs_supplier",           "name": "Legacy — COGS Supplier Payments (pre-revert)",     "type": "expense"},
+    {"code": "opex_agent_commission",   "name": "Legacy — Agent OpEx (pre-revert)",                 "type": "expense"},
+    {"code": "escrow_liability",        "name": "Legacy — Pre-reframe liability (pre-reframe)",     "type": "liability"},
 ]
 VALID_CODES = {a["code"] for a in ACCOUNTS}
 
@@ -129,9 +153,6 @@ def _reconcile_pennies(split: dict[str, Decimal]) -> dict[str, Decimal]:
     if drift != 0:
         platform_fee = D(platform_fee + drift)
 
-    # Ledger invariant — must NEVER be an `assert` because production servers
-    # typically run with `python -O` which strips asserts at byte-code level.
-    # A silent money-routing bug would be catastrophic; raise a real error.
     if seller_amount + agent_commission + platform_fee != gross:
         raise RuntimeError(
             f"split invariant broken: {seller_amount}+{agent_commission}+{platform_fee} != {gross}"
@@ -158,16 +179,8 @@ def calculate_split(
     `three_party`, `deal_value` is the *pre-fee* buyer price (= supplier_cost +
     hawker_markup) and `supplier_cost` MUST be provided.
 
-    Returns a dict with all numbers stored alongside the order doc:
-        gross_amount       — buyer pays this (incl. the 3% buyer fee)
-        seller_amount      — what the seller (or supplier) actually receives
-        agent_commission   — what the hawker receives (0 in direct mode)
-        platform_fee       — total platform revenue
-        supply_fee         — 2% slice of supplier_cost   (audit only)
-        hawker_fee         — 2% slice of hawker markup   (audit only)
-        buyer_fee          — 3% slice of deal_value      (audit only)
-
-    Invariant (asserted): gross_amount == seller_amount + agent_commission + platform_fee.
+    Returns a dict with all numbers stored alongside the order doc.
+    Invariant (checked): gross_amount == seller_amount + agent_commission + platform_fee.
     """
     if mode not in {"direct", "three_party"}:
         raise ValueError(f"Unknown order mode: {mode}")
@@ -196,7 +209,7 @@ def calculate_split(
 
 # ─── Async helpers (db is the motor.AsyncIOMotorDatabase passed in) ───────
 async def seed_chart_of_accounts(db) -> int:
-    """Idempotent — creates the 5 baseline accounts if missing. Safe on every boot."""
+    """Idempotent — creates the baseline accounts if missing. Safe on every boot."""
     inserted = 0
     for a in ACCOUNTS:
         res = await db.ledger_accounts.update_one(
@@ -206,6 +219,13 @@ async def seed_chart_of_accounts(db) -> int:
         )
         if res.upserted_id is not None:
             inserted += 1
+    # Backfill: legacy rows created before the Oct-2026 revert may have an
+    # outdated `name` field. Refresh them so the admin UI shows accurate labels.
+    for a in ACCOUNTS:
+        await db.ledger_accounts.update_one(
+            {"code": a["code"]},
+            {"$set": {"name": a["name"], "type": a["type"]}},
+        )
     return inserted
 
 
@@ -213,7 +233,6 @@ async def _post_entries(db, *, order_id: str, batch: list[dict[str, Any]], memo:
     """
     Append a balanced batch of debits/credits to `ledger_entries`.
 
-    `batch` is a list of dicts: {"account_code": ..., "entry_type": "debit"|"credit", "amount": ...}
     Validates the batch is internally balanced (sum debits == sum credits) before
     inserting, so we never persist a half-posted transaction.
     """
@@ -274,17 +293,19 @@ async def assert_balanced(db, order_id: str) -> dict[str, float]:
     return {"debit": to_float(debit), "credit": to_float(credit)}
 
 
-# ─── High-level transaction posters ───────────────────────────────────────
+# ─── High-level transaction posters (true-escrow model) ───────────────────
 async def post_funds_received(
     db, *, order_id: str, gross_amount, provider: str, provider_txn_id: str, raw_payload: dict | None = None,
 ) -> str:
     """
-    Buyer payment confirmed by gateway — booked as Merchant-of-Record revenue:
-        debit  cash_clearing
-        credit revenue_facilitation
+    Buyer payment confirmed by gateway (currently Selcom):
+        debit  cash_clearing_selcom     (asset ↑ — money sits with Selcom)
+        credit buyer_escrow_liability   (liability ↑ — owed back to buyer)
+
+    No revenue recognised here. Platform fee accrues on release.
     Returns the payment_transactions doc id.
 
-    Idempotent on (provider, provider_txn_id) via a unique-style guard.
+    Idempotent on (provider, provider_txn_id).
     """
     if not provider_txn_id:
         raise ValueError("provider_txn_id required")
@@ -313,29 +334,62 @@ async def post_funds_received(
     await _post_entries(
         db,
         order_id=order_id,
-        memo=f"Buyer payment received via {provider}",
+        memo=f"Buyer payment received via {provider} (pending Azania sweep)",
         batch=[
-            {"account_code": "cash_clearing",           "entry_type": "debit",  "amount": gross_amount},
-            {"account_code": "revenue_facilitation",    "entry_type": "credit", "amount": gross_amount},
+            {"account_code": "cash_clearing_selcom",   "entry_type": "debit",  "amount": gross_amount},
+            {"account_code": "buyer_escrow_liability", "entry_type": "credit", "amount": gross_amount},
         ],
     )
     await assert_balanced(db, order_id)
+    await record_escrow_event(
+        db, order_id=order_id, event_type="funds_received",
+        actor=f"{provider}:{provider_txn_id}", meta={"amount": to_float(gross_amount), "provider": provider},
+    )
     return tx_id
+
+
+async def post_trust_transfer(
+    db, *, order_id: str, amount, selcom_ref: str, azania_ref: str, admin_user_id: str,
+) -> None:
+    """
+    Admin records that funds moved from Selcom to the Azania trust account:
+        debit  cash_trust_azania         (asset ↑ — now held at Azania trust)
+        credit cash_clearing_selcom      (asset ↓ — swept out of Selcom)
+
+    This is a manual step: once/day, the admin logs into Selcom internet
+    banking, transfers the day's collected funds to the Azania trust account,
+    and then records both references here. The accounting moves the asset
+    between two custodians; the buyer liability is unaffected.
+    """
+    await _post_entries(
+        db,
+        order_id=order_id,
+        memo=f"Sweep Selcom→Azania (selcom={selcom_ref}, azania={azania_ref})",
+        batch=[
+            {"account_code": "cash_trust_azania",    "entry_type": "debit",  "amount": amount},
+            {"account_code": "cash_clearing_selcom", "entry_type": "credit", "amount": amount},
+        ],
+    )
+    await assert_balanced(db, order_id)
+    await record_escrow_event(
+        db, order_id=order_id, event_type="trust_transfer_recorded",
+        actor=f"admin:{admin_user_id}",
+        meta={"amount": to_float(amount), "selcom_ref": selcom_ref, "azania_ref": azania_ref},
+    )
 
 
 async def post_release(db, *, order: dict[str, Any]) -> None:
     """
-    Delivery confirmed → book supplier COGS and agent commission as expenses,
-    against corresponding payables (which will be cleared when the outbound
-    payment executes via `post_payout_paid`).
+    Buyer confirmed delivery (or dispute resolved for seller) → release escrow:
+        debit  buyer_escrow_liability    (liability ↓ — buyer no longer owed)
+        credit seller_payable            (liability ↑ — seller now owed)
+        credit agent_payable             (liability ↑ — agent now owed, 3-party)
+        credit platform_revenue          (revenue ↑ — platform fee earned)
 
-    Under the Merchant-of-Record model:
-        debit  cogs_supplier          (supplier amount — cost of sales)
-        debit  opex_agent_commission  (agent commission — operating expense)
-        credit seller_payable         (supplier amount)
-        credit agent_payable          (agent commission)
-    The platform's margin remains in revenue_facilitation (booked at receipt);
-    no separate release entry is needed for the fee.
+    The cash position (cash_trust_azania) is unchanged at this stage —
+    nothing has left the Azania account yet. The subsequent `post_payout_paid`
+    calls will discharge seller_payable + agent_payable against cash_trust_azania.
+    Platform fee will be swept separately via `post_fee_sweep`.
     """
     order_id = order["order_id"]
     gross = D(order["gross_amount"])
@@ -349,54 +403,81 @@ async def post_release(db, *, order: dict[str, Any]) -> None:
         )
 
     batch: list[dict[str, Any]] = [
-        {"account_code": "cogs_supplier",  "entry_type": "debit",  "amount": seller},
-        {"account_code": "seller_payable", "entry_type": "credit", "amount": seller},
+        {"account_code": "buyer_escrow_liability", "entry_type": "debit",  "amount": gross},
+        {"account_code": "seller_payable",         "entry_type": "credit", "amount": seller},
+        {"account_code": "platform_revenue",       "entry_type": "credit", "amount": platform},
     ]
     if agent > 0:
-        batch.append({"account_code": "opex_agent_commission", "entry_type": "debit",  "amount": agent})
-        batch.append({"account_code": "agent_payable",         "entry_type": "credit", "amount": agent})
+        batch.append({"account_code": "agent_payable", "entry_type": "credit", "amount": agent})
 
-    await _post_entries(db, order_id=order_id, batch=batch, memo="Supplier + agent expense accrual on delivery")
+    await _post_entries(db, order_id=order_id, batch=batch, memo="Escrow release — delivery confirmed")
     await assert_balanced(db, order_id)
+    await record_escrow_event(
+        db, order_id=order_id, event_type="released",
+        actor=f"buyer:{order.get('buyer_id', '?')}",
+        meta={
+            "seller_amount": to_float(seller),
+            "agent_commission": to_float(agent),
+            "platform_fee": to_float(platform),
+        },
+    )
 
 
 async def post_refund(db, *, order_id: str, amount) -> None:
     """
-    Dispute resolved in buyer's favour — reverse the facilitation revenue:
-        debit  revenue_facilitation
-        credit cash_clearing
-    Reverses the funds-received posting under the Merchant-of-Record model.
+    Dispute resolved for buyer OR stray payment refund:
+        debit  buyer_escrow_liability   (liability ↓ — we no longer owe buyer here)
+        credit cash_trust_azania        (asset ↓ — money leaves Azania trust to buyer)
+
+    Caller is responsible for deciding whether funds have reached Azania yet.
+    If the refund happens while funds still sit in cash_clearing_selcom (rare —
+    very fast refund same day as payment), the caller should instead issue a
+    direct refund via Selcom and post against `cash_clearing_selcom`. This
+    function assumes the standard case: funds have already been swept to Azania.
     """
     await _post_entries(
         db,
         order_id=order_id,
-        memo="Refund — dispute resolved for buyer",
+        memo="Refund to buyer from Azania trust",
         batch=[
-            {"account_code": "revenue_facilitation", "entry_type": "debit",  "amount": amount},
-            {"account_code": "cash_clearing",        "entry_type": "credit", "amount": amount},
+            {"account_code": "buyer_escrow_liability", "entry_type": "debit",  "amount": amount},
+            {"account_code": "cash_trust_azania",      "entry_type": "credit", "amount": amount},
         ],
     )
     await assert_balanced(db, order_id)
+    await record_escrow_event(
+        db, order_id=order_id, event_type="refunded",
+        actor="admin", meta={"amount": to_float(amount)},
+    )
 
 
 async def post_payout_paid(db, *, payout: dict[str, Any]) -> None:
     """
-    Disbursement provider confirmed payout was sent:
-        debit  seller_payable | agent_payable
-        credit cash_clearing
+    Disbursement from the Azania trust account to a beneficiary (seller/agent):
+        debit  seller_payable | agent_payable    (liability ↓ — paid)
+        credit cash_trust_azania                 (asset ↓ — cash leaves trust)
     """
     role = payout["beneficiary_role"]
     code = "seller_payable" if role == "seller" else "agent_payable"
     await _post_entries(
         db,
         order_id=payout["order_id"],
-        memo=f"Payout to {role} via {payout.get('provider', 'mock')}",
+        memo=f"Payout to {role} via {payout.get('provider', 'manual')}",
         batch=[
-            {"account_code": code,           "entry_type": "debit",  "amount": payout["amount"]},
-            {"account_code": "cash_clearing","entry_type": "credit", "amount": payout["amount"]},
+            {"account_code": code,               "entry_type": "debit",  "amount": payout["amount"]},
+            {"account_code": "cash_trust_azania","entry_type": "credit", "amount": payout["amount"]},
         ],
     )
     await assert_balanced(db, payout["order_id"])
+    await record_escrow_event(
+        db, order_id=payout["order_id"], event_type=f"payout_paid_{role}",
+        actor=f"admin:{payout.get('admin_user_id', '?')}",
+        meta={
+            "amount": to_float(payout["amount"]),
+            "beneficiary_user_id": payout.get("beneficiary_user_id"),
+            "provider_ref": payout.get("provider_ref"),
+        },
+    )
 
 
 # ─── Reconciliation views ─────────────────────────────────────────────────
@@ -438,6 +519,57 @@ async def mark_webhook_processed(db, *, provider: str, event_id: str) -> None:
     )
 
 
+# ─── Append-only escrow audit trail ───────────────────────────────────────
+# Collection: escrow_events
+# Fields: event_id, order_id, event_type, actor, meta, created_at
+# NEVER updated, NEVER deleted. This is the auditor/bank/BoT evidence log.
+ESCROW_EVENT_TYPES = {
+    "funds_received",            # buyer paid via Selcom
+    "trust_transfer_recorded",   # admin recorded Selcom → Azania bank move
+    "released",                  # buyer confirmed delivery → release posted
+    "payout_paid_seller",        # Azania → seller mobile money
+    "payout_paid_agent",         # Azania → agent mobile money
+    "fee_sweep_recorded",        # Azania → Biz-Salama ops (platform fee)
+    "refunded",                  # funds returned to buyer
+    "dispute_opened",
+    "dispute_resolved",
+    "mismatch_flagged",          # amount or duplicate payment anomaly
+}
+
+
+async def record_escrow_event(
+    db, *, order_id: str, event_type: str, actor: str | None = None, meta: dict | None = None,
+) -> str:
+    """
+    Append-only audit log of escrow state transitions. Treat each row as
+    immutable evidence; collection should be protected with read-mostly perms
+    and a periodic backup to cold storage.
+    """
+    if event_type not in ESCROW_EVENT_TYPES:
+        raise ValueError(f"Unknown escrow event type: {event_type}")
+    event_id = f"ev_{uuid.uuid4().hex[:16]}"
+    await db.escrow_events.insert_one({
+        "event_id": event_id,
+        "order_id": order_id,
+        "event_type": event_type,
+        "actor": actor,
+        "meta": meta or {},
+        "created_at": datetime.now(UTC),
+    })
+    return event_id
+
+
+async def list_escrow_events(db, order_id: str, limit: int = 500) -> list[dict[str, Any]]:
+    """Return the full event trail for an order, oldest first."""
+    cursor = db.escrow_events.find({"order_id": order_id}, {"_id": 0}).sort("created_at", 1).limit(limit)
+    rows = []
+    async for r in cursor:
+        if isinstance(r.get("created_at"), datetime):
+            r["created_at"] = r["created_at"].isoformat()
+        rows.append(r)
+    return rows
+
+
 # ─── Disputes auto-resolve ────────────────────────────────────────────────
 DISPUTE_AUTO_RESOLVE_DAYS = 3
 
@@ -449,3 +581,55 @@ async def find_auto_resolvable_disputes(db) -> list[dict[str, Any]]:
         {"status": "open", "created_at": {"$lt": cutoff}}, {"_id": 0}
     ).to_list(200)
     return rows
+
+
+# ─── Account balance roll-up (for the admin reconciliation page) ──────────
+async def account_balance(db, code: str) -> float:
+    """
+    Sum of (debits - credits) for an asset/expense account, or (credits - debits)
+    for a liability/revenue account. Returns a positive number representing the
+    current balance in that account as a cash-equivalent.
+    """
+    if code not in VALID_CODES:
+        raise ValueError(f"Unknown account code: {code}")
+    account = next(a for a in ACCOUNTS if a["code"] == code)
+    is_debit_natural = account["type"] in {"asset", "expense"}
+
+    debit = D(0)
+    credit = D(0)
+    cursor = db.ledger_entries.find({"account_code": code}, {"_id": 0, "entry_type": 1, "amount": 1})
+    async for e in cursor:
+        amt = D(e["amount"])
+        if e["entry_type"] == "debit":
+            debit += amt
+        else:
+            credit += amt
+    bal = (debit - credit) if is_debit_natural else (credit - debit)
+    return to_float(bal)
+
+
+async def trust_account_summary(db) -> dict[str, Any]:
+    """
+    Executive summary of the Azania trust / Selcom clearing position.
+    Used by the admin reconciliation page.
+    """
+    clearing = await account_balance(db, "cash_clearing_selcom")
+    trust = await account_balance(db, "cash_trust_azania")
+    buyer_liab = await account_balance(db, "buyer_escrow_liability")
+    seller_pay = await account_balance(db, "seller_payable")
+    agent_pay = await account_balance(db, "agent_payable")
+    revenue = await account_balance(db, "platform_revenue")
+    return {
+        "cash_clearing_selcom":   clearing,
+        "cash_trust_azania":      trust,
+        "buyer_escrow_liability": buyer_liab,
+        "seller_payable":         seller_pay,
+        "agent_payable":          agent_pay,
+        "platform_revenue":       revenue,
+        # Liquidity check: total cash on hand must cover all outstanding
+        # liabilities to buyers/sellers/agents. A negative shortfall is a bug
+        # or an un-recorded Selcom→Azania sweep.
+        "total_cash":             round(clearing + trust, 2),
+        "total_liabilities":      round(buyer_liab + seller_pay + agent_pay, 2),
+        "liquidity_shortfall":    round((buyer_liab + seller_pay + agent_pay) - (clearing + trust), 2),
+    }

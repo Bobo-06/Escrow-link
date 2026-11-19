@@ -11,13 +11,49 @@ React web app for Biz-Salama, a Tanzanian **secure commerce marketplace** (opera
 - PWA install + service worker
 - SEO via prerendering bot-intercepts
 
-## Terminology rule (CRITICAL — BoT / Selcom compliance)
-The platform operates as a **Merchant of Record providing a Commerce Facilitation Service**, NOT an escrow agent. Do NOT use the word "escrow" in any user-facing text, SMS templates, marketing copy, or public documentation. Use "Secure Commerce" / "Payment Protection" / "Biz-Salama Protected" (EN) or "Biashara Salama" / "Malipo Salama" / "Ulinzi wa Malipo" (SW). Internal variables, API paths (`/api/escrow/*`), DB fields (`escrow_status`), and component filenames may remain as-is — only user-visible strings are affected.
+## Terminology rule (REVISED 2026-11-18 — bank-trusteed escrow is correct)
+The platform legitimately operates a **true escrow service backed by an Azania Bank Trust Account** (Azania Trust Services is the trustee under a signed Trust Deed; Biz-Salama is the settlor; buyers are the beneficiaries). Because a licensed bank provides the trusteeship, no BoT PSP licence is required.
+
+**"Escrow" IS a legitimate word to use** in user-facing copy, SMS templates, legal docs, and marketing — provided it is framed as "bank-backed escrow via Azania" or similar. The earlier Feb-10 sweep that replaced "escrow" with "Secure Commerce" was based on the incorrect Merchant-of-Record pivot and should be partially rolled back on the trust badges / Letter of Comfort.
+
+Internal variables, API paths (`/api/escrow/*`), DB fields (`escrow_status`), and component filenames remain correct as-is.
 
 ## Tech stack
 React 18 (lazy-loaded), TypeScript, Tailwind, FastAPI, MongoDB, JWT auth, brute-force rate limiting, Cloudflare/DNS, Africa's Talking SMS.
 
 ## Recent sessions
+
+### 2026-11-18 — Revert to true-escrow ledger + Azania reconciliation workflow
+
+**Trigger:** User confirmed they operate a **true trust / escrow account at Azania Bank** under a signed Trust Deed (Azania Trust Services is the trustee; Biz-Salama is the settlor; buyers are beneficiaries). The July "Merchant of Record" pivot was therefore the wrong compliance narrative. Selcom has also been told the funds-flow model (trust account at Azania).
+
+**Reverted:**
+- `backend/ledger.py` — fully rewritten to true-escrow double-entry.
+  - New active accounts: `cash_clearing_selcom`, `cash_trust_azania`, `buyer_escrow_liability`, `seller_payable`, `agent_payable`, `platform_revenue`
+  - Legacy accounts retained for pre-revert historical entries: `cash_clearing`, `revenue_facilitation`, `cogs_supplier`, `opex_agent_commission`, `escrow_liability`
+  - `post_funds_received`: DR `cash_clearing_selcom` / CR `buyer_escrow_liability` (no revenue at receipt)
+  - New `post_trust_transfer`: DR `cash_trust_azania` / CR `cash_clearing_selcom` (admin records daily sweep)
+  - `post_release`: DR `buyer_escrow_liability` / CR `seller_payable` + `agent_payable` + `platform_revenue` (platform revenue recognised on release)
+  - `post_payout_paid`: DR payable / CR `cash_trust_azania`
+  - `post_refund`: DR `buyer_escrow_liability` / CR `cash_trust_azania`
+
+**New admin reconciliation endpoints** (`/app/backend/server.py`):
+- `GET  /api/admin/escrow/queue`              — orders pending Selcom→Azania sweep + daily total
+- `POST /api/admin/escrow/transfer-recorded`  — record the bulk Selcom→Azania sweep (mismatch guard: expected_total must == system)
+- `POST /api/admin/payouts/{id}/manual-record` — record manual Azania→seller payout (refuses if Azania trust balance insufficient)
+- `POST /api/admin/orders/{id}/refund-recorded` — record manual Azania→buyer refund
+- `GET  /api/admin/escrow/reconcile`           — daily position: cash vs liabilities, liquidity shortfall
+- `GET  /api/admin/escrow/events/{order_id}`   — append-only audit trail
+- `GET  /api/admin/escrow/transfers`           — recent sweep batches
+
+**New append-only audit collection `escrow_events`:**
+- Event types: `funds_received`, `trust_transfer_recorded`, `released`, `payout_paid_seller`, `payout_paid_agent`, `fee_sweep_recorded`, `refunded`, `dispute_opened`, `dispute_resolved`, `mismatch_flagged`
+- Written automatically by every posting function. Immutable auditor/BoT evidence log.
+
+**Testing:**
+- Updated `tests/test_iter10_ledger_http.py` to expect the true-escrow chart & 5 release entries
+- Full 22-test ledger suite: 22 passed in 9.48s
+- New smoke script `tests/scripts/test_true_escrow_e2e.py`: fund → sweep → release → payout → reconcile → audit trail, all steps verified end-to-end
 
 ### 2026-02-10 — Compliance: strip "escrow" from user-facing UI
 **Trigger:** Selcom / BoT compliance — the platform must not present itself as an escrow agent (which would require a PSP license). It operates as a Merchant of Record providing Commerce Facilitation.
@@ -110,15 +146,17 @@ React 18 (lazy-loaded), TypeScript, Tailwind, FastAPI, MongoDB, JWT auth, brute-
 - CI `security-lint.yml` green on the deploy commit
 
 ## Backlog (P0 → P3)
-- **P1** — Selcom Disbursement API / automated payouts (replace mocked `/api/payouts/{id}/disburse`)
-- **P2** — Daily reconciliation report (admin UI + API) comparing Selcom inflows/outflows vs internal ledger
-- **P2** — Refund automation via Selcom refund API
-- **P2** — Legal templates: Merchant-of-Record ToS, Supplier Agreement, Sample Ledger Report PDF
+- **P1** — Restore "escrow" / "bank-backed escrow via Azania" language in trust badges + Letter of Comfort (was swept out in Feb-10 compliance task; now legitimate under the Azania trust deed)
+- **P1** — Admin UI: `/admin/escrow/reconcile` React page showing reconcile dashboard, sweep queue with "Mark Swept" action, queued payouts with "Record Payment" action, and per-order audit timeline
+- **P1** — Selcom Disbursement API integration (replace manual Azania→seller IB transfers with automated calls; the admin UI keeps the manual-record path as a fallback)
+- **P2** — Daily reconciliation report job (scheduled cron) that emails the admin the sweep queue + reconcile snapshot
+- **P2** — Fee-sweep endpoint (Azania trust → Biz-Salama ops) with manual-record flow + ledger posting
 - **P2** — Click-Pesa / AzamPay as backup payment providers
-- **P2** — Refactor `server.py` (6.1k lines) into routers: `routes/auth.py`, `routes/products.py`, `routes/escrow.py`, `routes/orders.py`
+- **P2** — Legal templates: Supplier Agreement, Sample Ledger Report PDF (the Trust Deed itself already exists at Azania)
+- **P2** — Refactor `server.py` (now ~6.3k lines) into routers: `routes/auth.py`, `routes/products.py`, `routes/escrow.py`, `routes/admin_escrow.py`, `routes/orders.py`
 - **P3** — Ratings & reviews UI
 - **P3** — Native app wrapper (Capacitor / React Native)
-- **P3** — Public `/trust` page surfacing the audit results to buyers/sellers
+- **P3** — Public `/trust` page surfacing the audit results + Azania trust deed to buyers
 
 ## Credentials
 See `/app/memory/test_credentials.md`. Seed admin: `+255700000001` / `AdminPass123!`.

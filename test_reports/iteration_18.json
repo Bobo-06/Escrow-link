@@ -1,0 +1,37 @@
+{
+  "summary": "Frontend-only retest of /checkout/seed_kitenge-5m-premium at a 420x900 mobile viewport, run with Playwright against the preview URL using a freshly registered TEST_ buyer. Everything requested passed. Product: 'Kitenge Premium Fabric (5m)' loads, and all 4 methods are shown (mpesa, airtel, tigo, bank). Price math is correct: TZS 75,000 + 2,250 = 77,250. Validation: the Pay button is disabled with empty fields, name only, and name+phone, and enabled once all 3 are filled. Bank path: POST /api/orders returned 200 with payment_method='bank' and buyer_phone 255754710139. POST /api/payments/selcom/checkout returned 200 with {ok:false, activation_pending:true, message:'Bank & card payments are being activated on our Selcom merchant account. Please use M-Pesa, Tigo Pesa or Airtel Money for now.'} (raw Selcom resultcode 403 'API endpoint enabled for the vendor (4036)'). An error toast showed that message. The URL stayed on /checkout/seed_kitenge-5m-premium, with no dead-page redirect. The selection auto-switched to M-Pesa (mpesa radio checked and highlighted, bank unchecked), and the Pay button was re-enabled. Recovery: clicking Pay Securely again without re-filling the form made POST /api/orders (mpesa, 200) and POST /api/payments/selcom/stk (200, ok:true, 'Wallet push successful', ref S20817590317), then navigated to /my-orders/order_bdfb79a92420. The M-Pesa path works.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/payments/selcom/checkout", "issue": "When activation_pending is returned, the bank order already created (e.g. order_cdde3b5fdef7) stays as an orphaned pending order with payment_method='bank'. Consider cancelling it or marking it superseded, or checking bank availability before creating the order."},
+      {"endpoint": "POST /api/payments/selcom/stk and /checkout", "issue": "Still unauthenticated, and both trust the client-supplied amount (carried over from iteration 17)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Checkout -> MyOrder navigation", "issue": "Still not fixed from iteration 17: after the redirect to /my-orders/{id}, the scroll position is kept, so on mobile the page opens at the footer and the order card is off-screen.", "selector": "[data-testid='checkout-pay-btn']", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Bank attempt -> M-Pesa recovery", "issue": "Retrying creates a second order. The first (bank) order is orphaned, so one buyer action produces 2 orders. Reuse the order_id (update payment_method) on retry.", "affected_selectors": ["[data-testid='checkout-pay-btn']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "LOW: On activation_pending, reuse or cancel the order already created, to avoid duplicate pending orders on the M-Pesa retry.",
+    "LOW: Scroll to top when navigating to /my-orders/{id}.",
+    "Optional UX: visually mark the Bank option as 'Coming soon' while Selcom activation is pending, so users don't hit the error first."
+  ],
+  "critical_code_review_comments": [
+    "Checkout.tsx still prefills from localStorage 'bs_user', but auth persists under 'biz-salama-auth', so the prefill never happens.",
+    "Checkout.tsx buyer_email is still made up as `${phone}@biz-salama.co.tz`.",
+    "server.py activation_pending condition mixes `and`/`or` without parentheses. It works (the 'enabled for the vendor' check is the OR fallback), but add explicit parentheses for clarity."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend only)", "frontend": "100% of requested scenarios"},
+  "seed_data_creation": "Registered buyer TEST_Buyer R18 (+255755237435 / TestPass_123!). Created orders order_cdde3b5fdef7 (bank, pending) and order_bdfb79a92420 (mpesa). A real Selcom USSD push was sent to 0754710139 for TZS 77,250.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Auth by putting localStorage 'biz-salama-auth' = {state:{token,user,isAuthenticated:true},version:0}. Bank currently returns activation_pending (Selcom 4036). Once Selcom activates the vendor, retest that the bank redirect lands on a working hosted page.",
+  "rca of the issue": "The Bank 404 is resolved by handling Selcom's 403/4036 gracefully. A real bank/card payment still depends on Selcom activating /v1/checkout/create-order for the vendor."
+}

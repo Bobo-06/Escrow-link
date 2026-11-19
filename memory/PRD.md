@@ -23,6 +23,38 @@ React 18 (lazy-loaded), TypeScript, Tailwind, FastAPI, MongoDB, JWT auth, brute-
 
 ## Recent sessions
 
+### 2026-11-19 — Checkout page rewrite + Bank payment option + graceful activation-pending handling
+
+**User reported two production bugs on `biz-salama.co.tz` checkout**:
+1. "Pay Securely" button does nothing when clicked (M-Pesa)
+2. No "Bank" option exists in the payment methods list
+
+**Root cause:** `pages/Checkout.tsx` was a static demo with no onClick handler, uncontrolled inputs, and hardcoded TZS 75,000 total — never wired up during the original build.
+
+**Fix (frontend — `Checkout.tsx` fully rewritten):**
+- Reads product via public `GET /api/products/detail/{id}` (no auth required so visitors can see the checkout)
+- Controlled inputs for name / phone / address with validation
+- Live price math: `total = price + round(price * 0.03)`
+- Four payment radios: M-Pesa, Airtel Money, Tigo Pesa, **Bank Transfer / Card** (new)
+- Normalises `0754710139` → `255754710139` before API calls
+- Pay Securely button wired: `POST /api/orders` → routed by method:
+  - mobile money → `POST /api/payments/selcom/stk` (STK push)
+  - `bank` → `POST /api/payments/selcom/checkout` (hosted page)
+- Navigates to `/my-orders/{order_id}` after success
+
+**Second-round issue surfaced by testing agent:** Bank path returned a valid URL but Selcom's hosted page returned 404. Live probe confirmed Selcom's full `/v1/checkout/create-order` endpoint returns **`resultcode 403 "API endpoint enabled for the vendor (4036)"`** for our vendor — the hosted-checkout API has NOT been activated yet, only the acquirer side.
+
+**Follow-up fix:**
+- Added new `selcom_client.create_hosted_order()` function targeting the correct full endpoint (signed-fields order matches playbook: `vendor,order_id,buyer_email,buyer_name,buyer_phone,amount,currency,redirect_url,cancel_url,webhook,buyer_remarks,merchant_remarks,no_of_items`)
+- Kept `create_checkout_order()` on `/checkout/create-order-minimal` for the STK-push flow (documented clearly)
+- Server `/api/payments/selcom/checkout` detects the 403/4036 response and returns `{ok:false, activation_pending:true, message: "Bank & card payments are being activated..."}` instead of a dead URL
+- Frontend surfaces the message via error toast, auto-switches the method back to M-Pesa, and keeps the user on `/checkout/...` (no broken redirect)
+- Recovery verified: user can tap Pay Securely again without re-filling the form and the M-Pesa STK push completes successfully
+
+**Testing:** iteration_18 — full frontend regression: product load, all 4 methods render, price math, validation, M-Pesa live STK push (`Wallet push successful`, ref S20817590317), Bank activation-pending toast + auto-switch, recovery flow. `retest_needed: False`.
+
+**Action for user:** Email Selcom support with subject "**Please enable `/v1/checkout/create-order` API endpoint on vendor `{VENDOR}`**" — the acquirer side (bank/card processing) is already activated, but we can't *initiate* a hosted checkout until this specific API endpoint is enabled. Once activated, the existing frontend code will start routing bank payments through Selcom's hosted page automatically with zero further changes.
+
 ### 2026-11-19 — Wire Selcom webhook → ledger + /admin/escrow/trace forensic endpoint
 
 **Critical bug fixed:** The Selcom webhook handler at `/api/payments/selcom/webhook` was updating the order document on `COMPLETED` but **never calling `ledger_post_funds_received`**. Real Selcom payments (card / bank / mobile money) would mark orders paid but leave zero ledger entries — breaking the reconcile view and every downstream workflow. Wired the ledger posting, added `(provider, event_id)` idempotency via `processed_webhooks`, and now propagate the Selcom `transid` / `reference` into the order + audit log.

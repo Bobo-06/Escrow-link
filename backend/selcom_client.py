@@ -162,26 +162,22 @@ async def create_checkout_order(
 ) -> dict[str, Any]:
     """POST {base}/checkout/create-order-minimal.
 
-    This is the endpoint Selcom support directed us to use. The full
-    /checkout/create-order endpoint is not enabled on our sandbox vendor.
+    USE CASE: This endpoint is designed for the STK-push flow
+    (M-Pesa / Airtel Money / Tigo Pesa / HaloPesa). It registers the order
+    with Selcom and returns a `payment_token` — used by `wallet_pull_payment`
+    to trigger the USSD prompt on the buyer's phone. The gateway URL it
+    returns is a side-effect, NOT a functional hosted page — opening it
+    directly returns Selcom's 404 "page not found" (confirmed via live probe
+    2026-11-19). For a true hosted-page flow (bank + card tabs), use
+    `create_hosted_order()` below, which calls the full /checkout/create-order
+    endpoint.
 
     Per UAT (gateway refs S20581783730, S20581783761), the API requires:
       * webhook URL base64-encoded
       * Content-Type application/json
       * no_of_items required (even though docs sample suggests otherwise)
 
-    NOTE on payment tabs (card / bank / mobile money): the minimal endpoint
-    does NOT accept a `payment_methods` field — Selcom's hosted page shows
-    whatever methods the vendor has had activated on their account. Confirmed
-    via API probe 2026-11-19: adding `payment_methods` → resultcode 413
-    "Unexpected parameter payment_methods found in the payload".
-    To toggle which methods appear (bank / card / mobile money), ask Selcom
-    to enable/disable the relevant channel on the vendor account.
-
-    Returns the Selcom JSON with payment_token + base64 payment_gateway_url.
-    `redirect_url` / `cancel_url` are accepted for backwards-compat with the
-    full create-order call but not transmitted — they're not part of the
-    minimal flow.
+    Returns the Selcom JSON with payment_token.
     """
     _ = (redirect_url, cancel_url)  # accepted but unused for minimal endpoint
     if not is_configured():
@@ -262,6 +258,98 @@ async def wallet_pull_payment(
 
 # Kept as an alias for the older route-handler name to avoid breaking imports.
 wallet_push_ussd = wallet_pull_payment
+
+
+# ─────────────── Hosted-page Checkout (bank / card tabs) ───────────────
+# POST {base}/checkout/create-order  —  the FULL endpoint. Returns a
+# `payment_gateway_url` that actually renders Selcom's hosted payment page
+# (with whichever tabs — bank, card, mobile money — are activated on the
+# vendor). As of 2026-11-19 this endpoint returns 403 "API endpoint enabled
+# for the vendor (4036)" for our vendor — Selcom must activate it before
+# bank/card payments can begin. The frontend handles the 403 gracefully.
+
+async def create_hosted_order(
+    *,
+    order_id: str,
+    buyer_email: str,
+    buyer_name: str,
+    buyer_phone: str,
+    amount: int,  # integer TZS
+    redirect_url: str,
+    cancel_url: str,
+    webhook_url: str,
+    no_of_items: int = 1,
+    buyer_remarks: str = "",
+    merchant_remarks: str = "",
+) -> dict[str, Any]:
+    """POST {base}/checkout/create-order — full hosted-page flow.
+
+    Required for bank + card payments: returns a payment_gateway_url that
+    renders Selcom's hosted page where the buyer picks their bank / card /
+    mobile money tab.
+
+    Signed-fields order follows the published playbook:
+        vendor, order_id, buyer_email, buyer_name, buyer_phone, amount,
+        currency, redirect_url, cancel_url, webhook,
+        buyer_remarks, merchant_remarks, no_of_items
+
+    `redirect_url`, `cancel_url`, and `webhook_url` MUST be base64-encoded
+    before signing.
+    """
+    if not is_configured():
+        return {
+            "ok": True,
+            "simulated": True,
+            "message": "Selcom not configured — simulated response",
+            "order_id": order_id,
+        }
+
+    payload = {
+        "vendor": _cfg("SELCOM_VENDOR"),
+        "order_id": order_id,
+        "buyer_email": buyer_email,
+        "buyer_name": buyer_name,
+        "buyer_phone": buyer_phone,
+        "amount": int(amount),
+        "currency": "TZS",
+        "redirect_url": _b64(redirect_url),
+        "cancel_url": _b64(cancel_url),
+        "webhook": _b64(webhook_url),
+        "buyer_remarks": buyer_remarks or "None",
+        "merchant_remarks": merchant_remarks or "None",
+        "no_of_items": int(no_of_items),
+    }
+    signed_fields = [
+        "vendor", "order_id", "buyer_email", "buyer_name", "buyer_phone",
+        "amount", "currency", "redirect_url", "cancel_url", "webhook",
+        "buyer_remarks", "merchant_remarks", "no_of_items",
+    ]
+    headers = _build_headers(payload, signed_fields)
+    url = f"{_cfg('SELCOM_BASE_URL', 'https://apigw.selcommobile.com/v1').rstrip('/')}/checkout/create-order"
+    async with _client(timeout=35.0) as client:
+        resp = await client.post(url, json=payload, headers=headers)
+    try:
+        body = resp.json()
+    except Exception:
+        body = {"raw": resp.text}
+
+    # Decode the hosted-page URL if returned so the caller can use it directly.
+    data = body.get("data") if isinstance(body, dict) else None
+    if isinstance(data, list) and data:
+        first = data[0]
+        gw = first.get("payment_gateway_url")
+        if isinstance(gw, str) and gw:
+            try:
+                first["payment_gateway_url_decoded"] = base64.b64decode(gw).decode()
+            except Exception:
+                pass
+
+    logger.info(
+        "selcom.create-order order_id=%s status=%s resultcode=%s",
+        order_id, resp.status_code,
+        (body.get("resultcode") if isinstance(body, dict) else "?"),
+    )
+    return {"ok": resp.is_success, "status_code": resp.status_code, "selcom": body}
 
 
 # ─────────────────── Wallet Cashin (outbound disbursement) ─────────────────

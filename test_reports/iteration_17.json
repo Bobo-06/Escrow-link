@@ -1,0 +1,42 @@
+{
+  "summary": "Checkout page (/checkout/seed_kitenge-5m-premium) tested at 420x900 mobile viewport with Playwright. Both reported bugs are fixed on the frontend. (a) Pay Securely now works with M-Pesa: the button shows 'Processing...', a loading toast says 'Sending M-Pesa prompt to 255754710139...', POST /api/orders returns 200, POST /api/payments/selcom/stk returns 200 with ok=true ('Wallet push successful', ref S20817584970), a success toast appears and the page goes to /my-orders/order_79e7f0b97085, which renders correctly. (b) Bank option: there are 4 methods, and the bank one is 'Bank Transfer / Card' with sublabel 'CRDB, NMB, NBC, Stanbic, Visa, Mastercard' and data-testid checkout-method-bank. When selected, POST /api/orders is accepted with payment_method='bank' (200; the backend field is a plain str, so there is no enum rejection). POST /api/payments/selcom/checkout is called with exactly {amount:77250, phone:'255754710139', order_id, buyer_name, buyer_email}, and window.location changes to the returned tza.selcom.online checkout_url. HOWEVER, the Selcom hosted page shows 'Page Not Found - Let's Get You Back on Track', so a bank buyer still cannot pay. Validation: the button is disabled with empty fields, name only, and name+phone, and enabled once all 3 are filled. 0754710139 is normalized to 255754710139 in both the orders and payments calls. Price math: Subtotal TZS 75,000, Fee TZS 2,250, Total TZS 77,250, button 'Pay Securely — TZS 77,250'. Product loads without auth via GET /api/products/detail/{id} and shows 'Kitenge Premium Fabric (5m)'.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/payments/selcom/checkout", "issue": "Returns 200 with a checkout_url (decoded base64 payment_gateway_url, https://tza.selcom.online/paymentgw/checkout/<token>), but opening that URL shows Selcom's 'Page Not Found' page. The bank/card flow is broken for real users. Likely cause: the vendor is a sandbox vendor (SELCOM_VENDOR=SB00192172) running against the production gateway (apigw.selcommobile.com), and the hosted checkout page / card+bank channels are not enabled for this vendor or for create-order-minimal orders. It could also be that the URL should be the raw (non-decoded) payment_gateway_url, or that it needs the payment_token in a different path. Confirm with Selcom support / docs.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/orders", "issue": "Does not require auth and does not store buyer user_id, even though the frontend sends a Bearer token. The order is not linked to the buyer account."},
+      {"endpoint": "POST /api/payments/selcom/stk and /checkout", "issue": "Neither requires auth, and both trust the client-supplied amount. The amount should be taken server-side from the order (order.total_paid) using order_id, so it cannot be tampered with. As it stands, anyone can trigger USSD pushes to any phone."},
+      {"endpoint": "POST /api/orders", "issue": "The OrderCreate.payment_method comment still says 'mpesa, airtel, tigo, nala'. It accepts any string (so 'bank' works), but there is no validation at all. Consider using a Literal of mpesa/airtel/tigo/nala/bank."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Checkout to MyOrder navigation", "issue": "After navigating to /my-orders/{id}, the scroll position is kept (the page opened scrolled to the footer, so the order card was off-screen on mobile). Add window.scrollTo(0,0) on route change or on the MyOrder mount.", "selector": "[data-testid='checkout-pay-btn']", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Bank Transfer / Card", "issue": "The frontend correctly redirects to the Selcom checkout_url, but Selcom shows 'Page Not Found', and the user has no way back to Biz-Salama (dead end). Backend/Selcom configuration issue, see backend critical.", "affected_selectors": ["[data-testid='checkout-method-bank']", "[data-testid='checkout-pay-btn']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "HIGH: Fix the Selcom hosted checkout URL returning 'Page Not Found' for the bank/card flow. Check whether the raw payment_gateway_url vs. the decoded one should be used, and whether the sandbox vendor SB00192172 on the production gateway has the hosted page / card / bank channels enabled (contact Selcom). Until then, consider hiding or flagging the Bank option.",
+    "Derive the payment amount server-side from order_id in /payments/selcom/stk and /checkout, and add auth to these endpoints.",
+    "Link orders to the authenticated buyer (optional auth dependency in POST /api/orders).",
+    "Scroll to top when navigating to /my-orders/{id}."
+  ],
+  "critical_code_review_comments": [
+    "Checkout.tsx: buyer_email is made up as `${phone}@biz-salama.co.tz` even when the logged-in user has a real email. Use the auth store's user.email when present.",
+    "Checkout.tsx: the prefill reads localStorage 'bs_user', but the auth store persists under 'biz-salama-auth', so prefill never happens for logged-in users. Use useAuthStore().user.",
+    "Checkout.tsx: if the STK push fails after the order was created, the pending order is orphaned, and a retry creates a duplicate order. Consider reusing the order_id on retry.",
+    "Checkout.tsx: on bank-flow failure the toast falls back to r.data?.selcom?.message, which is fine. A 'Back to Biz-Salama' path from Selcom relies on redirect/cancel URLs, which the minimal endpoint does not send."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend only)", "frontend": "95% - every requested frontend behaviour verified; the bank flow ends on Selcom's 404 page (external/backend)"},
+  "seed_data_creation": "Registered 2 TEST_Buyer users (phones 0712xxxxxx / 0713xxxxxx) and created 2 pending orders: order_79e7f0b97085 (mpesa) and order_6ee05f77d856 (bank). A real Selcom USSD push was sent to 0754710139 for TZS 77,250 (as instructed).",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Mobile viewport 420x900. Set auth by putting the token in localStorage 'biz-salama-auth' as {state:{token,user,isAuthenticated:true},version:0}. The M-Pesa STK path works for real against Selcom. For the bank path, the frontend is correct, but the Selcom hosted URL shows 'Page Not Found'. Retest after the Selcom config / URL fix.",
+  "rca of the issue": "Original bug (Pay Securely does nothing) is FIXED: the button now has an onClick and calls /orders, then /payments/selcom/stk or /checkout. Remaining bank-flow issue: Selcom create-order-minimal returns a gateway URL, but the hosted page 404s. Most likely the vendor account/channel configuration on Selcom's side (sandbox vendor ID on the production gateway) or the wrong URL variant. Reproduce: select Bank on checkout and click Pay, or call POST /api/payments/selcom/checkout and open the checkout_url."
+}

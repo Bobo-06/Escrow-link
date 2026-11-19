@@ -2734,16 +2734,22 @@ def selcom_headers() -> dict[str, str]:
 
 @api_router.post("/payments/selcom/checkout")
 async def selcom_checkout(request: SelcomCheckoutRequest):
-    """Create a Selcom hosted-checkout order via create-order-minimal."""
+    """Create a Selcom hosted-checkout order for bank / card payments.
+
+    Returns the hosted page URL that the frontend redirects the buyer to.
+    If Selcom returns 403 "4036 API endpoint enabled for the vendor" it
+    means the hosted-checkout endpoint has not been activated for this
+    vendor yet — we propagate a friendly message to the frontend.
+    """
     try:
-        result = await selcom_client.create_checkout_order(
+        result = await selcom_client.create_hosted_order(
             order_id=request.order_id,
             buyer_email=request.buyer_email,
             buyer_name=request.buyer_name,
             buyer_phone=request.phone,
             amount=int(request.amount),
-            redirect_url=f"{BASE_URL}/payment/selcom/callback",
-            cancel_url=f"{BASE_URL}/payment/selcom/cancel",
+            redirect_url=f"{BASE_URL}/my-orders/{request.order_id}",
+            cancel_url=f"{BASE_URL}/checkout/cancel",
             webhook_url=f"{BASE_URL}/api/payments/selcom/webhook",
         )
         if result.get("simulated"):
@@ -2754,11 +2760,29 @@ async def selcom_checkout(request: SelcomCheckoutRequest):
                 "order_id": request.order_id,
             }
         sc = result.get("selcom") or {}
-        # Selcom returns { result, resultcode, data: [ { payment_token, payment_gateway_url, payment_gateway_url_decoded } ] }
         data = sc.get("data") or []
         first = data[0] if isinstance(data, list) and data else {}
-        # Prefer the human-friendly decoded URL added by selcom_client
         gateway_url = first.get("payment_gateway_url_decoded") or first.get("payment_gateway_url")
+        resultcode = str(sc.get("resultcode") or "")
+
+        # Friendly surfacing of the "not activated yet" state.
+        activation_pending = (
+            result.get("status_code") == 403
+            and resultcode in {"403", "4036"}
+            or "enabled for the vendor" in str(sc.get("message", "")).lower()
+        )
+        if activation_pending:
+            return {
+                "ok": False,
+                "activation_pending": True,
+                "order_id": request.order_id,
+                "message": (
+                    "Bank & card payments are being activated on our Selcom merchant account. "
+                    "Please use M-Pesa, Tigo Pesa or Airtel Money for now."
+                ),
+                "selcom": sc,
+            }
+
         return {
             "ok": result["ok"] and sc.get("result") == "SUCCESS",
             "checkout_url": gateway_url,

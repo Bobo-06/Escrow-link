@@ -137,6 +137,20 @@ const Checkout: React.FC = () => {
           buyer_name: name.trim(),
           buyer_email: `${nPhone}@biz-salama.co.tz`,
         });
+
+        // Selcom hasn't activated the hosted-checkout endpoint yet → clear message
+        if (r.data?.activation_pending) {
+          toast.error(
+            r.data.message ||
+              'Bank & card payments are being activated. Please use mobile money for now.',
+            { id: loader, duration: 8000 }
+          );
+          // Auto-switch the selection to M-Pesa so the next click just works
+          setMethod('mpesa');
+          setSubmitting(false);
+          return;
+        }
+
         const url = r.data?.checkout_url;
         if (!url) {
           toast.error(r.data?.selcom?.message || 'Selcom did not return a payment URL', { id: loader });
@@ -144,7 +158,6 @@ const Checkout: React.FC = () => {
           return;
         }
         toast.dismiss(loader);
-        // Give the user's browser a moment to land on the new page
         window.location.href = url;
         return;
       }

@@ -31,6 +31,7 @@ const DirectEscrowCreatePage = lazy(() => import('./pages/DirectEscrowCreatePage
 const DirectBuyerOfferPage = lazy(() => import('./pages/DirectBuyerOfferPage'));
 const MyWatchesPage = lazy(() => import('./pages/MyWatchesPage'));
 const LedgerAdminPage = lazy(() => import('./pages/LedgerAdminPage'));
+const AdminEscrowReconcilePage = lazy(() => import('./pages/AdminEscrowReconcilePage'));
 const SellerOnboardingPage = lazy(() => import('./pages/SellerOnboardingPage'));
 const ClientErrorsAdminPage = lazy(() => import('./pages/ClientErrorsAdminPage'));
 const CreateProductPage = lazy(() => import('./pages/CreateProductPage'));
@@ -75,6 +76,7 @@ function App() {
               <Route path="/direct-offer/:txId" element={<DirectBuyerOfferPage />} />
               <Route path="/my-watches" element={<MyWatchesPage />} />
               <Route path="/admin/ledger" element={<LedgerAdminPage />} />
+              <Route path="/admin/escrow/reconcile" element={<AdminEscrowReconcilePage />} />
               <Route path="/admin/client-errors" element={<ClientErrorsAdminPage />} />
               <Route path="/onboard/seller" element={<SellerOnboardingPage />} />
               <Route path="/sell/new" element={<CreateProductPage />} />

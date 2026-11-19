@@ -256,6 +256,153 @@ async def wallet_pull_payment(
 wallet_push_ussd = wallet_pull_payment
 
 
+# ─────────────────── Wallet Cashin (outbound disbursement) ─────────────────
+# Credits a customer wallet from the merchant float. Separate Selcom product
+# from Checkout/Wallet-Pull — must be enabled on the vendor float, and uses a
+# separate float PIN (env: SELCOM_PIN) in addition to the shared API_KEY/SECRET.
+#
+# Reference: developers.selcommobile.com — "Wallet Cashin"
+# Endpoint:  POST {base}/v1/walletcashin/process
+# Query:     GET  {base}/v1/walletcashin/query?transid=...
+# Networks:
+#   VMCASHIN — Vodacom M-Pesa
+#   AMCASHIN — Airtel Money
+#   TPCASHIN — Tigo Pesa / Mixx by Yas
+#   HPCASHIN — HaloPesa
+#   CASHIN   — auto-route by MSISDN lookup
+
+CASHIN_CODES = {
+    "mpesa":    "VMCASHIN",
+    "vodacom":  "VMCASHIN",
+    "airtel":   "AMCASHIN",
+    "tigo":     "TPCASHIN",
+    "yas":      "TPCASHIN",
+    "halopesa": "HPCASHIN",
+    "halo":     "HPCASHIN",
+    "auto":     "CASHIN",
+}
+
+
+def _is_cashin_configured() -> bool:
+    """Wallet Cashin additionally requires the float PIN."""
+    return is_configured() and bool(_cfg("SELCOM_PIN"))
+
+
+async def disburse_wallet(
+    *,
+    transid: str,
+    network: str,
+    msisdn: str,
+    amount: int,  # integer TZS
+) -> dict[str, Any]:
+    """POST {base}/v1/walletcashin/process — pay from merchant float to a customer wallet.
+
+    `transid` MUST be unique per real-world payout — Selcom uses it as the
+    idempotency key. Never reuse the same transid for a retry; create a new
+    one only after confirming the previous result via `query_disbursement`.
+
+    Returns `{ok, status_code, selcom}`. The caller interprets `selcom.resultcode`:
+        "000"          → success
+        "111" / "927"  → in progress  → poll via query_disbursement
+        "999"          → ambiguous   → poll via query_disbursement
+        anything else  → failure
+    Transport-level failure (timeout, 5xx) MUST NOT be treated as failure —
+    status is unknown and the caller must query to resolve.
+    """
+    if not _is_cashin_configured():
+        return {
+            "ok": True,
+            "simulated": True,
+            "message": "Selcom Wallet Cashin not configured (SELCOM_PIN missing) — simulated response",
+            "transid": transid,
+            "selcom": {"resultcode": "SIM", "result": "SIMULATED"},
+        }
+
+    code = CASHIN_CODES.get(network.lower())
+    if not code:
+        raise ValueError(
+            f"Unsupported network '{network}'. Use one of: {sorted(set(CASHIN_CODES))}"
+        )
+
+    # MSISDN must be in international format without a leading '+': "2557XXXXXXXX".
+    norm = msisdn.strip().replace("+", "").replace(" ", "")
+    if norm.startswith("0"):
+        norm = "255" + norm[1:]
+    if not (norm.startswith("255") and len(norm) == 12 and norm.isdigit()):
+        raise ValueError(f"MSISDN must be in 2557XXXXXXXX format: {msisdn!r}")
+
+    payload = {
+        "transid": transid,
+        "utilitycode": code,
+        "utilityref": norm,
+        "amount": int(amount),
+        "vendor": _cfg("SELCOM_VENDOR"),
+        "pin": _cfg("SELCOM_PIN"),
+        "msisdn": norm,
+    }
+    signed_fields = ["transid", "utilitycode", "utilityref", "amount", "vendor", "pin", "msisdn"]
+    headers = _build_headers(payload, signed_fields)
+    url = f"{_cfg('SELCOM_BASE_URL', 'https://apigw.selcommobile.com/v1').rstrip('/')}/walletcashin/process"
+    async with _client(timeout=35.0) as client:
+        resp = await client.post(url, json=payload, headers=headers)
+    try:
+        body = resp.json()
+    except Exception:
+        body = {"raw": resp.text}
+
+    # Never log the float PIN. The payload we just sent is sensitive.
+    logger.info(
+        "selcom_cashin.process transid=%s code=%s amount=%s status=%s resultcode=%s",
+        transid, code, int(amount), resp.status_code,
+        (body.get("resultcode") if isinstance(body, dict) else "?"),
+    )
+    return {"ok": resp.is_success, "status_code": resp.status_code, "selcom": body}
+
+
+async def query_disbursement(*, transid: str) -> dict[str, Any]:
+    """GET {base}/v1/walletcashin/query?transid=... — poll final status.
+
+    Selcom recommends waiting ~3 minutes before first query and then polling
+    periodically for in-progress / ambiguous results. Treat the returned
+    `resultcode` with the same semantics as disburse_wallet.
+    """
+    if not _is_cashin_configured():
+        return {
+            "ok": True, "simulated": True,
+            "transid": transid,
+            "selcom": {"resultcode": "SIM", "result": "SIMULATED"},
+        }
+
+    payload = {"transid": transid}
+    signed_fields = ["transid"]
+    headers = _build_headers(payload, signed_fields)
+    url = f"{_cfg('SELCOM_BASE_URL', 'https://apigw.selcommobile.com/v1').rstrip('/')}/walletcashin/query"
+    async with _client(timeout=20.0) as client:
+        resp = await client.get(url, params=payload, headers=headers)
+    try:
+        body = resp.json()
+    except Exception:
+        body = {"raw": resp.text}
+    return {"ok": resp.is_success, "status_code": resp.status_code, "selcom": body}
+
+
+def interpret_cashin_result(selcom_body: dict[str, Any]) -> str:
+    """Map Selcom Wallet Cashin resultcode → our internal payout status.
+
+    Returns one of: 'paid' | 'pending' | 'failed'.
+    """
+    if not isinstance(selcom_body, dict):
+        return "pending"
+    code = str(selcom_body.get("resultcode", ""))
+    if code == "000":
+        return "paid"
+    if code in {"111", "927", "999"}:
+        return "pending"
+    if code == "SIM":
+        return "pending"
+    return "failed"
+
+
 # ─────────────────────────── Webhook verify ────────────────────────────
 
 

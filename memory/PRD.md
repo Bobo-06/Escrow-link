@@ -23,6 +23,34 @@ React 18 (lazy-loaded), TypeScript, Tailwind, FastAPI, MongoDB, JWT auth, brute-
 
 ## Recent sessions
 
+### 2026-11-19 — Admin reconcile page + Selcom Wallet Cashin (automated payouts)
+
+**New admin page `/admin/escrow/reconcile`** (`frontend/src/pages/AdminEscrowReconcilePage.tsx`):
+- **Today's Position** — live cash + liability cards (Selcom clearing, Azania trust, buyer escrow liability, payables, platform revenue, liquidity shortfall with rose-red warning if positive)
+- **Daily Sweep** — pending-sweep table, auto-computed total + narration, two-stage confirm dialog that posts `/admin/escrow/transfer-recorded` with Selcom + Azania bank refs
+- **Payouts** — queued/disbursing/paid/failed filter tabs, two per-row actions:
+  - **Pay via Selcom** → one-click `POST /admin/payouts/{id}/disburse-via-selcom` (auto-routes network by MSISDN prefix)
+  - **Manual record** → modal to `POST /admin/payouts/{id}/manual-record` with Azania IB ref (fallback path)
+  - For in-flight payouts: **Poll** button queries Selcom and updates status
+- **Per-order Audit Trail** — load escrow_events for any order, rendered as timeline with event type, actor, meta JSON
+
+**Selcom Wallet Cashin integration** (`backend/selcom_client.py` + `backend/server.py`):
+- New client functions: `disburse_wallet()` (POST /v1/walletcashin/process), `query_disbursement()` (GET /v1/walletcashin/query), `interpret_cashin_result()` (result-code → paid/pending/failed)
+- Utility codes supported: VMCASHIN (M-Pesa), TPCASHIN (Tigo/Yas), AMCASHIN (Airtel), HPCASHIN (HaloPesa), CASHIN (auto-routed)
+- MSISDN normalization to 2557XXXXXXXX format + explicit prefix-based network routing helper
+- New env var: `SELCOM_PIN` (float PIN) — set via platform secrets card; `_is_cashin_configured()` gate allows simulated path when unset
+- New endpoints: `POST /admin/payouts/{id}/disburse-via-selcom`, `POST /admin/payouts/{id}/selcom-status`
+- Idempotency: `transid` persisted in payout doc, reused on retries so Selcom never double-pays; initial "claim" update atomically flips queued→disbursing to prevent double-click
+- Transport failure (timeout/5xx) does NOT mark failed — admin must poll /selcom-status to resolve
+- Ledger `post_payout_paid` fires exactly once on first transition to `paid` (both via initial process and later via query)
+- Audit: every disburse/query writes `payout_paid_seller`/`payout_paid_agent` or `mismatch_flagged` to `escrow_events`
+
+**Testing:**
+- Full 22-test ledger suite: still passes
+- `tests/scripts/test_selcom_disburse.py` — simulated-path E2E (configured=false): dispatch works, double-click returns 400, status poll works, non-admin returns 403
+- Offline cashin signing check: field order matches Selcom spec, digest non-empty, network-routing helper correctly maps all 4 Tanzanian prefixes
+- Frontend smoke screenshot: all 4 sections render, auth-gated, 10 data-testids present
+
 ### 2026-11-18 — Revert to true-escrow ledger + Azania reconciliation workflow
 
 **Trigger:** User confirmed they operate a **true trust / escrow account at Azania Bank** under a signed Trust Deed (Azania Trust Services is the trustee; Biz-Salama is the settlor; buyers are beneficiaries). The July "Merchant of Record" pivot was therefore the wrong compliance narrative. Selcom has also been told the funds-flow model (trust account at Azania).
@@ -147,13 +175,13 @@ React 18 (lazy-loaded), TypeScript, Tailwind, FastAPI, MongoDB, JWT auth, brute-
 
 ## Backlog (P0 → P3)
 - **P1** — Restore "escrow" / "bank-backed escrow via Azania" language in trust badges + Letter of Comfort (was swept out in Feb-10 compliance task; now legitimate under the Azania trust deed)
-- **P1** — Admin UI: `/admin/escrow/reconcile` React page showing reconcile dashboard, sweep queue with "Mark Swept" action, queued payouts with "Record Payment" action, and per-order audit timeline
-- **P1** — Selcom Disbursement API integration (replace manual Azania→seller IB transfers with automated calls; the admin UI keeps the manual-record path as a fallback)
+- **P1** — Nav / dashboard link to `/admin/escrow/reconcile` for admin users (currently reachable only by direct URL)
 - **P2** — Daily reconciliation report job (scheduled cron) that emails the admin the sweep queue + reconcile snapshot
 - **P2** — Fee-sweep endpoint (Azania trust → Biz-Salama ops) with manual-record flow + ledger posting
-- **P2** — Click-Pesa / AzamPay as backup payment providers
-- **P2** — Legal templates: Supplier Agreement, Sample Ledger Report PDF (the Trust Deed itself already exists at Azania)
-- **P2** — Refactor `server.py` (now ~6.3k lines) into routers: `routes/auth.py`, `routes/products.py`, `routes/escrow.py`, `routes/admin_escrow.py`, `routes/orders.py`
+- **P2** — Click-Pesa / AzamPay as backup payment providers (Selcom cashin fallback)
+- **P2** — Legal templates: Supplier Agreement, Sample Ledger Report PDF
+- **P2** — Refactor `server.py` (now ~7k lines) into routers: `routes/auth.py`, `routes/products.py`, `routes/escrow.py`, `routes/admin_escrow.py`, `routes/orders.py`
+- **P2** — Auto-poll `disbursing` payouts via scheduled task (currently manual via Poll button)
 - **P3** — Ratings & reviews UI
 - **P3** — Native app wrapper (Capacitor / React Native)
 - **P3** — Public `/trust` page surfacing the audit results + Azania trust deed to buyers

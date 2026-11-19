@@ -5295,6 +5295,197 @@ async def admin_record_refund(order_id: str, payload: ManualRefundRecorded, requ
     return {"ok": True, "order_id": order_id, "amount": amount, "azania_ref": payload.azania_ref}
 
 
+# ─── Selcom Wallet Cashin (automated disbursement) ────────────────────────
+# One-click payout from Biz-Salama's Selcom merchant float to a seller/agent
+# mobile wallet. Replaces the daily manual Azania-IB step. The manual-record
+# endpoint above is kept as a fallback (e.g. Selcom route down, high-value
+# payout requiring dual-sign-off, or outside Selcom's operating hours).
+
+class SelcomDisburseRequest(BaseModel):
+    network: str = "auto"              # mpesa | tigo | airtel | halopesa | auto
+
+
+def _network_for_phone(phone: str) -> str:
+    """Best-effort MSISDN-prefix routing. Selcom's 'auto' (CASHIN) handles
+    MNP, but passing the explicit code when we know it avoids an extra hop."""
+    p = (phone or "").strip().replace("+", "").replace(" ", "")
+    if p.startswith("0"):
+        p = "255" + p[1:]
+    if not p.startswith("255") or len(p) < 10:
+        return "auto"
+    prefix = p[3:5]
+    if prefix in {"74", "75", "76"}:   return "mpesa"      # Vodacom
+    if prefix in {"71", "67", "77"}:   return "tigo"       # Tigo / Yas
+    if prefix in {"68", "69", "78"}:   return "airtel"
+    if prefix in {"62", "65", "66"}:   return "halopesa"
+    return "auto"
+
+
+@api_router.post("/admin/payouts/{payout_id}/disburse-via-selcom")
+async def admin_disburse_via_selcom(
+    payout_id: str, payload: SelcomDisburseRequest, request: Request,
+):
+    """Automated payout via Selcom Wallet Cashin. Admin-only.
+
+    Response status semantics:
+        paid       → ledger posted; final.
+        disbursing → Selcom returned in-progress; admin polls via /selcom-status.
+        failed     → Selcom rejected; admin may fall back to manual-record.
+    """
+    user = await get_current_user(request)
+    _require_admin(user)
+
+    payout = await db.payouts.find_one({"payout_id": payout_id}, {"_id": 0})
+    if not payout:
+        raise HTTPException(status_code=404, detail="Payout not found")
+    if payout.get("status") != "queued":
+        raise HTTPException(status_code=400, detail=f"Payout is '{payout.get('status')}', not queued")
+
+    destination = payout.get("destination") or ""
+    if not destination:
+        raise HTTPException(status_code=400, detail="Payout has no destination MSISDN")
+
+    amount = float(payout["amount"])
+    if amount <= 0 or amount != int(amount):
+        raise HTTPException(status_code=400, detail="Amount must be a positive integer TZS")
+
+    # Reuse any prior transid so a retry never duplicates the real payout.
+    transid = payout.get("selcom_transid") or f"BSLP{uuid.uuid4().hex[:16].upper()}"
+    network = payload.network.lower()
+    if network == "auto":
+        network = _network_for_phone(destination)
+
+    # Mark attempt in-flight so a double-click doesn't fire twice.
+    claim = await db.payouts.update_one(
+        {"payout_id": payout_id, "status": "queued"},
+        {"$set": {
+            "status": "disbursing",
+            "selcom_transid": transid,
+            "selcom_network": network,
+            "selcom_attempt_at": datetime.now(UTC),
+            "updated_at": datetime.now(UTC),
+        }},
+    )
+    if claim.modified_count == 0:
+        raise HTTPException(status_code=409, detail="Payout already being disbursed")
+
+    try:
+        result = await selcom_client.disburse_wallet(
+            transid=transid, network=network,
+            msisdn=destination, amount=int(amount),
+        )
+    except Exception as e:
+        logger.exception("selcom_disburse transport_error payout_id=%s transid=%s", payout_id, transid)
+        await db.payouts.update_one(
+            {"payout_id": payout_id},
+            {"$set": {"selcom_last_error": str(e), "updated_at": datetime.now(UTC)}},
+        )
+        await ledger_record_escrow_event(
+            db, order_id=payout["order_id"], event_type="mismatch_flagged",
+            actor=f"admin:{user['user_id']}",
+            meta={"payout_id": payout_id, "transid": transid, "error": "transport_error"},
+        )
+        raise HTTPException(status_code=502, detail=f"Selcom unreachable: {e}") from e
+
+    selcom_body = result.get("selcom") or {}
+    status = selcom_client.interpret_cashin_result(selcom_body)
+    provider_ref = selcom_body.get("reference") or transid
+
+    update: dict[str, Any] = {
+        "selcom_response": selcom_body,
+        "selcom_resultcode": str(selcom_body.get("resultcode", "")),
+        "provider_ref": provider_ref,
+        "provider": "selcom_cashin",
+        "updated_at": datetime.now(UTC),
+    }
+    if status == "paid":
+        enriched = {
+            **payout, "provider_ref": provider_ref,
+            "admin_user_id": user["user_id"], "provider": "selcom_cashin",
+        }
+        await ledger_post_payout_paid(db, payout=enriched)
+        update["status"] = "paid"
+    elif status == "failed":
+        update["status"] = "failed"
+        update["selcom_fail_reason"] = selcom_body.get("message") or "Selcom returned failure"
+        await ledger_record_escrow_event(
+            db, order_id=payout["order_id"], event_type="mismatch_flagged",
+            actor=f"admin:{user['user_id']}",
+            meta={"payout_id": payout_id, "transid": transid,
+                  "resultcode": update["selcom_resultcode"], "reason": "selcom_rejected"},
+        )
+    else:
+        update["status"] = "disbursing"  # pending — admin must poll
+
+    await db.payouts.update_one({"payout_id": payout_id}, {"$set": update})
+
+    return {
+        "ok": True,
+        "payout_id": payout_id,
+        "status": update["status"],
+        "transid": transid,
+        "provider_ref": provider_ref,
+        "network": network,
+        "resultcode": update.get("selcom_resultcode"),
+        "configured": selcom_client._is_cashin_configured(),
+    }
+
+
+@api_router.post("/admin/payouts/{payout_id}/selcom-status")
+async def admin_selcom_status(payout_id: str, request: Request):
+    """Poll Selcom for the final status of a disbursing payout. Admin-only."""
+    user = await get_current_user(request)
+    _require_admin(user)
+
+    payout = await db.payouts.find_one({"payout_id": payout_id}, {"_id": 0})
+    if not payout:
+        raise HTTPException(status_code=404, detail="Payout not found")
+    if payout.get("status") not in {"disbursing", "pending"}:
+        return {
+            "ok": True, "payout_id": payout_id,
+            "status": payout.get("status"), "unchanged": True,
+        }
+
+    transid = payout.get("selcom_transid")
+    if not transid:
+        raise HTTPException(status_code=400, detail="Payout has no selcom_transid to query")
+
+    try:
+        result = await selcom_client.query_disbursement(transid=transid)
+    except Exception as e:
+        logger.exception("selcom_query transport_error payout_id=%s transid=%s", payout_id, transid)
+        raise HTTPException(status_code=502, detail=f"Selcom query failed: {e}") from e
+
+    selcom_body = result.get("selcom") or {}
+    status = selcom_client.interpret_cashin_result(selcom_body)
+    provider_ref = selcom_body.get("reference") or payout.get("provider_ref") or transid
+
+    update: dict[str, Any] = {
+        "selcom_query_response": selcom_body,
+        "selcom_query_resultcode": str(selcom_body.get("resultcode", "")),
+        "provider_ref": provider_ref,
+        "updated_at": datetime.now(UTC),
+    }
+    if status == "paid" and payout.get("status") != "paid":
+        enriched = {
+            **payout, "provider_ref": provider_ref,
+            "admin_user_id": user["user_id"], "provider": "selcom_cashin",
+        }
+        await ledger_post_payout_paid(db, payout=enriched)
+        update["status"] = "paid"
+    elif status == "failed":
+        update["status"] = "failed"
+        update["selcom_fail_reason"] = selcom_body.get("message") or "Selcom returned failure"
+    else:
+        update["status"] = "disbursing"
+
+    await db.payouts.update_one({"payout_id": payout_id}, {"$set": update})
+    return {
+        "ok": True, "payout_id": payout_id, "status": update["status"],
+        "resultcode": update["selcom_query_resultcode"], "provider_ref": provider_ref,
+    }
+
+
 @api_router.get("/admin/escrow/reconcile")
 async def admin_escrow_reconcile(request: Request):
     """

@@ -2816,7 +2816,13 @@ async def selcom_stk_push(request: SelcomSTKRequest):
 
 @api_router.post("/payments/selcom/webhook")
 async def selcom_webhook(request: Request):
-    """Handle Selcom payment webhook. HMAC-verified per Selcom spec."""
+    """Handle Selcom payment webhook. HMAC-verified per Selcom spec.
+
+    On SUCCESS the handler is idempotent (via `processed_webhooks`) and posts
+    the escrow-accounting double entry: cash_clearing_selcom debit /
+    buyer_escrow_liability credit. The admin can later sweep Selcom→Azania
+    from /admin/escrow/reconcile.
+    """
     body = await request.json()
     # Verify signature unless Selcom isn't configured (dev/simulated)
     if selcom_client.is_configured():
@@ -2831,20 +2837,68 @@ async def selcom_webhook(request: Request):
     order_id = body.get("order_id")
     result = body.get("result")
     payment_status = body.get("payment_status")
+    transid = body.get("transid") or body.get("selcom_transaction_id") or ""
+    reference = body.get("reference") or ""
 
     completed = (result == "SUCCESS") or (payment_status == "COMPLETED")
     if completed:
+        # Idempotency: Selcom may retry the webhook. Use (provider, event_id)
+        # dedupe before touching the ledger so retries cost nothing.
+        event_id = transid or reference or f"selcom:{order_id}"
+        already = await ledger_webhook_already_processed(db, provider="selcom", event_id=event_id)
+        if already:
+            logger.info("selcom webhook duplicate order_id=%s event_id=%s", order_id, event_id)
+            return {"ok": True, "duplicate": True}
+
+        # Look up the order for gross_amount — we need it for the ledger posting.
+        order = await db.orders.find_one(
+            {"order_id": order_id},
+            {"_id": 0, "gross_amount": 1, "total_paid": 1, "amount": 1, "status": 1},
+        )
+        if not order:
+            logger.warning("selcom webhook for unknown order_id=%s event_id=%s", order_id, event_id)
+            # Still ack to Selcom — a 4xx would make them retry forever.
+            return {"ok": True, "unknown_order": True}
+
+        gross_amount = (
+            order.get("gross_amount")
+            or order.get("total_paid")
+            or order.get("amount")
+            or body.get("amount")
+            or 0
+        )
+        try:
+            await ledger_post_funds_received(
+                db,
+                order_id=order_id,
+                gross_amount=float(gross_amount),
+                provider="selcom",
+                provider_txn_id=event_id,
+                raw_payload=body,
+            )
+        except Exception:
+            logger.exception("selcom webhook ledger post failed order_id=%s", order_id)
+            # Do NOT mark the webhook processed — we want Selcom to retry so the
+            # ledger eventually catches up. Returning 500 triggers Selcom's retry.
+            raise
+
         await db.orders.update_one(
             {"order_id": order_id},
             {"$set": {
                 "status": "paid",
                 "payment_status": "completed",
-                "selcom_tx_id": body.get("transid") or body.get("selcom_transaction_id"),
-                "selcom_reference": body.get("reference"),
+                "selcom_tx_id": transid,
+                "selcom_reference": reference,
                 "paid_at": datetime.now(UTC),
             }},
         )
-        await create_audit_log(order_id, "PAYMENT_RECEIVED", "system", {"gateway": "selcom"})
+        await create_audit_log(order_id, "PAYMENT_RECEIVED", "system", {
+            "gateway": "selcom", "transid": transid, "reference": reference,
+            "method": body.get("payment_method") or body.get("channel") or "unknown",
+        })
+        await ledger_mark_webhook_processed(db, provider="selcom", event_id=event_id)
+        return {"ok": True}
+
     elif result == "PENDING":
         await db.orders.update_one(
             {"order_id": order_id},
@@ -5518,6 +5572,71 @@ async def admin_escrow_events(order_id: str, request: Request):
     _require_admin(user)
     events = await ledger_list_escrow_events(db, order_id, limit=500)
     return {"order_id": order_id, "events": events, "count": len(events)}
+
+
+@api_router.get("/admin/escrow/trace/{order_id}")
+async def admin_order_trace(order_id: str, request: Request):
+    """
+    One-stop forensic view of a single order. Returns everything we know
+    about the order in one call: the order doc, all payment_transactions,
+    the full double-entry ledger, the escrow_events audit trail, queued/paid
+    payouts, and any processed_webhooks keyed to this order. Designed for
+    post-test inspection (e.g. after a live bank payment).
+    """
+    user = await get_current_user(request)
+    _require_admin(user)
+
+    order = await db.orders.find_one({"order_id": order_id}, {"_id": 0})
+
+    txns = await db.payment_transactions.find(
+        {"order_id": order_id}, {"_id": 0}
+    ).sort("created_at", 1).to_list(50)
+
+    entries = await db.ledger_entries.find(
+        {"order_id": order_id}, {"_id": 0}
+    ).sort("created_at", 1).to_list(500)
+
+    events = await ledger_list_escrow_events(db, order_id, limit=500)
+
+    payouts_rows = await db.payouts.find(
+        {"order_id": order_id}, {"_id": 0}
+    ).sort("created_at", 1).to_list(50)
+
+    # processed_webhooks is keyed by (provider, event_id). Match the event_ids
+    # we recorded in the payment_transactions for a quick "did Selcom's
+    # callback arrive?" check.
+    seen_ids = [t.get("provider_txn_id") for t in txns if t.get("provider_txn_id")]
+    webhooks = await db.processed_webhooks.find(
+        {"event_id": {"$in": seen_ids}}, {"_id": 0}
+    ).to_list(50) if seen_ids else []
+
+    # Normalize datetimes → ISO strings for JSON
+    def _iso(rows):
+        for r in rows:
+            for k, v in list(r.items()):
+                if isinstance(v, datetime):
+                    r[k] = v.isoformat()
+        return rows
+
+    return {
+        "order_id": order_id,
+        "order": _iso([order])[0] if order else None,
+        "payment_transactions": _iso(txns),
+        "ledger_entries": _iso(entries),
+        "escrow_events": events,
+        "payouts": _iso(payouts_rows),
+        "processed_webhooks": _iso(webhooks),
+        "summary": {
+            "order_status": (order or {}).get("status"),
+            "gross_amount": (order or {}).get("gross_amount"),
+            "txn_count": len(txns),
+            "ledger_entry_count": len(entries),
+            "event_count": len(events),
+            "payout_count": len(payouts_rows),
+            "webhook_seen": len(webhooks) > 0,
+        },
+        "generated_at": datetime.now(UTC).isoformat(),
+    }
 
 
 @api_router.get("/admin/escrow/transfers")

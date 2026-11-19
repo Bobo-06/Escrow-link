@@ -23,6 +23,17 @@ React 18 (lazy-loaded), TypeScript, Tailwind, FastAPI, MongoDB, JWT auth, brute-
 
 ## Recent sessions
 
+### 2026-11-19 — Wire Selcom webhook → ledger + /admin/escrow/trace forensic endpoint
+
+**Critical bug fixed:** The Selcom webhook handler at `/api/payments/selcom/webhook` was updating the order document on `COMPLETED` but **never calling `ledger_post_funds_received`**. Real Selcom payments (card / bank / mobile money) would mark orders paid but leave zero ledger entries — breaking the reconcile view and every downstream workflow. Wired the ledger posting, added `(provider, event_id)` idempotency via `processed_webhooks`, and now propagate the Selcom `transid` / `reference` into the order + audit log.
+
+**New debug endpoint `GET /api/admin/escrow/trace/{order_id}`** (admin-only): forensic one-stop view returning the order doc, all `payment_transactions`, every `ledger_entry`, the `escrow_events` audit trail, queued/paid `payouts`, and any matching `processed_webhooks` — exactly what you need to inspect after a live test.
+
+**Testing:**
+- `tests/scripts/test_selcom_webhook_to_ledger.py` — simulates a real Selcom bank webhook with valid HMAC: first delivery posts the double entry (`cash_clearing_selcom` DR / `buyer_escrow_liability` CR), writes `funds_received` to `escrow_events`, flips order to paid; duplicate retry returns `{duplicate: true}` with zero additional ledger entries
+- Full 22-test ledger suite still passes
+- `/admin/escrow/trace/{order_id}` returns all 5 collections cleanly for the test order
+
 ### 2026-11-19 — Bank-payment tab on Selcom hosted checkout
 
 **Finding:** Which payment tabs render on Selcom's hosted checkout page (bank / card / mobile money) is controlled entirely by Selcom's vendor activation — NOT by the `/v1/checkout/create-order-minimal` payload.

@@ -170,6 +170,14 @@ async def create_checkout_order(
       * Content-Type application/json
       * no_of_items required (even though docs sample suggests otherwise)
 
+    NOTE on payment tabs (card / bank / mobile money): the minimal endpoint
+    does NOT accept a `payment_methods` field — Selcom's hosted page shows
+    whatever methods the vendor has had activated on their account. Confirmed
+    via API probe 2026-11-19: adding `payment_methods` → resultcode 413
+    "Unexpected parameter payment_methods found in the payload".
+    To toggle which methods appear (bank / card / mobile money), ask Selcom
+    to enable/disable the relevant channel on the vendor account.
+
     Returns the Selcom JSON with payment_token + base64 payment_gateway_url.
     `redirect_url` / `cancel_url` are accepted for backwards-compat with the
     full create-order call but not transmitted — they're not part of the

@@ -23,6 +23,16 @@ React 18 (lazy-loaded), TypeScript, Tailwind, FastAPI, MongoDB, JWT auth, brute-
 
 ## Recent sessions
 
+### 2026-11-19 — Bank-payment tab on Selcom hosted checkout
+
+**Finding:** Which payment tabs render on Selcom's hosted checkout page (bank / card / mobile money) is controlled entirely by Selcom's vendor activation — NOT by the `/v1/checkout/create-order-minimal` payload.
+
+**Probe:** Tried adding `payment_methods: "ALL"` to the signed payload → Selcom returned `resultcode 413 "Unexpected parameter payment_methods found in the payload"`. That field is only valid on the full `/v1/checkout/create-order` endpoint, which our vendor does not use. Reverted the change; `selcom_client.create_checkout_order()` left unchanged.
+
+**Status:** User confirmed bank + card acceptance is already live on their Selcom vendor. The bank tab therefore appears automatically on the hosted page for every new order — no code change needed. Added documentation in `selcom_client.create_checkout_order()` docstring describing this constraint for future agents.
+
+**Verified:** Fresh create-order-minimal probe returns `resultcode: 000` and a live `tza.selcom.online/paymentgw/checkout/...` URL.
+
 ### 2026-11-19 — Admin reconcile page + Selcom Wallet Cashin (automated payouts)
 
 **New admin page `/admin/escrow/reconcile`** (`frontend/src/pages/AdminEscrowReconcilePage.tsx`):
